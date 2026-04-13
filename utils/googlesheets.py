@@ -1,19 +1,13 @@
 import httplib2
 import apiclient.discovery
 from oauth2client.service_account import ServiceAccountCredentials
-from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch, get_orders_count
-from utils.msql import sql_get_all_reviews, sql_get_all_reviews_by_user
+from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch
 from data.config import services
-from utils.other import link_cleaner, get_days_suffix
 from datetime import *
-import asyncio
-import time
 import gc
-import psutil
 import os
 import csv
 import tempfile
-from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'  # имя файла с закрытым ключом

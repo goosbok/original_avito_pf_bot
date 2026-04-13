@@ -7,6 +7,8 @@ from data.config import services
 from utils.other import link_cleaner, get_days_suffix
 from datetime import *
 import asyncio
+import time
+from googleapiclient.errors import HttpError
 
 CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'  # имя файла с закрытым ключом
 
@@ -25,7 +27,8 @@ def create_sheet():
     try:
         d = datetime.now()
         
-        # Размер пакета для обработки - КРИТИЧНО для памяти!
+        # Размер пакета для2000  # Отправляем в Google Sheets пакетами (больше = меньше запросов)
+        REQUEST_DELAY = 1.2  # Задержка между запросами в секундах (60 запросов/мин = 1 запрос/сек)
         DB_BATCH_SIZE = 1000  # Загружаем из БД пакетами по 1000 заказов
         SHEET_BATCH_SIZE = 500  # Отправляем в Google Sheets пакетами по 500 строк
         
@@ -133,36 +136,70 @@ def create_sheet():
                         
                         # Когда накопили SHEET_BATCH_SIZE строк - отправляем в Sheets
                         if len(batch_data['no']) >= SHEET_BATCH_SIZE:
-                            end_row = current_row + len(batch_data['no']) - 1
-                            service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
-                                "valueInputOption": "USER_ENTERED",
-                                "data": [
-                                    {"range": f"Заказы!A{current_row}:A{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['no']]},
-                                    {"range": f"Заказы!B{current_row}:B{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['ids']]},
-                                    {"range": f"Заказы!C{current_row}:C{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['logins']]},
-                                    {"range": f"Заказы!D{current_row}:D{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['links']]},
-                                    {"range": f"Заказы!E{current_row}:E{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['contacts']]},
-                                    {"range": f"Заказы!F{current_row}:F{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['position_name']]},
-                                    {"range": f"Заказы!G{current_row}:G{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['prices']]},
-                                    {"range": f"Заказы!H{current_row}:H{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['status']]},
-                                    {"range": f"Заказы!I{current_row}:I{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['reg_date']]}
-                                ]
-                            }).execute()
+                            
+                            # Отправка с повторами при rate limit
+                            retry_count = 0
+                            max_retries = 5
+                            while retry_count < max_retries:
+                                try:
+                                    service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
+                                        "valueInputOption": "USER_ENTERED",
+                                        "data": [
+                                            {"range": f"Заказы!A{current_row}:A{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['no']]},
+                                            {"range": f"Заказы!B{current_row}:B{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['ids']]},
+                                            {"range": f"Заказы!C{current_row}:C{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['logins']]},
+                                            {"range": f"Заказы!D{current_row}:D{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['links']]},
+                                            {"range": f"Заказы!E{current_row}:E{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['contacts']]},
+                                            {"range": f"Заказы!F{current_row}:F{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['position_name']]},
+                                            {"range": f"Заказы!G{current_row}:G{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['prices']]},
+                                            {"range": f"Заказы!H{current_row}:H{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['status']]},
+                                            {"range": f"Заказы!I{current_row}:I{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['reg_date']]}
+                                        ]
+                                    }).execute()
+                                    break  # Успешно отправлено
+                                except HttpError as e:
+                                    if e.resp.status == 429:  # Rate limit
+                                        retry_count += 1
+                                        wait_time = REQUEST_DELAY * (2 ** retry_count)  # Экспоненциальная задержка
+                                        print(f"⚠️ Rate limit! Ожидание {wait_time:.1f} сек... (попытка {retry_count}/{max_retries})")
+                                        time.sleep(wait_time)
+                                    else:
+                                        raise
                             
                             print(f"✅ Отправлено {processed_rows} строк в таблицу")
                             current_row = end_row + 1
                             
-                            # Очищаем пакет
-                            batch_data = {
-                                'no': [], 'ids': [], 'logins': [], 'links': [],
-                                'contacts': [], 'position_name': [], 'prices': [],
-                                'reg_date': [], 'status': []
-                            }
-                    
-                    del links_array
+                            # Задержка между запросами для соблюдения rate limit
             
-            # Очищаем пакет заказов из памяти
-            del orders_batch
+            # Отправка финального пакета с повторами
+            retry_count = 0
+            max_retries = 5
+            while retry_count < max_retries:
+                try:
+                    service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
+                        "valueInputOption": "USER_ENTERED",
+                        "data": [
+                            {"range": f"Заказы!A{current_row}:A{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['no']]},
+                            {"range": f"Заказы!B{current_row}:B{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['ids']]},
+                            {"range": f"Заказы!C{current_row}:C{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['logins']]},
+                            {"range": f"Заказы!D{current_row}:D{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['links']]},
+                            {"range": f"Заказы!E{current_row}:E{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['contacts']]},
+                            {"range": f"Заказы!F{current_row}:F{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['position_name']]},
+                            {"range": f"Заказы!G{current_row}:G{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['prices']]},
+                            {"range": f"Заказы!H{current_row}:H{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['status']]},
+                            {"range": f"Заказы!I{current_row}:I{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['reg_date']]}
+                        ]
+                    }).execute()
+                    break
+                except HttpError as e:
+                    if e.resp.status == 429:
+                        retry_count += 1
+                        wait_time = REQUEST_DELAY * (2 ** retry_count)
+                        print(f"⚠️ Rate limit! Ожидание {wait_time:.1f} сек... (попытка {retry_count}/{max_retries})")
+                        time.sleep(wait_time)
+                    else:
+                        raise
+            atch
             db_offset += DB_BATCH_SIZE
         
         # Отправляем остаток данных

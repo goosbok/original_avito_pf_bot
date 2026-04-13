@@ -399,6 +399,22 @@ def all_orders():
         sql = "SELECT * FROM orders"
         return con.execute(sql).fetchall()
 
+# Получение заказов пакетами для экономии памяти
+def get_orders_batch(limit=1000, offset=0):
+    """Получает заказы порциями из БД"""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        sql = "SELECT * FROM orders LIMIT ? OFFSET ?"
+        return con.execute(sql, (limit, offset)).fetchall()
+
+# Получение общего количества заказов
+def get_orders_count():
+    """Возвращает общее количество заказов"""
+    with sqlite3.connect(path_db) as con:
+        sql = "SELECT COUNT(*) as count FROM orders"
+        result = con.execute(sql).fetchone()
+        return result[0] if result else 0
+
 # Получение всех заказов в зависимости от статуса
 def all_orders_by_status(status):
     array = []

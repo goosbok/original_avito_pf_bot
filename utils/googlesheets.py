@@ -1,7 +1,7 @@
 import httplib2
 import apiclient.discovery
 from oauth2client.service_account import ServiceAccountCredentials
-from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude
+from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch, get_orders_count
 from utils.msql import sql_get_all_reviews, sql_get_all_reviews_by_user
 from data.config import services
 from utils.other import link_cleaner, get_days_suffix
@@ -23,55 +23,25 @@ def get_user_str(user):
 
 def create_sheet():
     try:
-        orders = all_orders()
-        excludes = get_report_exclude()
         d = datetime.now()
+        
+        # Размер пакета для обработки - КРИТИЧНО для памяти!
+        DB_BATCH_SIZE = 1000  # Загружаем из БД пакетами по 1000 заказов
+        SHEET_BATCH_SIZE = 500  # Отправляем в Google Sheets пакетами по 500 строк
+        
+        print("🚀 Создание таблицы...")
+        
+        # Создаем таблицу сразу
+        spreadsheet = service.spreadsheets().create(body = {
+            'properties': {'title': f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}", 'locale': 'ru_RU'},
+            'sheets': [{'properties': {'sheetType': 'GRID', 'sheetId': 0, 'title': 'Заказы', 'gridProperties': {'rowCount': 200000, 'columnCount': 9}}}]
+        }).execute()
 
-        # Размер чанка для обработки
-        CHUNK_SIZE = 1000
+        spreadsheet_id = spreadsheet['spreadsheetId']
+        del spreadsheet
         
-        #Получаю № заказа
-        no = ['№']
-        ids = ['id']
-        logins = ['username']
-        links = ['Ссылки']
-        contacts = ['Контакты']
-        position_name = ['Дней/ПФ']
-        prices = ['Итого']
-        reg_date = ['Дата']
-        status = ['Статус']
+        print(f"📊 Таблица создана: {spreadsheet_id}")
         
-        # Обрабатываем заказы чанками
-        for order in orders:
-            if str(order['user_id']) not in excludes:
-                links_array = order['links'].split()
-                for link in links_array:
-                    logins.append(order['user_name'])
-                    # Очищаем ссылку один раз
-                    clean_link = link.replace("'", "").replace("[", "").replace("]", "")
-                    links.append(clean_link)
-                    
-                    #Получаю № заказа
-                    no.append(order['increment'])
-                    ids.append(order['user_id'])
-                    contacts.append('Да' if order['contacts'] else 'Нет')
-                    position_name.append(order['position_name'])
-                    prices.append(order['price'])
-                    reg_date.append(order['date'])
-                    
-                    if order['status'] == 'Posted':
-                        status.append('Размещён')
-                    elif order['status'] == 'Completed':
-                        status.append('Выполнен')
-                    else:
-                        status.append(order['status'])
-                
-                # Очищаем временный массив
-                del links_array
-        
-        # Очищаем orders из памяти
-        del orders
-
         # Компактные запросы форматирования
         format_requests = [
             {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
@@ -87,70 +57,156 @@ def create_sheet():
                            'fields': 'userEnteredFormat'}},
             {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}}
         ]
-
-        spreadsheet = service.spreadsheets().create(body = {
-            'properties': {'title': f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}", 'locale': 'ru_RU'},
-            'sheets': [{'properties': {'sheetType': 'GRID', 'sheetId': 0, 'title': 'Заказы', 'gridProperties': {'rowCount': len(no), 'columnCount': 9}}}]
-        }).execute()
-
-        spreadsheet_id = spreadsheet['spreadsheetId']
         
         # Форматирование
         service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": format_requests}).execute()
-        
-        # Очищаем format_requests
         del format_requests
-
-        # Заполнение данными чанками для экономии памяти
-        total_rows = len(no)
         
-        # Отправляем данные по колонкам чанками
-        all_columns = [
-            ('A', no),
-            ('B', ids),
-            ('C', logins),
-            ('D', links),
-            ('E', contacts),
-            ('F', position_name),
-            ('G', prices),
-            ('H', status),
-            ('I', reg_date)
-        ]
+        print("✅ Форматирование завершено")
         
-        for col_letter, col_data in all_columns:
-            # Разбиваем каждую колонку на чанки и отправляем
-            for chunk_start in range(0, total_rows, CHUNK_SIZE):
-                chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
-                chunk = col_data[chunk_start:chunk_end]
-                
-                service.spreadsheets().values().update(
-                    spreadsheetId=spreadsheet_id,
-                    range=f"Заказы!{col_letter}{chunk_start + 1}:{col_letter}{chunk_end}",
-                    valueInputOption="USER_ENTERED",
-                    body={"majorDimension": "COLUMNS", "values": [chunk]}
-                ).execute()
-                
-                # Очищаем чанк
-                del chunk
+        # Сначала добавляем заголовки
+        headers = [['№'], ['id'], ['username'], ['Ссылки'], ['Контакты'], ['Дней/ПФ'], ['Итого'], ['Статус'], ['Дата']]
+        service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
+            "valueInputOption": "USER_ENTERED",
+            "data": [
+                {"range": "Заказы!A1", "values": [headers[0]]},
+                {"range": "Заказы!B1", "values": [headers[1]]},
+                {"range": "Заказы!C1", "values": [headers[2]]},
+                {"range": "Заказы!D1", "values": [headers[3]]},
+                {"range": "Заказы!E1", "values": [headers[4]]},
+                {"range": "Заказы!F1", "values": [headers[5]]},
+                {"range": "Заказы!G1", "values": [headers[6]]},
+                {"range": "Заказы!H1", "values": [headers[7]]},
+                {"range": "Заказы!I1", "values": [headers[8]]}
+            ]
+        }).execute()
+        del headers
         
-        # Очищаем большие массивы данных
-        del no, ids, logins, links, contacts, position_name, prices, reg_date, status
-        del all_columns, excludes
-
+        print("📝 Заголовки добавлены, начинаем обработку данных...")
+        
+        # Получаем список исключений один раз
+        excludes = get_report_exclude()
+        
+        # Пакет для накопления данных перед отправкой в Sheets
+        batch_data = {
+            'no': [], 'ids': [], 'logins': [], 'links': [],
+            'contacts': [], 'position_name': [], 'prices': [],
+            'reg_date': [], 'status': []
+        }
+        
+        current_row = 2  # Начинаем со второй строки (первая - заголовки)
+        processed_rows = 0
+        db_offset = 0
+        
+        # Загружаем и обрабатываем заказы пакетами из БД
+        while True:
+            # Загружаем пакет заказов из БД
+            orders_batch = get_orders_batch(limit=DB_BATCH_SIZE, offset=db_offset)
+            
+            if not orders_batch:
+                break  # Больше заказов нет
+            
+            print(f"📦 Загружен пакет заказов {db_offset}-{db_offset + len(orders_batch)} из БД")
+            
+            # Обрабатываем каждый заказ в пакете
+            for order in orders_batch:
+                if str(order['user_id']) not in excludes:
+                    links_array = order['links'].split()
+                    for link in links_array:
+                        batch_data['logins'].append(order['user_name'])
+                        batch_data['links'].append(link.replace("'", "").replace("[", "").replace("]", ""))
+                        batch_data['no'].append(order['increment'])
+                        batch_data['ids'].append(order['user_id'])
+                        batch_data['contacts'].append('Да' if order['contacts'] else 'Нет')
+                        batch_data['position_name'].append(order['position_name'])
+                        batch_data['prices'].append(order['price'])
+                        batch_data['reg_date'].append(order['date'])
+                        
+                        if order['status'] == 'Posted':
+                            batch_data['status'].append('Размещён')
+                        elif order['status'] == 'Completed':
+                            batch_data['status'].append('Выполнен')
+                        else:
+                            batch_data['status'].append(order['status'])
+                        
+                        processed_rows += 1
+                        
+                        # Когда накопили SHEET_BATCH_SIZE строк - отправляем в Sheets
+                        if len(batch_data['no']) >= SHEET_BATCH_SIZE:
+                            end_row = current_row + len(batch_data['no']) - 1
+                            service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
+                                "valueInputOption": "USER_ENTERED",
+                                "data": [
+                                    {"range": f"Заказы!A{current_row}:A{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['no']]},
+                                    {"range": f"Заказы!B{current_row}:B{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['ids']]},
+                                    {"range": f"Заказы!C{current_row}:C{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['logins']]},
+                                    {"range": f"Заказы!D{current_row}:D{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['links']]},
+                                    {"range": f"Заказы!E{current_row}:E{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['contacts']]},
+                                    {"range": f"Заказы!F{current_row}:F{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['position_name']]},
+                                    {"range": f"Заказы!G{current_row}:G{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['prices']]},
+                                    {"range": f"Заказы!H{current_row}:H{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['status']]},
+                                    {"range": f"Заказы!I{current_row}:I{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['reg_date']]}
+                                ]
+                            }).execute()
+                            
+                            print(f"✅ Отправлено {processed_rows} строк в таблицу")
+                            current_row = end_row + 1
+                            
+                            # Очищаем пакет
+                            batch_data = {
+                                'no': [], 'ids': [], 'logins': [], 'links': [],
+                                'contacts': [], 'position_name': [], 'prices': [],
+                                'reg_date': [], 'status': []
+                            }
+                    
+                    del links_array
+            
+            # Очищаем пакет заказов из памяти
+            del orders_batch
+            db_offset += DB_BATCH_SIZE
+        
+        # Отправляем остаток данных
+        if batch_data['no']:
+            end_row = current_row + len(batch_data['no']) - 1
+            service.spreadsheets().values().batchUpdate(spreadsheetId=spreadsheet_id, body={
+                "valueInputOption": "USER_ENTERED",
+                "data": [
+                    {"range": f"Заказы!A{current_row}:A{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['no']]},
+                    {"range": f"Заказы!B{current_row}:B{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['ids']]},
+                    {"range": f"Заказы!C{current_row}:C{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['logins']]},
+                    {"range": f"Заказы!D{current_row}:D{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['links']]},
+                    {"range": f"Заказы!E{current_row}:E{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['contacts']]},
+                    {"range": f"Заказы!F{current_row}:F{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['position_name']]},
+                    {"range": f"Заказы!G{current_row}:G{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['prices']]},
+                    {"range": f"Заказы!H{current_row}:H{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['status']]},
+                    {"range": f"Заказы!I{current_row}:I{end_row}", "majorDimension": "COLUMNS", "values": [batch_data['reg_date']]}
+                ]
+            }).execute()
+            print(f"✅ Отправлен финальный пакет: {processed_rows} строк (всего)")
+        
+        # Очищаем все данные
+        del batch_data, excludes
+        
+        print("🔓 Настройка публичного доступа...")
+        
+        # Публичный доступ
         driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
         driveService.permissions().create(
             fileId=spreadsheet_id,
             body={'type': 'anyone', 'role': 'writer'},
             fields='id'
         ).execute()
-
-        spreadsheet_url = spreadsheet['spreadsheetUrl']
-        del spreadsheet
+        
+        spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
+        print(f"🎉 Отчет готов: {spreadsheet_url}")
+        print(f"📊 Обработано строк: {processed_rows}")
         
         return spreadsheet_url
         
     except Exception as e:
-        print(f'Error in create_sheet: {e}')
+        print(f'❌ Error in create_sheet: {e}')
+        import traceback
+        traceback.print_exc()
         raise
 
 def create_orders_report(user_id):

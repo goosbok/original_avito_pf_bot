@@ -425,7 +425,7 @@ async def pf(call: CallbackQuery, state: FSMContext):
             data['total_price'] = int(count * fix * int(days))
         if 'links' not in data:
             STR = get_string('str_pf_links')
-            await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
+            await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'), disable_web_page_preview=True)
         else:
             await place_order(call.message, state)
         await state.set_state("place_order")
@@ -473,16 +473,50 @@ async def enter_pf_func(message: types.Message, state: FSMContext):
         STR = get_string('str_bad_number')
         await message.answer(STR, reply_markup=user_back_kb('user:tarif'))
 
-@dp.message_handler(text_startswith="http", state='place_order')
+def extract_avito_links(text: str) -> list:
+    """Извлекает уникальные ссылки avito.ru из произвольного текста.
+
+    Обрабатывает:
+    - текст со ссылками (не только сообщения, начинающиеся с http)
+    - ссылки, разорванные переносом строки
+    """
+    # Склеиваем строки, которые выглядят как продолжение разорванной ссылки:
+    # строка без пробелов, не начинается с http, идёт сразу после http-строки
+    lines = text.split('\n')
+    merged = []
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if line.startswith('http'):
+            while i + 1 < len(lines):
+                nxt = lines[i + 1].strip()
+                if nxt and ' ' not in nxt and not nxt.startswith('http'):
+                    line += nxt
+                    i += 1
+                else:
+                    break
+        merged.append(line)
+        i += 1
+
+    full_text = ' '.join(merged)
+    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/\S+', full_text)
+
+    seen = set()
+    unique_links = []
+    for url in raw_urls:
+        url = link_cleaner(url)
+        if url not in seen:
+            seen.add(url)
+            unique_links.append(url)
+    return unique_links
+
+
+@dp.message_handler(content_types=ContentType.TEXT, state='place_order')
 async def place_order(message: Message, state: FSMContext):
-    links = []
-    if 'avito' in message.text:
+    links = extract_avito_links(message.text)
+    if links:
         async with state.proxy() as data:
             if 'links' not in data:
-                for link in message.text.split('\n'):
-                    if len(link) > 0:
-                        link = link_cleaner(link)
-                        links.append(link)
                 data['links'] = links
             data['total_price'] *= len(data['links'])
         await state.set_state("order_checkout")

@@ -1,0 +1,58 @@
+Updates were skipped successfully.
+Cause exception while getting updates.
+Traceback (most recent call last):
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiogram/bot/api.py", line 139, in make_request
+    async with session.post(url, data=req, **kwargs) as response:
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiohttp/client.py", line 1521, in __aenter__
+    self._resp: _RetType = await self._coro
+                           ^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiohttp/client.py", line 788, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiohttp/client.py", line 766, in _connect_and_send_request
+    await resp.start(conn)
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiohttp/client_reqrep.py", line 539, in start
+    message, payload = await protocol.read()  # type: ignore[union-attr]
+                       ^^^^^^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiohttp/streams.py", line 707, in read
+    await self._waiter
+aiohttp.client_exceptions.ServerDisconnectedError: Server disconnected
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiogram/dispatcher/dispatcher.py", line 381, in start_polling
+    updates = await self.bot.get_updates(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiogram/bot/bot.py", line 110, in get_updates
+    result = await self.request(api.Methods.GET_UPDATES, payload)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiogram/bot/base.py", line 236, in request
+    return await api.make_request(await self.get_session(), self.server, self.__token, method, data, files,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/avito_pf_bot/venv/lib/python3.12/site-packages/aiogram/bot/api.py", line 142, in make_request
+    raise exceptions.NetworkError(f"aiohttp client throws an error: {e.__class__.__name__}: {e}")
+aiogram.utils.exceptions.NetworkError: Aiohttp client throws an error: ServerDisconnectedError: Server disconnected
+Goodbye!
+[31m    ___    ____  __  ____________     __             ____  ______            ____  ______
+   /   |  / __ )/ / / /_  __/ __ \   / /_  __  __   / __ \/ ____/   ______ _( __ )/ ____/
+  / /| | / __  / / / / / / / / / /  / __ \/ / / /  / / / / __/ | | / / __ `/ __  /___ \  
+ / ___ |/ /_/ / /_/ / / / / /_/ /  / /_/ / /_/ /  / /_/ / /___ | |/ / /_/ / /_/ /___/ /  
+/_/  |_/_____/\____/ /_/  \____/  /_.___/\__, /   \____/_____/ |___/\__, /\____/_____/   
+                                        /____/                     /____/                
+[39m
+database was found (users | 1/6)
+database was found (refills | 2/6)
+database was found (orders | 3/6)
+database was found (promocodes | 4/6)
+database was found (reviews | 5/6)
+database was found (delreviews | 6/6)
+[35m    __                       __             __
+   / /___ ___  ______  _____/ /_  ___  ____/ /
+  / / __ `/ / / / __ \/ ___/ __ \/ _ \/ __  / 
+ / / /_/ / /_/ / / / / /__/ / / /  __/ /_/ /  
+/_/\__,_/\__,_/_/ /_/\___/_/ /_/\___/\__,_/   
+                                              
+[39m
+Error deleting message!
+Updates were skipped successfully.

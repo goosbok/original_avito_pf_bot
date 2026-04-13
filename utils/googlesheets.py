@@ -22,263 +22,136 @@ def get_user_str(user):
         return str(user['id'])
 
 def create_sheet():
-    orders = all_orders()
-    users = all_users()
-    excludes = get_report_exclude()
-    d=datetime.now()
+    try:
+        orders = all_orders()
+        excludes = get_report_exclude()
+        d = datetime.now()
 
-    #Получаю № заказа
-    no = ['№']
-    ids = ['id']
-    logins = ['username']
-    links = ['Ссылки']
-    contacts = ['Контакты']
-    position_name = ['Дней/ПФ']
-    prices = ['Итого']
-    reg_date = ['Дата']
-    status = ['Статус']
-    for order in orders:
-        if str(order['user_id']) not in excludes:
-            links_array = order['links'].split()
-            for link in links_array:
-                logins.append(order['user_name'])
-                links.append(link.replace("'", "").replace("[", "").replace("]", ""))
-                #Получаю № заказа
-                no.append(order['increment'])
-                ids.append(order['user_id'])
-                if order['contacts']:
-                    contacts.append('Да')
-                else:
-                    contacts.append('Нет')
-                position_name.append(order['position_name'])
-                prices.append(order['price'])
-                reg_date.append(order['date'])
-                if order['status'] == 'Posted':
-                    status.append('Размещён')
-                elif order['status'] == 'Completed':
-                    status.append('Выполнен')
-                else:
-                    status.append(order['status'])
+        # Размер чанка для обработки
+        CHUNK_SIZE = 1000
+        
+        #Получаю № заказа
+        no = ['№']
+        ids = ['id']
+        logins = ['username']
+        links = ['Ссылки']
+        contacts = ['Контакты']
+        position_name = ['Дней/ПФ']
+        prices = ['Итого']
+        reg_date = ['Дата']
+        status = ['Статус']
+        
+        # Обрабатываем заказы чанками
+        for order in orders:
+            if str(order['user_id']) not in excludes:
+                links_array = order['links'].split()
+                for link in links_array:
+                    logins.append(order['user_name'])
+                    # Очищаем ссылку один раз
+                    clean_link = link.replace("'", "").replace("[", "").replace("]", "")
+                    links.append(clean_link)
+                    
+                    #Получаю № заказа
+                    no.append(order['increment'])
+                    ids.append(order['user_id'])
+                    contacts.append('Да' if order['contacts'] else 'Нет')
+                    position_name.append(order['position_name'])
+                    prices.append(order['price'])
+                    reg_date.append(order['date'])
+                    
+                    if order['status'] == 'Posted':
+                        status.append('Размещён')
+                    elif order['status'] == 'Completed':
+                        status.append('Выполнен')
+                    else:
+                        status.append(order['status'])
+                
+                # Очищаем временный массив
+                del links_array
+        
+        # Очищаем orders из памяти
+        del orders
 
-    spreadsheet = service.spreadsheets().create(body = {
-        'properties': {'title': f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}", 'locale': 'ru_RU'},
-        'sheets': [{'properties': {'sheetType': 'GRID',
-                                    'sheetId': 0,
-                                    'title': 'Заказы',
-                                    'gridProperties': {'rowCount': len(no), 'columnCount': 9}}}]
-    }).execute()
-
-    results = service.spreadsheets().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "requests": [
-            # Задать ширину столбца A: 40 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",  # COLUMNS - потому что столбец
-                    "startIndex": 0,         # Столбцы нумеруются с нуля
-                    "endIndex": 1            # startIndex берётся включительно, endIndex - НЕ включительно,
-                                             # т.е. размер будет применён к столбцам в диапазоне [0,1), т.е. только к столбцу A
-                    },
-                    "properties": {
-                    "pixelSize": 40     # размер в пикселях
-                    },
-                    "fields": "pixelSize"  # нужно задать только pixelSize и не трогать другие параметры столбца
-                }
-            },
-
-            # Задать ширину столбцов B и C: 100 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 1,
-                    "endIndex": 3
-                    },
-                    "properties": {
-                    "pixelSize": 100
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца D: 500 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 3,
-                    "endIndex": 4
-                    },
-                    "properties": {
-                    "pixelSize": 500
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца E: 140 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 4,
-                    "endIndex": 5
-                    },
-                    "properties": {
-                    "pixelSize": 80
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца F: 140 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 5,
-                    "endIndex": 6
-                    },
-                    "properties": {
-                    "pixelSize": 140
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца G: 80 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 6,
-                    "endIndex": 7
-                    },
-                    "properties": {
-                    "pixelSize": 80
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца H: 80 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 7,
-                    "endIndex": 8
-                    },
-                    "properties": {
-                    "pixelSize": 80
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            # Задать ширину столбца I: 140 пикселей
-            {
-                "updateDimensionProperties": {
-                    "range": {
-                    "sheetId": 0,
-                    "dimension": "COLUMNS",
-                    "startIndex": 8,
-                    "endIndex": 9
-                    },
-                    "properties": {
-                    "pixelSize": 140
-                    },
-                    "fields": "pixelSize"
-                }
-            },
-
-            #Шапка таблицы
-            {
-                'repeatCell': {
-                    'range': {
-                        'sheetId': 0,
-                        'startRowIndex': 0,
-                        'endRowIndex': 1,
-                        'startColumnIndex': 0,
-                        'endColumnIndex': 9
-                    },
-                    'cell': {
-                        'userEnteredFormat': {
-                        'horizontalAlignment': 'CENTER',
-                        "backgroundColor": {
-                            "red": 0.8,
-                            "green": 0.8,
-                            "blue": 0.8,
-                            "alpha": 1
-                        },
-                        'textFormat': {'bold': True}
-                        }
-                    },
-                    'fields': 'userEnteredFormat'
-                    }
-            },
-            {
-            'setBasicFilter': {
-                'filter': {
-                    'range': {
-                        'sheetId': 0,
-                        'startRowIndex': 0,
-                        'endRowIndex': 1,
-                        'startColumnIndex': 0,
-                        'endColumnIndex': 9
-                    }
-                }
-            }}
-            ]}).execute()
-
-    results = service.spreadsheets().values().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "valueInputOption": "USER_ENTERED",
-        "data": [
-            {"range": f"Заказы!A1:A{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [no]},
-            {"range": f"Заказы!B1:B{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [ids]},
-            {"range": f"Заказы!C1:C{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [logins]},
-            {"range": f"Заказы!D1:D{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [links]},
-            {"range": f"Заказы!E1:E{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [contacts]},
-            {"range": f"Заказы!F1:F{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [position_name]},
-            {"range": f"Заказы!G1:G{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [prices]},
-            {"range": f"Заказы!H1:H{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [status]},
-            {"range": f"Заказы!I1:I{len(no)}",
-            "majorDimension": "COLUMNS",
-            "values": [reg_date]}
+        # Компактные запросы форматирования
+        format_requests = [
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 8, "endIndex": 9}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+            {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}, 
+                           'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 
+                           'fields': 'userEnteredFormat'}},
+            {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}}
         ]
-    }).execute()
 
-    driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
-    shareRes = driveService.permissions().create(
-        fileId = spreadsheet['spreadsheetId'],
-        body = {'type': 'anyone', 'role': 'writer'},  # доступ на чтение кому угодно
-        fields = 'id'
-    ).execute()
+        spreadsheet = service.spreadsheets().create(body = {
+            'properties': {'title': f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}", 'locale': 'ru_RU'},
+            'sheets': [{'properties': {'sheetType': 'GRID', 'sheetId': 0, 'title': 'Заказы', 'gridProperties': {'rowCount': len(no), 'columnCount': 9}}}]
+        }).execute()
 
-    return spreadsheet['spreadsheetUrl']
+        spreadsheet_id = spreadsheet['spreadsheetId']
+        
+        # Форматирование
+        service.spreadsheets().batchUpdate(spreadsheetId=spreadsheet_id, body={"requests": format_requests}).execute()
+        
+        # Очищаем format_requests
+        del format_requests
+
+        # Заполнение данными чанками для экономии памяти
+        total_rows = len(no)
+        
+        # Отправляем данные по колонкам чанками
+        all_columns = [
+            ('A', no),
+            ('B', ids),
+            ('C', logins),
+            ('D', links),
+            ('E', contacts),
+            ('F', position_name),
+            ('G', prices),
+            ('H', status),
+            ('I', reg_date)
+        ]
+        
+        for col_letter, col_data in all_columns:
+            # Разбиваем каждую колонку на чанки и отправляем
+            for chunk_start in range(0, total_rows, CHUNK_SIZE):
+                chunk_end = min(chunk_start + CHUNK_SIZE, total_rows)
+                chunk = col_data[chunk_start:chunk_end]
+                
+                service.spreadsheets().values().update(
+                    spreadsheetId=spreadsheet_id,
+                    range=f"Заказы!{col_letter}{chunk_start + 1}:{col_letter}{chunk_end}",
+                    valueInputOption="USER_ENTERED",
+                    body={"majorDimension": "COLUMNS", "values": [chunk]}
+                ).execute()
+                
+                # Очищаем чанк
+                del chunk
+        
+        # Очищаем большие массивы данных
+        del no, ids, logins, links, contacts, position_name, prices, reg_date, status
+        del all_columns, excludes
+
+        driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
+        driveService.permissions().create(
+            fileId=spreadsheet_id,
+            body={'type': 'anyone', 'role': 'writer'},
+            fields='id'
+        ).execute()
+
+        spreadsheet_url = spreadsheet['spreadsheetUrl']
+        del spreadsheet
+        
+        return spreadsheet_url
+        
+    except Exception as e:
+        print(f'Error in create_sheet: {e}')
+        raise
 
 def create_orders_report(user_id):
     orders = all_orders()

@@ -784,22 +784,29 @@ async def order_finish(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text="gsheets")
 async def gsheets(call: types.CallbackQuery, state: FSMContext):
-    #await call.message.answer_sticker("CAACAgIAAxkBAAKsC2ZiFkw2x6LCIMANpdUYdwFmX6XnAAIuQQACL3WRSy5s2sn5ZuS8NQQ")
-    #await call.message.answer(sheet_complete, reply_markup=gsheets_url(create_sheet()))
+    chat_id = call.message.chat.id
+    
     try:
         await call.message.delete()
     except:
         print('Error deleting message!')
 
     STICKER = get_setting('wait_sticker')
-    msg = await call.message.answer("⏳ Идет генерация отчета.")
-    stick = await call.message.answer_sticker(STICKER)
-    await call.message.answer(sheet_complete, reply_markup=gsheets_url(create_sheet()))
+    msg = await bot.send_message(chat_id=chat_id, text="⏳ Идет генерация отчета.")
+    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER)
+    
     try:
-        await bot.delete_message(chat_id=call.message.chat.id, message_id=msg.message_id)
-        await bot.delete_message(chat_id=call.message.chat.id, message_id=stick.message_id)
-    except:
-        pass
+        sheet_url = create_sheet()
+        await bot.send_message(chat_id=chat_id, text=sheet_complete, reply_markup=gsheets_url(sheet_url))
+    except Exception as e:
+        print(f'Error creating sheet: {e}')
+        await bot.send_message(chat_id=chat_id, text="⚠️ Ошибка при генерации отчета!")
+    finally:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
+            await bot.delete_message(chat_id=chat_id, message_id=stick.message_id)
+        except:
+            pass
 
 @dp.callback_query_handler(text_startswith="orders_", state="*")
 async def admin_call_orders_by_status(call: types.CallbackQuery, state: FSMContext):

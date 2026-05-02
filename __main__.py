@@ -29,10 +29,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("bot_runner")
 
+async def serve_web():
+    import uvicorn
+    from web.main import app
+    from web.config import WEB_HOST, WEB_PORT, assert_configured
+
+    assert_configured()
+    config = uvicorn.Config(
+        app,
+        host=WEB_HOST,
+        port=WEB_PORT,
+        log_level="info",
+        lifespan="off",
+    )
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
 #    sql_start()
     logger.info("Bot startup")
+    asyncio.create_task(serve_web())
     print(Fore.MAGENTA + fig.renderText('launched') + Fore.RESET)
 
 

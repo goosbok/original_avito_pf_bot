@@ -684,97 +684,114 @@ def add_balance(new_balance, id):
 ############################           Базы Данных          ###########################
 #######################################################################################
 
-# Создание Базы Данных
+def get_schema_statements() -> list[tuple[str, str, int]]:
+    """Возвращает список (table_name, create_sql, expected_column_count).
+
+    Используется create_db() для бутстрапа продовой БД и tests.conftest для tmp-БД.
+    """
+    return [
+        (
+            "users",
+            "CREATE TABLE users("
+            "id INTEGER PRIMARY KEY,"
+            "user_name TEXT,"
+            "first_name TEXT,"
+            "balance INTEGER DEFAULT 0,"
+            "reg_date TIMESTAMP,"
+            "ref_user_name TEXT,"
+            "ref_id INTEGER,"
+            "is_vip BOOLEN,"
+            "magic TEXT,"
+            "referals TEXT)",
+            10,
+        ),
+        (
+            "refills",
+            "CREATE TABLE refills("
+            "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "amount INTEGER,"
+            "date TIMESTAMP,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            4,
+        ),
+        (
+            "orders",
+            "CREATE TABLE orders("
+            "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "price INTEGER,"
+            "position_name TEXT,"
+            "status TEXT,"
+            "links TEXT,"
+            "date TIMESTAMP,"
+            "contacts BOOLEN DEFAULT False,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            8,
+        ),
+        (
+            "promocodes",
+            "CREATE TABLE promocodes("
+            "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "code TEXT NOT NULL,"
+            "price INTEGER,"
+            "isactivated BOOL DEFAULT FALSE,"
+            "prom_users TEXT)",
+            5,
+        ),
+        (
+            "reviews",
+            "CREATE TABLE reviews ("
+            "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "user_id INTEGER NOT NULL, "
+            "price INTEGER, "
+            "service TEXT, "
+            "status TEXT, "
+            "date TIMESTAMP, "
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            6,
+        ),
+        (
+            "delreviews",
+            "CREATE TABLE delreviews ("
+            "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "user_id INTEGER NOT NULL, "
+            "price INTEGER, "
+            "service TEXT, "
+            "link TEXT, "
+            "status TEXT, "
+            "date TIMESTAMP, "
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            7,
+        ),
+        (
+            "settings",
+            "CREATE TABLE IF NOT EXISTS settings("
+            "parametr TEXT PRIMARY KEY,"
+            "description TEXT,"
+            "value TEXT)",
+            3,
+        ),
+        (
+            "strings",
+            "CREATE TABLE IF NOT EXISTS strings("
+            "parametr TEXT PRIMARY KEY,"
+            "description TEXT,"
+            "value TEXT)",
+            3,
+        ),
+    ]
+
+
 def create_db():
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-
-        # Пользователи
-        if len(con.execute("PRAGMA table_info(users)").fetchall()) == 10:
-            print("database was found (users | 1/6)")
-        else:
-            con.execute("CREATE TABLE users("
-                        "id INTEGER PRIMARY KEY,"
-                        "user_name TEXT,"
-                        "first_name TEXT,"
-                        "balance INTEGER DEFAULT 0,"
-                        "reg_date TIMESTAMP,"
-                        "ref_user_name TEXT,"
-                        "ref_id INTEGER,"
-                        "is_vip BOOLEN,"
-                        "magic TEXT,"
-                        "referals TEXT)")
-
-            print("database was not found (users | 1/6), creating...")
-        # Пополнения
-        if len(con.execute("PRAGMA table_info(refills)").fetchall()) == 4:
-            print("database was found (refills | 2/6)")
-        else:
-            con.execute("CREATE TABLE refills("
-                        "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        "user_id INTEGER NOT NULL,"
-                        "amount INTEGER,"
-                        "date TIMESTAMP,"
-                        "FOREIGN KEY (user_id) REFERENCES users(id))")
-            print("database was not found (refills | 2/6), creating...")
-
-        # Покупки
-        if len(con.execute("PRAGMA table_info(orders)").fetchall()) == 9:
-            print("database was found (orders | 3/6)")
-        else:
-            con.execute("CREATE TABLE orders("
-                        "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        "user_id INTEGER NOT NULL,"
-                        "price INTEGER,"
-                        "position_name TEXT,"
-                        "status TEXT,"
-                        "links TEXT,"
-                        "date TIMESTAMP,"
-                        "contacts BOOLEN DEFAULT False,"
-                        "FOREIGN KEY (user_id) REFERENCES users(id))")
-            print("database was not found (orders | 3/6), creating...")
-            con.commit()
-
-        # Покупки
-        if len(con.execute("PRAGMA table_info(promocodes)").fetchall()) == 5:
-            print("database was found (promocodes | 4/6)")
-        else:
-            con.execute("CREATE TABLE promocodes("
-                        "increment INTEGER PRIMARY KEY AUTOINCREMENT,"
-                        "code TEXT NOT NULL,"
-                        "price INTEGER,"
-                        "isactivated BOOL DEFAULT FALSE,"
-                        "prom_users TEXT,)")
-            print("database was not found (promocodes | 4/6), creating...")
-            con.commit()
-        #Отзывы
-        if len(con.execute("PRAGMA table_info(reviews)").fetchall()) == 6:
-            print("database was found (reviews | 5/6)")
-        else:
-            # Создание таблицы reviews
-            con.execute("CREATE TABLE reviews ("
-                        "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
-                        "user_id INTEGER NOT NULL, "
-                        "price INTEGER, "
-                        "service TEXT, "
-                        "status TEXT, "
-                        "date TIMESTAMP, "
-                        "FOREIGN KEY (user_id) REFERENCES users(id))")
-            print("database was not found (reviews | 5/6), creating...")
-
-        if len(con.execute("PRAGMA table_info(delreviews)").fetchall()) == 7:
-            print("database was found (delreviews | 6/6)")
-        else:
-            # Создание таблицы reviews
-            con.execute("CREATE TABLE delreviews ("
-                        "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
-                        "user_id INTEGER NOT NULL, "
-                        "price INTEGER, "
-                        "service TEXT, "
-                        "link TEXT, "
-                        "status TEXT, "
-                        "date TIMESTAMP, "
-                        "FOREIGN KEY (user_id) REFERENCES users(id))")
-            print("database was not found (delreviews | 6/6), creating...")
-            con.commit()
+        for idx, (table, ddl, cols) in enumerate(get_schema_statements(), start=1):
+            existing = con.execute(f"PRAGMA table_info({table})").fetchall()
+            if len(existing) == cols:
+                print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
+            else:
+                con.execute(ddl)
+                print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
+        con.commit()
 

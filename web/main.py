@@ -20,3 +20,10 @@ from web.routers import refill as refill_router  # noqa: E402
 
 app.include_router(auth_router.router)
 app.include_router(refill_router.router)
+
+from pathlib import Path  # noqa: E402
+
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")

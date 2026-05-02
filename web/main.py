@@ -13,3 +13,8 @@ app = FastAPI(title="Avito PF Bot Web", version="0.1.0")
 @app.get("/api/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+from web.routers import auth as auth_router  # noqa: E402
+
+app.include_router(auth_router.router)

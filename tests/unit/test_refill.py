@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
+from services.balance import get_balance
 from services.exceptions import PaymentError, UserNotFound
 from services.refill import create_invoice, finalize
 
@@ -126,3 +127,21 @@ def test_referral_bonus_referrer_does_not_exist(tmp_db: Path) -> None:
     assert result.user_balance == 1000
     assert result.referrer_bonus == 0
     assert result.referrer_new_balance is None
+
+
+def test_finalize_is_idempotent_with_payment_id(tmp_db: Path) -> None:
+    _make_user(tmp_db, balance=0)
+    finalize(user_id=1, amount=100, payment_id="pay-A")
+    new_balance = finalize(user_id=1, amount=100, payment_id="pay-A")
+    assert new_balance == 100
+    with sqlite3.connect(tmp_db) as con:
+        rows = con.execute("SELECT amount FROM refills WHERE user_id = 1").fetchall()
+    assert rows == [(100,)]
+
+
+def test_finalize_no_payment_id_is_not_dedup(tmp_db: Path) -> None:
+    """Без payment_id вызовы независимы — два пополнения = +amount × 2."""
+    _make_user(tmp_db, balance=0)
+    finalize(user_id=1, amount=100)
+    finalize(user_id=1, amount=100)
+    assert get_balance(1) == 200

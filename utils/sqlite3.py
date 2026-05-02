@@ -712,8 +712,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "user_id INTEGER NOT NULL,"
             "amount INTEGER,"
             "date TIMESTAMP,"
+            "payment_id TEXT,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            4,
+            5,
         ),
         (
             "orders",
@@ -793,5 +794,11 @@ def create_db():
             else:
                 con.execute(ddl)
                 print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
+
+        # Миграция: payment_id для дедупликации web-пополнений (Phase 1)
+        existing_cols = {row["name"] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
+        if "payment_id" not in existing_cols:
+            con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
+            print("migration: added refills.payment_id")
         con.commit()
 

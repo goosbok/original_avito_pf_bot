@@ -16,5 +16,7 @@ async def health() -> dict[str, str]:
 
 
 from web.routers import auth as auth_router  # noqa: E402
+from web.routers import refill as refill_router  # noqa: E402
 
 app.include_router(auth_router.router)
+app.include_router(refill_router.router)

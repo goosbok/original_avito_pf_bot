@@ -5,7 +5,7 @@ finalize — после подтверждения оплаты атомарно
 """
 from __future__ import annotations
 
-from services.balance import credit
+from services.balance import credit, get_balance
 from services.db import connect
 from services.exceptions import PaymentError
 from utils.other import get_date
@@ -22,19 +22,28 @@ def create_invoice(user_id: int, amount: int) -> tuple[str, str]:
         raise PaymentError(f"yookassa create_invoice failed: {exc}") from exc
 
 
-def finalize(user_id: int, amount: int) -> int:
+def finalize(user_id: int, amount: int, payment_id: str | None = None) -> int:
     """Атомарно зачислить amount на баланс и записать в refills.
 
-    Возвращает новый баланс. Бросает UserNotFound если такого user_id нет.
+    Если передан payment_id — операция идемпотентна: повторный вызов с тем же
+    payment_id не зачисляет деньги повторно, а возвращает текущий баланс.
     """
     if amount <= 0:
         raise ValueError(f"amount must be > 0, got {amount}")
 
+    if payment_id is not None:
+        with connect() as con:
+            existing = con.execute(
+                "SELECT 1 FROM refills WHERE payment_id = ? LIMIT 1", (payment_id,)
+            ).fetchone()
+        if existing is not None:
+            return get_balance(user_id)
+
     new_balance = credit(user_id, amount)
     with connect() as con:
         con.execute(
-            "INSERT INTO refills(amount, date, user_id) VALUES (?, ?, ?)",
-            (amount, get_date(), user_id),
+            "INSERT INTO refills(amount, date, user_id, payment_id) VALUES (?, ?, ?, ?)",
+            (amount, get_date(), user_id, payment_id),
         )
         con.commit()
     return new_balance
@@ -71,7 +80,9 @@ def _get_user_for_referral(user_id: int) -> dict:
     return row
 
 
-def finalize_with_referral_bonus(user_id: int, amount: int) -> RefillResult:
+def finalize_with_referral_bonus(
+    user_id: int, amount: int, payment_id: str | None = None
+) -> RefillResult:
     """Atomically finalize a refill and credit a referral bonus when applicable.
 
     Bonus rules (preserved from handlers/user_functions.py:722-744):
@@ -83,7 +94,7 @@ def finalize_with_referral_bonus(user_id: int, amount: int) -> RefillResult:
     user = _get_user_for_referral(user_id)
     is_first = _is_first_refill(user_id)
 
-    new_balance = finalize(user_id, amount)
+    new_balance = finalize(user_id, amount, payment_id=payment_id)
 
     referrer_id: int | None = user["ref_id"]
     bonus = 0

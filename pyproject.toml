@@ -1,0 +1,10 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning:aiogram.*",
+]
+addopts = "-ra -q"
+
+[tool.pytest.ini_options.markers]
+slow = "marks tests as slow"

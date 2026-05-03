@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <title>Личный кабинет</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 560px; margin: 60px auto; padding: 0 16px; }
+        .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-top: 16px; }
+        button { padding: 10px 16px; font-size: 16px; cursor: pointer; }
+        input { padding: 8px 10px; font-size: 16px; width: 160px; margin-right: 8px; }
+        .err { color: #c00; margin-top: 16px; white-space: pre-wrap; }
+        .ok  { color: #080; margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <h1>Личный кабинет</h1>
+    <div id="profile" class="card">Загрузка...</div>
+
+    <div class="card">
+        <h3>Пополнить баланс</h3>
+        <input id="amount" type="number" min="1" placeholder="Сумма, ₽">
+        <button id="refill-btn">Пополнить</button>
+        <div id="refill-status"></div>
+    </div>
+
+    <p><a href="#" id="logout">Выйти</a></p>
+
+    <script>
+        const token = localStorage.getItem("access_token");
+        if (!token) { window.location.href = "/index.html"; }
+
+        const authHeaders = {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+        };
+
+        async function loadProfile() {
+            const r = await fetch("/api/me", {headers: authHeaders});
+            const el = document.getElementById("profile");
+            if (r.status === 401) { localStorage.removeItem("access_token"); window.location.href = "/index.html"; return; }
+            if (r.status === 404) { el.textContent = "Сначала запустите бота /start в Telegram, потом перезагрузите страницу."; return; }
+            const p = await r.json();
+            el.innerHTML = `<b>${p.first_name || ""}</b> (@${p.user_name || "—"})<br>Баланс: <b>${p.balance} ₽</b>`;
+        }
+
+        async function startRefill() {
+            const amount = Number(document.getElementById("amount").value);
+            const status = document.getElementById("refill-status");
+            status.className = ""; status.textContent = "Создаю инвойс...";
+            const r = await fetch("/api/refill", {
+                method: "POST", headers: authHeaders,
+                body: JSON.stringify({amount}),
+            });
+            if (!r.ok) { status.className = "err"; status.textContent = "Ошибка: " + r.status; return; }
+            const {payment_id, payment_url} = await r.json();
+            window.open(payment_url, "_blank");
+            status.textContent = "Ожидаю подтверждение оплаты...";
+            pollStatus(payment_id, status);
+        }
+
+        async function pollStatus(payment_id, statusEl) {
+            for (let i = 0; i < 60; i++) {
+                await new Promise(r => setTimeout(r, 5000));
+                const r = await fetch(`/api/refill/${payment_id}/status`, {headers: authHeaders});
+                if (!r.ok) continue;
+                const {status} = await r.json();
+                if (status === "succeeded") {
+                    statusEl.className = "ok"; statusEl.textContent = "Оплата прошла, баланс обновлён.";
+                    loadProfile();
+                    return;
+                }
+                if (status === "failed") {
+                    statusEl.className = "err"; statusEl.textContent = "Оплата не прошла.";
+                    return;
+                }
+            }
+            statusEl.className = "err"; statusEl.textContent = "Время ожидания истекло. Если оплатили — перезагрузите страницу.";
+        }
+
+        document.getElementById("refill-btn").onclick = startRefill;
+        document.getElementById("logout").onclick = (e) => {
+            e.preventDefault();
+            localStorage.removeItem("access_token");
+            window.location.href = "/index.html";
+        };
+
+        loadProfile();
+    </script>
+</body>
+</html>

@@ -668,89 +668,73 @@ async def refill(message: Message, state: FSMContext):
     except:
         print("Error deleting message!")
 
-# Ваш обработчик для кнопки "Оплатить подписку навсегда"
 @dp.callback_query_handler(text_startswith="refil:confirm", state="refill_balance")
 async def refill_balance(call: CallbackQuery, state: FSMContext):
+    from services.refill import (
+        create_invoice as svc_create_invoice,
+        finalize_with_referral_bonus,
+    )
+    from services.exceptions import PaymentError, UserNotFound
+
     await call.message.delete()
     async with state.proxy() as data:
-        amount=data['price']
-    # Получаем user_id пользователя, чтобы сгенерировать уникальный URL оплаты
+        amount = data['price']
     user_id = call.from_user.id
 
-    is_refill = get_refill(user_id)
-
-    # Генерируем URL оплаты
     try:
-        payment_url, payment_id = create_invoice(user_id, int(amount))
-    except:
+        payment_url, payment_id = svc_create_invoice(user_id, int(amount))
+    except PaymentError:
         support_nick = get_nick('manager_nick')
-        msg = get_string('str_payment_error')
-        msg = msg.format(support_nick)
+        msg = get_string('str_payment_error').format(support_nick)
         await bot.send_message(chat_id=user_id, text=msg, reply_markup=payment_error_kb())
         return
 
-    # Отправляем сообщение с кнопкой на оплату
-    STR1 = get_string('str_debet_money')
-    f_amount = format_decimal(amount)
-    STR1 = STR1.format(f_amount)
+    STR1 = get_string('str_debet_money').format(format_decimal(amount))
 
     if user_id != 6988175544 and user_id != 257838190:
-        await bot.send_message(chat_id=user_id, text=STR1, reply_markup=yookassa_kb(int(amount), payment_url))
+        await bot.send_message(
+            chat_id=user_id, text=STR1,
+            reply_markup=yookassa_kb(int(amount), payment_url),
+        )
         success = await check_payment_status(payment_id)
     else:
         success = True
 
-    # Используем callback_query.message.answer вместо message.answer
-    if success:
-        usr = get_user(id=user_id)
-        ref_user=get_user(id=str(usr['ref_id']))
-        try:
-            update_user(id=user_id, balance=usr['balance'] + int(amount))
-            add_refill(int(amount), user_id)
-            user_string = await get_user_string_without_first_name(usr)
-            STR2 = get_string('str_usr_pay_success')
-            f_amount = format_decimal(amount)
-            new_balance = usr['balance'] + int(amount)
-            f_balance = format_decimal(new_balance)
-            STR2 = STR2.format(f_amount, f_balance)
-            await bot.send_message(chat_id=user_id, text=STR2, reply_markup=user_back_kb('user:profile'))
-            STR3 = get_string('str_adm_pay_success')
-            STR3 = STR3.format(f_amount, user_string, f_balance)
-            await send_admins(STR3)
-            print(f"Юзер {usr['id']}: {usr['user_name']} пополнил баланс на {amount} руб.")
-
-            if ref_user:
-
-                if ref_user['user_name']:
-                    ref_user_str = ref_user['user_name']
-                else:
-                    ref_user_str = ref_user['id']
-
-                if not usr['is_vip']:
-                    if not is_refill:
-                        if ref_user is not None:
-                            update_user(id=str(usr['ref_id']), balance=ref_user['balance'] + int(amount * 0.3))
-                            add_refill(int(amount * 0.3), usr['ref_id'])
-                            STR4 = get_string('str_ref_balance_refil')
-                            f_add_bal = format_decimal(amount * 0.3)
-                            f_new_bal = format_decimal(ref_user['balance'] + int(amount * 0.3))
-                            STR4 = STR4.format(f_add_bal, f_new_bal)
-                            await bot.send_message(chat_id=str(usr['ref_id']), text=STR4)
-                            print(f"Юзер {ref_user_str} получил пополнение на {amount * 0.3} руб.")
-                        else:
-                            print(f"Юзер {usr['id']}: {usr['user_name']} не имет рефера!")
-                else:
-                    ref_user_str = await get_user_string_without_first_name(ref_user)
-                    print("Реферал пользователя {ref_user_str} пополнил баланс на {amount} руб.")
-        except Exception as ex:
-            print(f'Error:\n{ex}')
-            STR5 = get_string('str_error')
-            await bot.send_message(chat_id=user_id, text=STR5)
-    else:
-        STR6 = get_string('str_pay_error')
-        support_nick = get_nick('manager_nick')
-        STR6 = STR6.format(support_nick)
+    if not success:
+        STR6 = get_string('str_pay_error').format(get_nick('manager_nick'))
         await bot.send_message(chat_id=user_id, text=STR6)
+        return
+
+    try:
+        result = finalize_with_referral_bonus(user_id, int(amount))
+    except UserNotFound:
+        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        return
+    except Exception as ex:
+        print(f'Error:\n{ex}')
+        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        return
+
+    usr = get_user(id=user_id)
+    user_string = await get_user_string_without_first_name(usr)
+    f_amount = format_decimal(amount)
+    f_balance = format_decimal(result.user_balance)
+
+    STR2 = get_string('str_usr_pay_success').format(f_amount, f_balance)
+    await bot.send_message(chat_id=user_id, text=STR2, reply_markup=user_back_kb('user:profile'))
+    STR3 = get_string('str_adm_pay_success').format(f_amount, user_string, f_balance)
+    await send_admins(STR3)
+    print(f"Юзер {usr['id']}: {usr['user_name']} пополнил баланс на {amount} руб.")
+
+    if result.referrer_bonus > 0 and result.referrer_id is not None:
+        ref_user = get_user(id=str(result.referrer_id))
+        if ref_user:
+            f_add_bal = format_decimal(result.referrer_bonus)
+            f_new_bal = format_decimal(result.referrer_new_balance)
+            STR4 = get_string('str_ref_balance_refil').format(f_add_bal, f_new_bal)
+            await bot.send_message(chat_id=str(result.referrer_id), text=STR4)
+            ref_user_str = ref_user.get('user_name') or ref_user['id']
+            print(f"Юзер {ref_user_str} получил пополнение на {result.referrer_bonus} руб.")
 
 ###############################################################################################
 #############################             ВИДОСИК              ################################

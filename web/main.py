@@ -1,0 +1,29 @@
+"""Точка входа FastAPI-приложения.
+
+Запускается как фоновая asyncio-таска внутри aiogram-loop через __main__.py.
+Routers подключаются ниже по мере добавления (в Task 14, 15).
+"""
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+app = FastAPI(title="Avito PF Bot Web", version="0.1.0")
+
+
+@app.get("/api/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+from web.routers import auth as auth_router  # noqa: E402
+from web.routers import refill as refill_router  # noqa: E402
+
+app.include_router(auth_router.router)
+app.include_router(refill_router.router)
+
+from pathlib import Path  # noqa: E402
+
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")

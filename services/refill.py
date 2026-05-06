@@ -22,14 +22,24 @@ def create_invoice(user_id: int, amount: int) -> tuple[str, str]:
         raise PaymentError(f"yookassa create_invoice failed: {exc}") from exc
 
 
-def finalize(user_id: int, amount: int, payment_id: str | None = None) -> int:
-    """Атомарно зачислить amount на баланс и записать в refills.
+def finalize(
+    user_id: int,
+    amount: int,
+    payment_id: str | None = None,
+    *,
+    source_type: str = "telegram",
+    source_app_id: int | None = None,
+) -> int:
+    """Атомарно зачислить amount на баланс и записать в refills с source-tracking.
 
     Если передан payment_id — операция идемпотентна: повторный вызов с тем же
     payment_id не зачисляет деньги повторно, а возвращает текущий баланс.
     """
     if amount <= 0:
         raise ValueError(f"amount must be > 0, got {amount}")
+
+    from services.source import normalize
+    src_type, src_app = normalize(source_type, source_app_id)
 
     if payment_id is not None:
         with connect() as con:
@@ -42,8 +52,9 @@ def finalize(user_id: int, amount: int, payment_id: str | None = None) -> int:
     new_balance = credit(user_id, amount)
     with connect() as con:
         con.execute(
-            "INSERT INTO refills(amount, date, user_id, payment_id) VALUES (?, ?, ?, ?)",
-            (amount, get_date(), user_id, payment_id),
+            "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (amount, get_date(), user_id, payment_id, src_type, src_app),
         )
         con.commit()
     return new_balance
@@ -81,7 +92,12 @@ def _get_user_for_referral(user_id: int) -> dict:
 
 
 def finalize_with_referral_bonus(
-    user_id: int, amount: int, payment_id: str | None = None
+    user_id: int,
+    amount: int,
+    payment_id: str | None = None,
+    *,
+    source_type: str = "telegram",
+    source_app_id: int | None = None,
 ) -> RefillResult:
     """Atomically finalize a refill and credit a referral bonus when applicable.
 
@@ -94,7 +110,10 @@ def finalize_with_referral_bonus(
     user = _get_user_for_referral(user_id)
     is_first = _is_first_refill(user_id)
 
-    new_balance = finalize(user_id, amount, payment_id=payment_id)
+    new_balance = finalize(
+        user_id, amount, payment_id=payment_id,
+        source_type=source_type, source_app_id=source_app_id,
+    )
 
     referrer_id: int | None = user["ref_id"]
     bonus = 0
@@ -103,7 +122,11 @@ def finalize_with_referral_bonus(
     if is_first and not user["is_vip"] and referrer_id is not None:
         bonus = int(amount * 0.3)
         try:
-            referrer_new_balance = finalize(int(referrer_id), bonus) if bonus > 0 else None
+            referrer_new_balance = (
+                finalize(int(referrer_id), bonus,
+                         source_type=source_type, source_app_id=source_app_id)
+                if bonus > 0 else None
+            )
         except UserNotFound:
             referrer_new_balance = None
             bonus = 0

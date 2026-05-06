@@ -145,3 +145,36 @@ def test_finalize_no_payment_id_is_not_dedup(tmp_db: Path) -> None:
     finalize(user_id=1, amount=100)
     finalize(user_id=1, amount=100)
     assert get_balance(1) == 200
+
+
+def test_finalize_writes_source_telegram_by_default(tmp_db: Path):
+    _make_user(tmp_db, balance=0)
+    finalize(user_id=1, amount=100)
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT source_type, source_app_id FROM refills").fetchone()
+    assert row == ("telegram", None)
+
+
+def test_finalize_writes_source_web(tmp_db: Path):
+    _make_user(tmp_db, balance=0)
+    finalize(user_id=1, amount=100, source_type="web")
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT source_type, source_app_id FROM refills").fetchone()
+    assert row == ("web", None)
+
+
+def test_finalize_writes_source_api_with_app_id(tmp_db: Path):
+    _make_user(tmp_db, balance=0)
+    finalize(user_id=1, amount=100, source_type="api", source_app_id=7)
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT source_type, source_app_id FROM refills").fetchone()
+    assert row == ("api", 7)
+
+
+def test_finalize_api_without_app_id_raises(tmp_db: Path):
+    _make_user(tmp_db, balance=0)
+    with pytest.raises(ValueError):
+        finalize(user_id=1, amount=100, source_type="api")

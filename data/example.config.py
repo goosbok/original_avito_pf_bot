@@ -78,3 +78,12 @@ price_avito={'100' : 650, '50' : 650, '20' : 650, '10' : 650, '5': 650}
 JWT_SECRET = "REPLACE_ME_WITH_AT_LEAST_32_CHARS_RANDOM_STRING_PLEASE"
 WEB_HOST = "127.0.0.1"
 WEB_PORT = 8000
+
+#################################
+### OTP (Telegram login codes)
+OTP_TTL_SECONDS = 300        # 5 минут
+OTP_MAX_ATTEMPTS = 5         # после 5 неверных попыток код инвалидируется
+OTP_RESEND_COOLDOWN = 60     # не чаще раза в минуту
+
+# Telegram Bot HTTP API (используется для отправки OTP без aiogram)
+BOT_HTTP_API_BASE = "https://api.telegram.org"

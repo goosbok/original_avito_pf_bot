@@ -4,41 +4,28 @@
     <meta charset="utf-8">
     <title>Avito PF Bot — вход</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 480px; margin: 80px auto; padding: 0 16px; }
-        h1 { margin-bottom: 24px; }
-        .err { color: #c00; margin-top: 16px; white-space: pre-wrap; }
+        body { font-family: system-ui, sans-serif; max-width: 420px; margin: 100px auto; padding: 0 16px; text-align: center; }
+        h1 { margin-bottom: 8px; }
+        p { color: #555; margin-bottom: 32px; }
+        .btn { display: block; width: 100%; padding: 14px; font-size: 16px; margin-bottom: 12px;
+               border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; text-decoration: none;
+               color: #000; box-sizing: border-box; }
+        .btn:hover { background: #f5f5f5; }
+        .btn-primary { background: #0088cc; color: #fff; border-color: #0088cc; }
+        .btn-primary:hover { background: #006fa8; }
     </style>
 </head>
 <body>
-    <h1>Войти через Telegram</h1>
-    <p>Чтобы продолжить, авторизуйтесь через бота.</p>
+    <h1>Avito PF Bot</h1>
+    <p>Выберите способ входа или создайте аккаунт</p>
 
-    <script async src="https://telegram.org/js/telegram-widget.js?22"
-            data-telegram-login="AVITOPF_bot"
-            data-size="large"
-            data-onauth="onTelegramAuth(user)"
-            data-request-access="write"></script>
-
-    <div id="err" class="err"></div>
+    <a class="btn btn-primary" href="/login_telegram.html">Войти через Telegram</a>
+    <a class="btn" href="/login.html">Войти через Email</a>
+    <a class="btn" href="/register.html">Зарегистрироваться</a>
 
     <script>
-        async function onTelegramAuth(user) {
-            try {
-                const resp = await fetch("/api/auth/telegram", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify(user),
-                });
-                if (!resp.ok) {
-                    const detail = await resp.text();
-                    throw new Error("auth failed: " + resp.status + " " + detail);
-                }
-                const data = await resp.json();
-                localStorage.setItem("access_token", data.access_token);
-                window.location.href = "/cabinet.html";
-            } catch (e) {
-                document.getElementById("err").textContent = String(e);
-            }
+        if (localStorage.getItem("access_token")) {
+            window.location.href = "/cabinet.html";
         }
     </script>
 </body>

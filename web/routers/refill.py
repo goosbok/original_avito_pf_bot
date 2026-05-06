@@ -11,7 +11,7 @@ from yookassa import Configuration, Payment
 from data.config import SECRET_KEY, SHOP_ID
 from services.exceptions import PaymentError, UserNotFound
 from services.refill import create_invoice, finalize_with_referral_bonus
-from web.deps import get_current_user_id
+from web.deps import require_user
 from web.schemas import RefillRequest, RefillResponse, RefillStatusResponse
 
 router = APIRouter(prefix="/api/refill", tags=["refill"])
@@ -33,7 +33,7 @@ def _yookassa_status(payment_id: str) -> str:
 @router.post("", response_model=RefillResponse)
 async def create_refill(
     payload: RefillRequest,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(require_user),
 ) -> RefillResponse:
     try:
         url, pid = create_invoice(user_id, payload.amount)
@@ -48,7 +48,7 @@ async def create_refill(
 @router.get("/{payment_id}/status", response_model=RefillStatusResponse)
 async def refill_status(
     payment_id: str,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(require_user),
 ) -> RefillStatusResponse:
     yookassa_status = _yookassa_status(payment_id)
 

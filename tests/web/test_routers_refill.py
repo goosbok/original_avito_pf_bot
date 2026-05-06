@@ -11,9 +11,7 @@ from fastapi.testclient import TestClient
 def authed(tmp_db: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("web.config.BOT_TOKEN", "1234:dummy")
     monkeypatch.setattr("web.config.JWT_SECRET", "x" * 32)
-    monkeypatch.setattr("web.routers.auth.BOT_TOKEN", "1234:dummy")
-    monkeypatch.setattr("web.routers.auth.JWT_SECRET", "x" * 32)
-    monkeypatch.setattr("web.deps.JWT_SECRET", "x" * 32)
+    monkeypatch.setattr("web.auth.JWT_SECRET", "x" * 32)
 
     with sqlite3.connect(tmp_db) as con:
         con.execute(

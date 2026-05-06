@@ -1,80 +1,28 @@
-"""Авторизация веб-клиента: Telegram Login Widget + JWT.
+"""JWT-helpers для веб-аутентификации.
 
-verify_telegram_auth — валидирует данные виджета по HMAC от bot token.
-create_jwt / decode_jwt — выдают и проверяют наш собственный сессионный токен.
+Telegram Login Widget verify удалён — теперь логин через OTP (см. routers/auth_telegram.py).
 """
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
-import jwt as pyjwt
+import jwt
 
-from web.config import (
-    JWT_ALGORITHM,
-    JWT_EXPIRE_HOURS,
-    TG_AUTH_MAX_AGE_SECONDS,
-)
+from web.config import JWT_ALGORITHM, JWT_EXPIRE_HOURS, JWT_SECRET
 
 
-class AuthError(Exception):
-    """Не удалось проверить подпись или токен истёк."""
+def create_jwt(user_id: int, *, secret: str | None = None, expire_hours: int | None = None) -> str:
+    """Сгенерировать JWT с internal user_id."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(hours=expire_hours or JWT_EXPIRE_HOURS)).timestamp()),
+    }
+    return jwt.encode(payload, secret or JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-def verify_telegram_auth(data: dict[str, Any], bot_token: str) -> int:
-    """Проверить подпись Telegram Login Widget и вернуть user_id.
-
-    Бросает AuthError если подпись неверна или auth_date устарел.
-    """
-    if "hash" not in data:
-        raise AuthError("missing 'hash'")
-
-    received_hash = data["hash"]
-    payload = {k: v for k, v in data.items() if k != "hash"}
-
-    if "auth_date" not in payload:
-        raise AuthError("missing 'auth_date'")
-    try:
-        auth_date = int(payload["auth_date"])
-    except (TypeError, ValueError) as exc:
-        raise AuthError("invalid 'auth_date'") from exc
-
-    if time.time() - auth_date > TG_AUTH_MAX_AGE_SECONDS:
-        raise AuthError("auth_date is too old")
-
-    data_check_string = "\n".join(f"{k}={payload[k]}" for k in sorted(payload.keys()))
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
-    expected = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-
-    if not hmac.compare_digest(expected, received_hash):
-        raise AuthError("hash mismatch")
-
-    if "id" not in payload:
-        raise AuthError("missing 'id'")
-    try:
-        return int(payload["id"])
-    except (TypeError, ValueError) as exc:
-        raise AuthError("invalid 'id'") from exc
-
-
-def create_jwt(user_id: int, secret: str, expires_hours: int | None = None) -> str:
-    exp = datetime.now(timezone.utc) + timedelta(hours=expires_hours or JWT_EXPIRE_HOURS)
-    payload = {"sub": str(user_id), "exp": exp}
-    return pyjwt.encode(payload, secret, algorithm=JWT_ALGORITHM)
-
-
-def decode_jwt(token: str, secret: str) -> int:
-    try:
-        payload = pyjwt.decode(token, secret, algorithms=[JWT_ALGORITHM])
-    except pyjwt.PyJWTError as exc:
-        raise AuthError(f"invalid token: {exc}") from exc
-    sub = payload.get("sub")
-    if sub is None:
-        raise AuthError("missing 'sub'")
-    try:
-        return int(sub)
-    except (TypeError, ValueError) as exc:
-        raise AuthError("invalid 'sub'") from exc
+def decode_jwt(token: str, *, secret: str | None = None) -> int:
+    """Декодировать JWT и вернуть user_id. Бросает jwt.InvalidTokenError."""
+    payload = jwt.decode(token, secret or JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    return int(payload["sub"])

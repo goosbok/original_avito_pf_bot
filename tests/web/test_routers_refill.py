@@ -91,3 +91,36 @@ def test_status_failed_for_canceled(authed) -> None:
     with patch("web.routers.refill.Payment.find_one", return_value=fake):
         response = authed.client.get("/api/refill/pay-Z/status", headers=authed.headers)
     assert response.json()["status"] == "failed"
+
+
+def test_refill_endpoint_accepts_api_key_auth(tmp_db: Path, monkeypatch) -> None:
+    """Verify /api/refill accepts X-API-Key auth (returns 200 with invoice URL)."""
+    monkeypatch.setattr("web.config.JWT_SECRET", "x" * 32)
+    monkeypatch.setattr("web.auth.JWT_SECRET", "x" * 32)
+
+    from services import applications, auth_email
+
+    owner_id = auth_email.register("dev@example.com", "password123")
+    created = applications.create(owner_id, "TestBot")
+
+    from web.main import app as fastapi_app
+
+    client = TestClient(fastapi_app)
+
+    with patch(
+        "web.routers.refill.create_invoice",
+        return_value=("https://pay/test", "pid-test"),
+    ):
+        r = client.post(
+            "/api/refill",
+            json={"amount": 500},
+            headers={
+                "X-API-Key": created.api_key,
+                "X-End-User-Id": "external-42",
+            },
+        )
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("payment_id") == "pid-test"
+    assert body.get("payment_url") == "https://pay/test"

@@ -11,7 +11,7 @@ from yookassa import Configuration, Payment
 from data.config import SECRET_KEY, SHOP_ID
 from services.exceptions import PaymentError, UserNotFound
 from services.refill import create_invoice, finalize_with_referral_bonus
-from web.deps import require_user
+from web.deps import CurrentCaller, current_caller
 from web.schemas import RefillRequest, RefillResponse, RefillStatusResponse
 
 router = APIRouter(prefix="/api/refill", tags=["refill"])
@@ -33,10 +33,10 @@ def _yookassa_status(payment_id: str) -> str:
 @router.post("", response_model=RefillResponse)
 async def create_refill(
     payload: RefillRequest,
-    user_id: int = Depends(require_user),
+    caller: CurrentCaller = Depends(current_caller),
 ) -> RefillResponse:
     try:
-        url, pid = create_invoice(user_id, payload.amount)
+        url, pid = create_invoice(caller.user_id, payload.amount)
     except PaymentError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -48,7 +48,7 @@ async def create_refill(
 @router.get("/{payment_id}/status", response_model=RefillStatusResponse)
 async def refill_status(
     payment_id: str,
-    user_id: int = Depends(require_user),
+    caller: CurrentCaller = Depends(current_caller),
 ) -> RefillStatusResponse:
     yookassa_status = _yookassa_status(payment_id)
 
@@ -58,7 +58,13 @@ async def refill_status(
         payment = Payment.find_one(payment_id)
         amount = int(float(payment.amount.value))
         try:
-            finalize_with_referral_bonus(user_id, amount, payment_id=payment_id)
+            finalize_with_referral_bonus(
+                caller.user_id,
+                amount,
+                payment_id=payment_id,
+                source_type=caller.source_type,
+                source_app_id=caller.source_app_id,
+            )
         except UserNotFound:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

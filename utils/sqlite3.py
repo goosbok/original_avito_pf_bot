@@ -713,8 +713,10 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "amount INTEGER,"
             "date TIMESTAMP,"
             "payment_id TEXT,"
+            "source_type TEXT NOT NULL DEFAULT 'telegram',"
+            "source_app_id INTEGER,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            5,
+            7,
         ),
         (
             "orders",
@@ -781,7 +783,66 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "value TEXT)",
             3,
         ),
+        (
+            "auth_providers",
+            "CREATE TABLE IF NOT EXISTS auth_providers("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "provider TEXT NOT NULL,"
+            "identifier TEXT NOT NULL,"
+            "credential_hash TEXT,"
+            "created_at TIMESTAMP NOT NULL,"
+            "last_used_at TIMESTAMP,"
+            "UNIQUE(provider, identifier),"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            8,
+        ),
+        (
+            "applications",
+            "CREATE TABLE IF NOT EXISTS applications("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "owner_user_id INTEGER NOT NULL,"
+            "name TEXT NOT NULL,"
+            "api_key_hash TEXT NOT NULL UNIQUE,"
+            "api_key_prefix TEXT NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "revoked_at TIMESTAMP,"
+            "FOREIGN KEY (owner_user_id) REFERENCES users(id))",
+            7,
+        ),
+        (
+            "otp_codes",
+            "CREATE TABLE IF NOT EXISTS otp_codes("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "purpose TEXT NOT NULL,"
+            "telegram_id INTEGER NOT NULL,"
+            "code_hash TEXT NOT NULL,"
+            "user_id_to_link INTEGER,"
+            "created_at TIMESTAMP NOT NULL,"
+            "expires_at TIMESTAMP NOT NULL,"
+            "attempts INTEGER NOT NULL DEFAULT 0,"
+            "consumed_at TIMESTAMP,"
+            "FOREIGN KEY (user_id_to_link) REFERENCES users(id))",
+            9,
+        ),
     ]
+
+
+def apply_phase2_migrations():
+    """Идемпотентно добавляет колонки source-tracking в refills."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        existing_cols = {row['name'] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
+        if 'source_type' not in existing_cols:
+            con.execute("ALTER TABLE refills ADD COLUMN source_type TEXT NOT NULL DEFAULT 'telegram'")
+            print("refills.source_type added")
+        if 'source_app_id' not in existing_cols:
+            con.execute("ALTER TABLE refills ADD COLUMN source_app_id INTEGER")
+            print("refills.source_app_id added")
+        if 'payment_id' not in existing_cols:
+            con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
+            print("refills.payment_id added")
+        con.commit()
 
 
 def create_db():
@@ -794,11 +855,6 @@ def create_db():
             else:
                 con.execute(ddl)
                 print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
-
-        # Миграция: payment_id для дедупликации web-пополнений (Phase 1)
-        existing_cols = {row["name"] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
-        if "payment_id" not in existing_cols:
-            con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
-            print("migration: added refills.payment_id")
         con.commit()
+    apply_phase2_migrations()
 

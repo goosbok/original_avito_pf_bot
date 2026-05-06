@@ -27,3 +27,45 @@ class InsufficientBalance(ServiceError):
 
 class PaymentError(ServiceError):
     """Ошибка при работе с провайдером платежей (yookassa)."""
+
+
+class InvalidCredentials(ServiceError):
+    """Email + password не совпадают, или provider/identifier не найден."""
+
+
+class ProviderAlreadyLinked(ServiceError):
+    """Пытаются привязать identifier, который уже привязан к другому user_id."""
+
+    def __init__(self, provider: str, identifier: str, existing_user_id: int):
+        super().__init__(f"{provider}:{identifier} already linked to user {existing_user_id}")
+        self.provider = provider
+        self.identifier = identifier
+        self.existing_user_id = existing_user_id
+
+
+class OTPInvalid(ServiceError):
+    """Код не совпадает или превышен лимит попыток."""
+
+
+class OTPExpired(ServiceError):
+    """Срок жизни кода истёк."""
+
+
+class OTPCooldown(ServiceError):
+    """Слишком частые запросы кода."""
+
+    def __init__(self, retry_after_seconds: int):
+        super().__init__(f"Try again in {retry_after_seconds}s")
+        self.retry_after_seconds = retry_after_seconds
+
+
+class ApplicationNotFound(ServiceError):
+    pass
+
+
+class InvalidAPIKey(ServiceError):
+    pass
+
+
+class EmailAlreadyRegistered(ServiceError):
+    pass

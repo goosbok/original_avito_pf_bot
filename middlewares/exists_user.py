@@ -4,6 +4,7 @@ from aiogram.types import Update
 from utils.sqlite3 import *
 from utils.sender import *
 from data.loader import bot
+from services import identity
 
 # TODO: отредачить поля
 class ExistsUserMiddleware(BaseMiddleware):
@@ -24,24 +25,25 @@ class ExistsUserMiddleware(BaseMiddleware):
         if user is not None:
             if not user.is_bot:
                 self.id = user.id
-                self.user_name = user.username
+                self.user_name = user.username or ""
                 self.first_name = user.first_name
                 self.bot = await bot.get_me()
 
-                if self.user_name is None:
-                    self.user_name = ""
+                is_new = get_user(id=self.id) is None
+                internal_user_id = identity.get_or_create_user_by_telegram(
+                    tg_id=self.id,
+                    user_name=self.user_name,
+                    first_name=self.first_name,
+                )
+                data["user_id"] = internal_user_id
 
-                if get_user(id=self.id) is None:
-                    register_user(id=self.id, user_name=self.user_name, first_name=self.first_name)
-                    await send_admins(f"<b>💎 Зарегистрирован новый пользователь @{self.user_name} (<a href='tg://user?id={self.id}'>{self.id}</a>)</b>")
+                if is_new:
+                    await send_admins(
+                        f"<b>💎 Зарегистрирован новый пользователь @{self.user_name} "
+                        f"(<a href='tg://user?id={self.id}'>{self.id}</a>)</b>"
+                    )
                 else:
                     if get_user(id=self.id)['user_name'] != self.user_name:
                         update_user(self.id, user_name=self.user_name)
                     if get_user(id=self.id)['first_name'] != self.first_name:
                         update_user(self.id, first_name=self.first_name)
-
-                    if len(self.user_name) >= 1:
-                        if self.user_name != get_user(id=self.id)['user_name']:
-                            update_user(id=self.id, user_name=self.user_name)
-                    else:
-                        update_user(id=self.id, user_name="")

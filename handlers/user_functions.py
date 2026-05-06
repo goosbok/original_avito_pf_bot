@@ -675,14 +675,21 @@ async def refill_balance(call: CallbackQuery, state: FSMContext):
         finalize_with_referral_bonus,
     )
     from services.exceptions import PaymentError, UserNotFound
+    from services.identity import get_or_create_user_by_telegram
 
     await call.message.delete()
     async with state.proxy() as data:
         amount = data['price']
     user_id = call.from_user.id
 
+    internal_user_id = get_or_create_user_by_telegram(
+        tg_id=user_id,
+        user_name=call.from_user.username,
+        first_name=call.from_user.first_name,
+    )
+
     try:
-        payment_url, payment_id = svc_create_invoice(user_id, int(amount))
+        payment_url, payment_id = svc_create_invoice(internal_user_id, int(amount))
     except PaymentError:
         support_nick = get_nick('manager_nick')
         msg = get_string('str_payment_error').format(support_nick)
@@ -706,7 +713,10 @@ async def refill_balance(call: CallbackQuery, state: FSMContext):
         return
 
     try:
-        result = finalize_with_referral_bonus(user_id, int(amount))
+        result = finalize_with_referral_bonus(
+            internal_user_id, int(amount),
+            source_type="telegram",
+        )
     except UserNotFound:
         await bot.send_message(chat_id=user_id, text=get_string('str_error'))
         return
@@ -715,7 +725,7 @@ async def refill_balance(call: CallbackQuery, state: FSMContext):
         await bot.send_message(chat_id=user_id, text=get_string('str_error'))
         return
 
-    usr = get_user(id=user_id)
+    usr = get_user(id=internal_user_id)
     user_string = await get_user_string_without_first_name(usr)
     f_amount = format_decimal(amount)
     f_balance = format_decimal(result.user_balance)

@@ -16,12 +16,16 @@ async def health() -> dict[str, str]:
 
 
 from web.routers import refill as refill_router  # noqa: E402
+from web.routers.applications import router as applications_router  # noqa: E402
 from web.routers.auth_email import router as auth_email_router  # noqa: E402
+from web.routers.auth_link import router as auth_link_router  # noqa: E402
 from web.routers.auth_telegram import router as auth_telegram_router  # noqa: E402
 from web.routers.me import router as me_router  # noqa: E402
 
 app.include_router(refill_router.router)
+app.include_router(applications_router)
 app.include_router(auth_email_router)
+app.include_router(auth_link_router)
 app.include_router(auth_telegram_router)
 app.include_router(me_router)
 

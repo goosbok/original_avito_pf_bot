@@ -147,8 +147,10 @@ async def user(call: CallbackQuery, state: FSMContext):
     data = call.data.split(":")
     action = data[1]
     if action == 'profile':
-        #await call.message.answer("Личный кабинет:", reply_markup=profile_kb())
         user = get_user_by_tg_id(call.from_user.id)
+        if user is None:
+            await call.message.answer(get_string('str_error') or '⚠️ Ошибка', reply_markup=get_menu_kb())
+            return
         profile_string = get_string('str_user_profile')
         ref_link = f"{config.botlink}?start={call.from_user.id}"
         rferals_count = get_referals_count(user)

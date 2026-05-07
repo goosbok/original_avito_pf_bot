@@ -35,6 +35,26 @@ def test_resolve_username(tmp_db: Path):
     assert auth_telegram.resolve_telegram_id("ALICE") == 555
 
 
+def test_resolve_username_modern_user(tmp_db: Path):
+    """Modern users: users.id is auto-increment, real Telegram ID is in auth_providers.
+    Bug: resolve_telegram_id was returning users.id (1) instead of the actual tg_id.
+    """
+    real_tg_id = 987654321
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO users(user_name, first_name, balance, reg_date) VALUES (?, ?, 0, ?)",
+            ("modernuser", "Modern", "2026-01-01"),
+        )
+        internal_id = con.execute("SELECT last_insert_rowid()").fetchone()[0]
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at) "
+            "VALUES (?, 'telegram', ?, '2026-01-01')",
+            (internal_id, str(real_tg_id)),
+        )
+        con.commit()
+    assert auth_telegram.resolve_telegram_id("@modernuser") == real_tg_id
+
+
 def test_resolve_username_not_found(tmp_db: Path):
     with pytest.raises(OTPInvalid):
         auth_telegram.resolve_telegram_id("@nobody")

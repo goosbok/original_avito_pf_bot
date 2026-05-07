@@ -1,6 +1,6 @@
 import logging
 from aiogram.dispatcher.middlewares import BaseMiddleware
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Update, Message, CallbackQuery
 from utils.sqlite3 import get_user, update_user
 from utils.sender import send_admins
 from data.loader import bot
@@ -12,6 +12,18 @@ logger = logging.getLogger(__name__)
 class ExistsUserMiddleware(BaseMiddleware):
     def __init__(self):
         super().__init__()
+
+    # ── fires for EVERY incoming Telegram update ──────────────────────────────
+    async def on_pre_process_update(self, update: Update, data: dict):
+        logger.info(
+            "UPDATE type=%s id=%s | msg=%s | cb_data=%s",
+            update.update_id,
+            "message" if update.message else
+            "callback_query" if update.callback_query else
+            "other",
+            update.message.text[:50] if update.message and update.message.text else None,
+            update.callback_query.data if update.callback_query else None,
+        )
 
     async def _ensure_user(self, tg_user, data: dict) -> None:
         if tg_user is None or tg_user.is_bot:
@@ -37,9 +49,9 @@ class ExistsUserMiddleware(BaseMiddleware):
             )
         else:
             db_user = get_user(id=user_id)
-            if db_user['user_name'] != user_name:
+            if db_user and db_user['user_name'] != user_name:
                 update_user(user_id, user_name=user_name)
-            if db_user['first_name'] != first_name:
+            if db_user and db_user['first_name'] != first_name:
                 update_user(user_id, first_name=first_name)
 
     async def on_pre_process_message(self, message: Message, data: dict):

@@ -1,29 +1,18 @@
 from aiogram import Dispatcher
 from aiogram.utils import executor
-#from aiogram import executor
 from pyfiglet import Figlet
 from colorama import Fore
 import logging
 import time
 from pathlib import Path
+import asyncio
+import os
 
 fig = Figlet(font='slant', width=200)
 print(f"{Fore.RED}{fig.renderText('ABUTO by OEvg85')}{Fore.RESET}")
 
-import asyncio
-import os
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-# DB must exist before handler modules are imported — users_menu.py queries
-# the settings table at module level (get_price calls on lines 10-15).
-from utils.sqlite3 import create_db as _init_db
-_init_db()
-
-from handlers.admin_functions import *
-from handlers.main_start import *
-from data.loader import dp
-
-
+# Logging must be configured before any module imports so that import-time
+# errors (missing DB rows, bad env vars, etc.) appear in the log file.
 LOG_PATH = Path(__file__).resolve().parent / "log.txt"
 logging.basicConfig(
     level=logging.INFO,
@@ -34,6 +23,17 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger("bot_runner")
+
+# DB must exist before handler modules are imported — users_menu.py queries
+# the settings table at module level (get_price calls on lines 10-15).
+from utils.sqlite3 import create_db as _init_db
+_init_db()
+
+logger.info("Importing handlers...")
+from handlers.admin_functions import *
+from handlers.main_start import *
+from data.loader import dp
+logger.info("Handlers imported successfully")
 
 async def serve_web():
     import uvicorn

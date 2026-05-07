@@ -1,3 +1,4 @@
+import logging
 import colorama
 from aiogram import Dispatcher, types
 from aiogram.dispatcher import FSMContext
@@ -28,6 +29,8 @@ from keyboards.inline_keyboards import *
 from utils.other import *
 from utils.sender import *
 from utils.googlesheets import create_sheet, create_orders_report, create_refills_report, create_reviews_report
+
+logger = logging.getLogger(__name__)
 
 class Admin(StatesGroup):
     del_promik = State()
@@ -119,12 +122,12 @@ async def find_user(param):
             try:
                 user = get_user(user_name=param)
             except Exception as e:
-                print(f"{user_not_in_base.format(param)}\n{e}")
+                logger.exception("get_user_string: user not found param=%s", param)
         else:
             try:
                 user = get_user(user_name=param[1:])
             except Exception as e:
-                print(f"{user_not_in_base.format(param)}\n{e}")
+                logger.exception("get_user_string: user not found param=%s", param)
     return user
 
 @dp.message_handler(commands=['admin'], state='*')
@@ -157,7 +160,7 @@ async def to_admin_menu(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text="users_man", state='*')
 async def profile(call: CallbackQuery, state: FSMContext):
@@ -168,7 +171,7 @@ async def profile(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text="promo_codes", state='*')
 async def promo_codes(call: CallbackQuery, state: FSMContext):
@@ -180,7 +183,7 @@ async def promo_codes(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text="add_promo", state="*")
 async def add_promik(call: types.CallbackQuery, state: FSMContext):
@@ -193,7 +196,7 @@ async def add_promik(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     code = generate_random_string(8)
     add_promocode(code, 2000)
     await call.message.answer(f"✅ Успешно! Промокод - <code>{code}</code>", reply_markup=admin_back_kb(page))
@@ -209,7 +212,7 @@ async def call_show_promik(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     user_id = call.from_user.id
     prm = "Найдены промокоды:\n"
     all_promo = all_promocodes()
@@ -221,7 +224,7 @@ async def del_promik(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer("⚙️ Введите промокод!")
     await Admin.del_promik.set()
 
@@ -248,7 +251,7 @@ async def call_del_act_promo(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     all_promo = all_promocodes()
     for code in all_promo:
         if code['isactivated'] == 1:
@@ -264,7 +267,7 @@ async def call_add_custom_promo(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     await call.message.answer("🔮Введите новый промокод:")
     await state.update_data(call=call)
@@ -313,7 +316,7 @@ async def call_users_ids(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     ids = all_users()
     with open("ids.txt", "w") as file:
         for id in ids:
@@ -328,7 +331,7 @@ async def call_users_len(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     usr_cnt = len(all_users())
     await call.message.answer(f"🤖 в базе зарегистрировано {usr_cnt} 🐹 пользователей", reply_markup=admin_back_kb('users_man'))
 
@@ -339,7 +342,7 @@ async def del_user(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.message_handler(state=Admin.del_user)
 async def del_usr(message: types.Message, state: FSMContext):
@@ -351,7 +354,7 @@ async def del_usr(message: types.Message, state: FSMContext):
         await message.answer(f"✅ Пользователь {usr_str} успешно удален!", reply_markup=admin_back_kb('users_man'))
         await state.finish()
     except Exception as e:
-        print(e)
+        logger.exception("handler error")
         await message.answer(f"❎ Ошибка удаления пользователя!\n{e}", reply_markup=admin_back_kb('users_man'))
         await state.finish()
 
@@ -362,7 +365,7 @@ async def usr_balance(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.message_handler(state=balance.select_user)
 async def usr_sel(message: types.Message, state: FSMContext):
@@ -376,7 +379,7 @@ async def usr_sel(message: types.Message, state: FSMContext):
         await balance.change_balance.set()
         await message.answer("💳 Введите новый баланс:")
     except Exception as e:
-        print(e)
+        logger.exception("handler error")
         await message.answer(f"⚠️ Ошибка!:\n{e}")
         await state.finish()
 
@@ -394,7 +397,7 @@ async def change_balance(message: types.Message, state: FSMContext):
         await bot.send_message(chat_id=ch_usr['id'], text=f"<b>🤖 Пользователь @{adm_user['user_name']} установил Ваш 💳 баланс на {new_balance}руб.</b>")
         await state.finish()
     except Exception as e:
-        print(e)
+        logger.exception("handler error")
         await message.answer(f"⚠️ Ошибка!\n{e}")
     await state.finish()
 
@@ -405,7 +408,7 @@ async def set_vip(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await vip.set_status.set()
 
 @dp.message_handler(state=vip.set_status)
@@ -432,7 +435,7 @@ async def unset_vip(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await vip.unset_status.set()
 
 @dp.message_handler(state=vip.unset_status)
@@ -462,7 +465,7 @@ async def send_spam(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await Spam.SpamShow.set()
 
 @dp.message_handler(content_types=list_content_types, state = Spam.SpamShow)
@@ -499,7 +502,7 @@ async def send_spam(state: FSMContext):
                     await bot.send_message(user['id'], text=text)
                     sended += 1
                 except:
-                    print(f"Error sending message to {user['id']}")
+                    logger.warning("spam: failed to send to user_id=%s", user["id"])
                     not_sended += 1
             else:
                 not_sended += 1
@@ -513,7 +516,7 @@ async def send_spam(state: FSMContext):
                     await bot.send_photo(chat_id=user['id'], photo=photo_id, caption=caption)
                     sended += 1
                 except:
-                    print(f"Error sending message to {user['id']}")
+                    logger.warning("spam: failed to send to user_id=%s", user["id"])
                     not_sended += 1
             else:
                 not_sended += 1
@@ -525,7 +528,7 @@ async def send_spam(state: FSMContext):
             await bot.send_sticker(chat_id=admin, sticker=random_sticker)
             await bot.send_message(chat_id=admin, text=f"⚠️Рассылка сообщений завершена!\nПользователей в базе <b>{total_users}</b> из них <b>{sended}</b> доставлено, <b>{not_sended}</b> не доставлено, время рассылки <b>{sec}</b>", reply_markup=admin_back_kb('messages_menu'))
         except Exception as e:
-            print(f"Error sending a message to the administrator with ID {admin}\n{e}")
+            logger.exception("sender: failed to send to admin_id=%s", admin)
     await state.finish()
 
 
@@ -554,7 +557,7 @@ async def messages_menu(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text="admin_send")
 async def input_admin_message(call: types.CallbackQuery):
@@ -564,7 +567,7 @@ async def input_admin_message(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.message_handler(state=admin_message.send)
 async def send_admin_message(message: types.Message, state: FSMContext):
@@ -583,7 +586,7 @@ async def input_coder_message(call: types.CallbackQuery):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.message_handler(state=coder_message.send)
 async def send_coder_message(message: types.Message, state: FSMContext):
@@ -620,7 +623,7 @@ async def orders_man(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text="search_order")
 async def search_order(call: types.CallbackQuery):
@@ -657,7 +660,7 @@ async def call_user_all_orders(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print("Error deleting message!")
+        logger.debug("could not delete message")
     if 'old_user' not in state_data:
         await call.message.answer("⚙️ Введите ID или логин пользователя:")
         await Order.user.set()
@@ -715,7 +718,7 @@ async def admin_call_show_all_orders(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     state_data = await state.get_data()
     orders = state_data['orders']
     orders_array = state_data['array']
@@ -765,7 +768,7 @@ async def order_input_id(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await bot.send_message(chat_id=call.from_user.id, text=f"⚙️ Введите ID заказа:")
     await Order1.order.set()
 
@@ -787,7 +790,7 @@ async def gsheets(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     STICKER = get_setting('wait_sticker')
     msg = await bot.send_message(chat_id=chat_id, text="⏳ Идет генерация отчета.")
@@ -797,7 +800,7 @@ async def gsheets(call: types.CallbackQuery, state: FSMContext):
         sheet_url = create_sheet()
         await bot.send_message(chat_id=chat_id, text=sheet_complete, reply_markup=gsheets_url(sheet_url))
     except Exception as e:
-        print(f'Error creating sheet: {e}')
+        logger.exception('googlesheets: failed to create sheet')
         await bot.send_message(chat_id=chat_id, text="⚠️ Ошибка при генерации отчета!")
     finally:
         try:
@@ -811,7 +814,7 @@ async def admin_call_orders_by_status(call: types.CallbackQuery, state: FSMConte
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     orders = all_orders()
     action = call.data.split('_')[1]
     orders_cnt = 0
@@ -832,7 +835,7 @@ async def magic_menu(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
 @dp.callback_query_handler(text_startswith="magic:", state="*")
 async def magic_start(call: types.CallbackQuery, state: FSMContext):
@@ -841,7 +844,7 @@ async def magic_start(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     if param == "generate":
         await call.message.answer(magic_ref)
         await state.update_data(magic_command=param)
@@ -910,7 +913,7 @@ async def call_to_general_user_report(call: types.CallbackQuery, state: FSMConte
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message!\n{e}")
+        logger.debug("could not delete message", exc_info=True)
 
     state_data = await state.get_data()
     if 'report' in state_data:
@@ -1137,7 +1140,7 @@ async def call_user_all_refills(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print('Error deleting message!\n{e}')
+        logger.debug("could not delete message", exc_info=True)
 
     param = call.data.split(':')[1]
     state_data = await state.get_data()
@@ -1245,7 +1248,7 @@ async def call_money_by_year(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
     refills = all_refills()
     await state.update_data(refills=refills)
     years_array = []
@@ -1260,7 +1263,7 @@ async def call_money_by_month(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
     param = call.data.split(':')[1]
     state_data = await state.get_data()
     refills = state_data['refills']
@@ -1278,7 +1281,7 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
     param = call.data.split(':')[1]
     state_data = await state.get_data()
     refills = state_data['refills']
@@ -1321,7 +1324,7 @@ async def call_money_by_year(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
 
     refills = all_refills()  # Получаем все пополнения
     await state.update_data(refills=refills)
@@ -1339,7 +1342,7 @@ async def call_money_by_month(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
 
     year = call.data.split(':')[1]  # Получаем год из текста
     state_data = await state.get_data()
@@ -1359,7 +1362,7 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
 
     month = call.data.split(':')[1]  # Получаем месяц из текста
     state_data = await state.get_data()
@@ -1414,7 +1417,7 @@ async def call_get_vip(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message\n{e}")
+        logger.debug("could not delete message", exc_info=True)
 
     STR = "<b>👑 Список VIP - пользователей\n</b>"
     all_vip = get_all_vip()
@@ -1437,7 +1440,7 @@ async def call_reviews_man(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print("Error deleting message")
+        logger.debug("could not delete message")
 
     all_orders = all_orders_reviews()
 
@@ -1508,7 +1511,7 @@ async def call_rev_user_search(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     await call.message.answer(magic_report)
     await reviews.user.set()
@@ -1544,7 +1547,7 @@ async def admin_call_show_review_by_index(call: types.CallbackQuery, state: FSMC
     try:
         await call.message.delete()
     except Exception as e:
-        print(f"Error deleting message!\n{e}")
+        logger.debug("could not delete message", exc_info=True)
     index = int(call.data.split(":")[1])
     state_data = await state.get_data()
     orders = state_data['orders']
@@ -1557,7 +1560,7 @@ async def admin_call_show_all_reviews(call: types.CallbackQuery, state: FSMConte
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     state_data = await state.get_data()
     orders = state_data['orders']
     orders_array = state_data['array']
@@ -1576,7 +1579,7 @@ async def admin_call_review_close(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer("⚙️ Введите номер заказа:")
     await reviews.close.set()
 
@@ -1598,7 +1601,7 @@ async def admin_call_reviews_gsheets(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     orders = all_orders_reviews()
     STICKER = get_setting('wait_sticker')
     msg = await call.message.answer("Идет генерация отчета.")
@@ -1615,7 +1618,7 @@ async def call_del_rev_user_search(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     await call.message.answer(magic_report)
     await del_reviews.user.set()
@@ -1644,7 +1647,7 @@ async def admin_call_del_review_close(call: types.CallbackQuery, state: FSMConte
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer("⚙️ Введите номер заказа:")
     await del_reviews.close.set()
 
@@ -1673,7 +1676,7 @@ async def admin_call_settings(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer("⚙️ Вы в пункте \"Настройки\". Выбирите вариант:", reply_markup=setup_kb())
 
 #Касса/цены
@@ -1682,7 +1685,7 @@ async def admin_call_price_edit(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     #await call.message.answer(text=in_devel, reply_markup=admin_back_kb('settings'))
     pay_work = str2bool(get_setting('payment_work'))
     #print(pay_work)
@@ -1701,7 +1704,7 @@ async def admin_call_payment_toggle(call: types.CallbackQuery, state: FSMContext
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     pay_work = str2bool(get_setting('payment_work'))
     if pay_work:
        STR = "Касса сейчас работает. Отключаем?"
@@ -1715,7 +1718,7 @@ async def admin_call_payment_methods_setup(call: types.CallbackQuery, state: FSM
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer(
         "💳 Способы оплаты:",
         reply_markup=payment_methods_admin_kb()
@@ -1735,7 +1738,7 @@ async def admin_call_payment_method_toggle(call: types.CallbackQuery, state: FSM
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer(
         "💳 Способы оплаты:",
         reply_markup=payment_methods_admin_kb()
@@ -1748,7 +1751,7 @@ async def admin_call_interface_setup(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer(text="⚙️ Вы в пункте \"Интерфейс\". Выбирите вариант:", reply_markup=setup_strings_kb())
 
 #Визуальный редактор строк
@@ -1757,7 +1760,7 @@ async def admin_call_str_visual_edit(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     all_str = get_all_strings()
     captions_array = []
     for string in all_str:
@@ -1770,7 +1773,7 @@ async def admin_call_str_visual_edit(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     index = int(call.data.split(":")[1])
     all_str = get_all_strings()
     captions_array = []
@@ -1784,7 +1787,7 @@ async def admin_call_str_visual_edit_param(call: types.CallbackQuery, state: FSM
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     index = int(call.data.split(":")[1])
     await state.update_data(index=index)
@@ -1806,7 +1809,7 @@ async def admin_call_btn_visual_edit(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     all_str = get_all_strings()
     btn_array = []
     for btn in all_str:
@@ -1819,7 +1822,7 @@ async def admin_call_btn_visual_edit(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     index = int(call.data.split(":")[1])
     all_str = get_all_strings()
     btn_array = []
@@ -1833,7 +1836,7 @@ async def admin_call_btn_visual_edit_param(call: types.CallbackQuery, state: FSM
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     index = int(call.data.split(":")[1])
     await state.update_data(index=index)
@@ -1859,7 +1862,7 @@ async def admin_call_variable_setup(call: types.CallbackQuery, state: FSMContext
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer('Меню \"Переменные\". Выберите действие:', reply_markup=setup_variables_kb())
 
 #Посмотреть переменную
@@ -1868,7 +1871,7 @@ async def admin_call_str_variable_view(call: types.CallbackQuery, state: FSMCont
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     settings = get_all_strings()
     STR = "✏️ Введите переменную, которую хотите посмотреть:\n"
     for i in range (len(settings)):
@@ -1892,7 +1895,7 @@ async def admin_call_str_variable_add(call: types.CallbackQuery, state: FSMConte
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     #await call.message.answer(text=in_devel, reply_markup=admin_back_kb(None))
     await call.message.answer(text="""✏️ Введите данные в виде:
         Параметр|описание|значение""")
@@ -1922,7 +1925,7 @@ async def admin_call_btn_view(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     settings = get_all_strings()
     STR = "✏️ Введите переменную, которую хотите посмотреть:\n"
     for i in range (len(settings)):
@@ -1949,7 +1952,7 @@ async def admin_call_btn_add(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     #await call.message.answer(text=in_devel, reply_markup=admin_back_kb(None))
     await call.message.answer(text="""✏️ Введите данные в виде:
         Параметр|описание|значение""")
@@ -1970,7 +1973,7 @@ async def admin_call_variable_view(call: types.CallbackQuery, state: FSMContext)
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     settings = get_all_settings()
     STR = "✏️ Введите переменную, которую хотите посмотреть:\n"
     for i in range (len(settings)):
@@ -2003,7 +2006,7 @@ async def admin_call_variable_add(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     #await call.message.answer(text=in_devel, reply_markup=admin_back_kb(None))
     await call.message.answer(text="""✏️ Введите данные в виде:
         Параметр|описание|значение""")
@@ -2027,7 +2030,7 @@ async def admin_call_admins_setup(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer(text="👑 Управление админами:", reply_markup=setup_admins())
     #await setup_class.variable_add.set()
 
@@ -2036,7 +2039,7 @@ async def admin_call_add_del_admins(call: types.CallbackQuery, state: FSMContext
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     action = call.data.split(':')[1]
     await state.update_data(action=action)
     if action == 'add':
@@ -2074,7 +2077,7 @@ async def admin_call_del_admin_by_id(call: types.CallbackQuery, state: FSMContex
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     id_to_del = call.data.split(':')[1]
     del_admin(id_to_del)
     await call.message.answer('❎ Пользователь удален из админов!', reply_markup=admin_back_kb("admins_setup"))
@@ -2085,7 +2088,7 @@ async def admin_call_spam_exclude(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer('👑 Введите ID или ник пользователя, которого хотите исключить из рассылки:', reply_markup=admin_back_kb("admins_setup"))
     await setup_class.spam_exclude.set()
 
@@ -2110,7 +2113,7 @@ async def admin_call_report_exclude(call: types.CallbackQuery, state: FSMContext
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     await call.message.answer('👑 Введите ID или ник пользователя, которого хотите исключить из отчетов:', reply_markup=admin_back_kb("admins_setup"))
     await setup_class.report_exclude.set()
 
@@ -2142,7 +2145,7 @@ async def admin_call_price_edit(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
 
     price = get_price(f"price_{service}")
 
@@ -2160,7 +2163,7 @@ async def admin_call_edit_price_function(call: types.CallbackQuery, state: FSMCo
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     service = call.data.split('-')[1]
     price_item = call.data.split('-')[2]
     k = price_item.split(':')[0]
@@ -2199,7 +2202,7 @@ async def admin_call_min_amount(call: types.CallbackQuery, state: FSMContext):
     try:
         await call.message.delete()
     except:
-        print('Error deleting message!')
+        logger.debug("could not delete message")
     min_amo = int(get_setting('min_amount'))
     f_min_amo = format_decimal(min_amo)
     await call.message.answer(f'Сейчас минимальный платеж составляет {f_min_amo} ₽. Введите новое значение:')

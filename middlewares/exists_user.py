@@ -1,49 +1,51 @@
-# - *- coding: utf- 8 - *-
+import logging
 from aiogram.dispatcher.middlewares import BaseMiddleware
-from aiogram.types import Update
-from utils.sqlite3 import *
-from utils.sender import *
+from aiogram.types import Message, CallbackQuery
+from utils.sqlite3 import get_user, update_user
+from utils.sender import send_admins
 from data.loader import bot
 from services import identity
 
-# TODO: отредачить поля
+logger = logging.getLogger(__name__)
+
+
 class ExistsUserMiddleware(BaseMiddleware):
     def __init__(self):
-        super(ExistsUserMiddleware, self).__init__()
+        super().__init__()
 
-    async def on_process_message(self, update: Update, data: dict):
+    async def _ensure_user(self, tg_user, data: dict) -> None:
+        if tg_user is None or tg_user.is_bot:
+            return
 
-        #print(update)
-        user = update
-        if "message_id" in update:
-            user = update.from_user
-        elif "callback_query" in update:
-            user = update.callback_query.from_user
-        elif "pre_checkout_query" in update:
-            user = update.pre_checkout_query.from_user
+        user_id = tg_user.id
+        user_name = tg_user.username or ""
+        first_name = tg_user.first_name or ""
 
-        if user is not None:
-            if not user.is_bot:
-                self.id = user.id
-                self.user_name = user.username or ""
-                self.first_name = user.first_name
-                self.bot = await bot.get_me()
+        is_new = get_user(id=user_id) is None
+        internal_user_id = identity.get_or_create_user_by_telegram(
+            tg_id=user_id,
+            user_name=user_name,
+            first_name=first_name,
+        )
+        data["user_id"] = internal_user_id
 
-                is_new = get_user(id=self.id) is None
-                internal_user_id = identity.get_or_create_user_by_telegram(
-                    tg_id=self.id,
-                    user_name=self.user_name,
-                    first_name=self.first_name,
-                )
-                data["user_id"] = internal_user_id
+        if is_new:
+            logger.info("new user registered: tg_id=%s username=%s", user_id, user_name)
+            await send_admins(
+                f"<b>💎 Зарегистрирован новый пользователь @{user_name} "
+                f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>"
+            )
+        else:
+            db_user = get_user(id=user_id)
+            if db_user['user_name'] != user_name:
+                update_user(user_id, user_name=user_name)
+            if db_user['first_name'] != first_name:
+                update_user(user_id, first_name=first_name)
 
-                if is_new:
-                    await send_admins(
-                        f"<b>💎 Зарегистрирован новый пользователь @{self.user_name} "
-                        f"(<a href='tg://user?id={self.id}'>{self.id}</a>)</b>"
-                    )
-                else:
-                    if get_user(id=self.id)['user_name'] != self.user_name:
-                        update_user(self.id, user_name=self.user_name)
-                    if get_user(id=self.id)['first_name'] != self.first_name:
-                        update_user(self.id, first_name=self.first_name)
+    async def on_process_message(self, message: Message, data: dict):
+        logger.debug("message: user_id=%s text=%r", message.from_user.id if message.from_user else None, message.text)
+        await self._ensure_user(message.from_user, data)
+
+    async def on_process_callback_query(self, call: CallbackQuery, data: dict):
+        logger.debug("callback: user_id=%s data=%r", call.from_user.id if call.from_user else None, call.data)
+        await self._ensure_user(call.from_user, data)

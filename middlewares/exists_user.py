@@ -1,7 +1,7 @@
 import logging
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.types import Update, Message, CallbackQuery
-from utils.sqlite3 import get_user, update_user
+from utils.sqlite3 import get_user, get_user_by_tg_id, update_user
 from utils.sender import send_admins
 from data.loader import bot
 from services import identity
@@ -33,7 +33,7 @@ class ExistsUserMiddleware(BaseMiddleware):
         user_name = tg_user.username or ""
         first_name = tg_user.first_name or ""
 
-        is_new = get_user(id=user_id) is None
+        is_new = get_user_by_tg_id(user_id) is None
         internal_user_id = identity.get_or_create_user_by_telegram(
             tg_id=user_id,
             user_name=user_name,
@@ -48,11 +48,11 @@ class ExistsUserMiddleware(BaseMiddleware):
                 f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>"
             )
         else:
-            db_user = get_user(id=user_id)
+            db_user = get_user_by_tg_id(user_id)
             if db_user and db_user['user_name'] != user_name:
-                update_user(user_id, user_name=user_name)
+                update_user(db_user['id'], user_name=user_name)
             if db_user and db_user['first_name'] != first_name:
-                update_user(user_id, first_name=first_name)
+                update_user(db_user['id'], first_name=first_name)
 
     async def on_pre_process_message(self, message: Message, data: dict):
         await self._ensure_user(message.from_user, data)

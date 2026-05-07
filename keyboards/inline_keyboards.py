@@ -1,5 +1,8 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
-from utils.sqlite3 import get_user, get_string_from_base, get_setting, get_all_qna_avito, get_admins
+# NOTE: import get_string from utils.sqlite3 — DO NOT redefine it here.
+# A previous local get_string() shadowed the canonical one via star-imports
+# and silently dropped _STRING_DEFAULTS fallbacks, breaking every handler.
+from utils.sqlite3 import get_user, get_string, get_string_from_base, get_setting, get_all_qna_avito, get_admins
 from design import *
 from data.config import price_google, price_yandex, price_vk, price_flamp, price_2gis, price_avito
 from utils.other_functions import str2bool
@@ -7,13 +10,6 @@ from utils.other_functions import str2bool
 months_names = {'1': 'Январь', '2': 'Февраль', '3': 'Март', '4': 'Апрель',
                 '5': 'Май', '6': 'Июнь', '7': 'Июль', '8': 'Август',
                 '9': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь'}
-
-def get_string(param):
-    str_value = get_string_from_base(param)
-    if str_value:
-        return str_value['value']
-    else:
-        return globals().get(param)
 
 def get_username(user_id):
     user = get_user(id=user_id)

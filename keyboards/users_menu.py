@@ -274,6 +274,42 @@ def yes_no_kb():
     )
     return keyboard
 
+def payment_methods_kb(methods: list) -> InlineKeyboardMarkup:
+    from services.payment_methods import METHODS as METHOD_LABELS
+    keyboard = InlineKeyboardMarkup()
+    for method in methods:
+        label = METHOD_LABELS.get(method, method)
+        keyboard.add(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"pay_method:{method}"
+            )
+        )
+    keyboard.add(
+        InlineKeyboardButton(
+            text=get_string('btn_main_menu'),
+            callback_data='menu'
+        )
+    )
+    return keyboard
+
+
+def manual_payment_kb(manager_nick: str) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(
+        InlineKeyboardButton(
+            text="✉️ Написать менеджеру",
+            url=f"https://t.me/{manager_nick}"
+        )
+    )
+    keyboard.add(
+        InlineKeyboardButton(
+            text=get_string('btn_main_menu'),
+            callback_data='menu'
+        )
+    )
+    return keyboard
+
 def yes_no_contact_kb():
     keyboard = InlineKeyboardMarkup()
     STR_YES = get_string('btn_yes')

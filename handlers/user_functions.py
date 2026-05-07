@@ -15,13 +15,12 @@ from data.loader import dp, bot
 from keyboards.users_menu import *
 from utils.other import *
 from utils.sender import *
-from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill
+from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
 
 from handlers.admin_functions import *
 #from handlers.robokassa import *
 from utils.yookassa_refil import create_invoice, check_payment_status
 import asyncio
-from utils.msql import sql_add_review, sql_get_last_review
 
 class FSMToken(StatesGroup):
     promik = State()
@@ -863,17 +862,14 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext):
     link = state_data['link']
     if user['balance'] >= int(amount):
         update_user(id=user['id'], balance=user['balance']-int(amount))
-        #add_order_reviews(user_id=user['id'], price=amount, service=service, status="Размещен")
-        await sql_add_review(str(call.from_user.id), int(amount), service,link, 'Posted')
-        #await send_admins(new_order_review_text(get_users_last_order_reviews(user['id'])))
-        order = await sql_get_last_review(str(call.from_user.id))
-        #await send_admins(new_order_review_text(order))
+        add_order_reviews(user_id=user['id'], price=amount, service=service, link=link, status='Posted')
+        order = get_users_last_order_reviews(str(call.from_user.id))
         manager = get_nick('nick_manager_reviews')
-        STR = get_string('str_review_confirm').format(order['id'], manager)
+        STR = get_string('str_review_confirm').format(order['increment'], manager)
         MSG = get_string('str_new_review_admin_report')
         famount = format_decimal(amount)
         user_str = await get_user_string_without_first_name(user)
-        MSG = MSG.format(order['id'], famount, user_str, services[service], order['status'], order['date'], order['link'])
+        MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
         await call.message.answer(STR, reply_markup=get_menu_kb())
         await send_admins(MSG)
     else:

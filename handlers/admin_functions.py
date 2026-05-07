@@ -27,9 +27,7 @@ from design import *
 from keyboards.inline_keyboards import *
 from utils.other import *
 from utils.sender import *
-from utils.msql import *
 from utils.googlesheets import create_sheet, create_orders_report, create_refills_report, create_reviews_report
-#from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, all_users, delete_order, get_refill, all_orders
 
 class Admin(StatesGroup):
     del_promik = State()
@@ -1441,8 +1439,7 @@ async def call_reviews_man(call: types.CallbackQuery, state: FSMContext):
     except:
         print("Error deleting message")
 
-    #all_orders = all_orders_reviews()
-    all_orders = await sql_get_all_reviews()
+    all_orders = all_orders_reviews()
 
     total_orders = 0
     vk_cnt = 0
@@ -1521,7 +1518,7 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
     try:
         rev_arr = []
         user = await find_user(message.text)
-        orders = await sql_get_all_reviews_by_user(user['id'])
+        orders = user_orders_all_reviews(user['id'])
         STR = get_string('str_new_review_admin_report')
         usr_str = await get_user_string_without_first_name(user)
         for order in orders:
@@ -1533,7 +1530,7 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
             elif order['status'] == 'In progress':
                 status = 'Выполняется'
             f_price = format_decimal(order['price'])
-            STR = STR.format(order['id'], f_price, usr_str, service, status, order['date'], order['link'])
+            STR = STR.format(order['increment'], f_price, usr_str, service, status, order['date'], order['link'])
             rev_arr.append(STR)
 
         await message.answer(rev_arr[len(rev_arr)-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))
@@ -1602,7 +1599,7 @@ async def admin_call_reviews_gsheets(call: types.CallbackQuery, state: FSMContex
         await call.message.delete()
     except:
         print('Error deleting message!')
-    orders = await sql_get_all_reviews()
+    orders = all_orders_reviews()
     STICKER = get_setting('wait_sticker')
     msg = await call.message.answer("Идет генерация отчета.")
     stick = await call.message.answer_sticker(STICKER)

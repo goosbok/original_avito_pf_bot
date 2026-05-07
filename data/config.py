@@ -17,12 +17,6 @@ CODER: int = int(os.getenv("CODER", "0"))
 botlink: str = os.getenv("BOT_LINK", "https://t.me/AVITOPF_bot")
 channel_link: str = os.getenv("CHANNEL_LINK", "https://t.me/pf_avito_top")
 
-# MySQL (reviews bot)
-host: str = os.getenv("MYSQL_HOST", "")
-user: str = os.getenv("MYSQL_USER", "")
-bd_name: str = os.getenv("MYSQL_DB", "")
-password: str = os.getenv("MYSQL_PASSWORD", "")
-
 # --- Static pricing config (rarely changes, not secret) ---
 fix_price: int = 6
 prices = {

@@ -16,7 +16,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from handlers.admin_functions import *
 from handlers.main_start import *
 from data.loader import dp
-from utils.msql import sql_start
 
 
 LOG_PATH = Path(__file__).resolve().parent / "log.txt"
@@ -49,7 +48,6 @@ async def serve_web():
 
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
-#    sql_start()
     logger.info("Bot startup")
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())

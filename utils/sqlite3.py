@@ -437,13 +437,13 @@ def user_orders_all(user_id):
 #############################################################################################
 
 # Добавление покупки
-def add_order_reviews(user_id, price, service, status):
+def add_order_reviews(user_id, price, service, link, status):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         con.execute("INSERT INTO reviews "
-                    "(user_id, price, service, status, date) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    [user_id, price, service, status, get_date()])
+                    "(user_id, price, service, link, status, date) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    [user_id, price, service, link, status, get_date()])
         con.commit()
 
 # Получение последнего заказа данного пользователя
@@ -749,10 +749,11 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "user_id INTEGER NOT NULL, "
             "price INTEGER, "
             "service TEXT, "
+            "link TEXT, "
             "status TEXT, "
             "date TIMESTAMP, "
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            6,
+            7,
         ),
         (
             "delreviews",
@@ -829,19 +830,23 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
 
 
 def apply_phase2_migrations():
-    """Идемпотентно добавляет колонки source-tracking в refills."""
+    """Идемпотентно добавляет колонки source-tracking в refills и link в reviews."""
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        existing_cols = {row['name'] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
-        if 'source_type' not in existing_cols:
+        existing_refills = {row['name'] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
+        if 'source_type' not in existing_refills:
             con.execute("ALTER TABLE refills ADD COLUMN source_type TEXT NOT NULL DEFAULT 'telegram'")
             print("refills.source_type added")
-        if 'source_app_id' not in existing_cols:
+        if 'source_app_id' not in existing_refills:
             con.execute("ALTER TABLE refills ADD COLUMN source_app_id INTEGER")
             print("refills.source_app_id added")
-        if 'payment_id' not in existing_cols:
+        if 'payment_id' not in existing_refills:
             con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
             print("refills.payment_id added")
+        existing_reviews = {row['name'] for row in con.execute("PRAGMA table_info(reviews)").fetchall()}
+        if 'link' not in existing_reviews:
+            con.execute("ALTER TABLE reviews ADD COLUMN link TEXT")
+            print("reviews.link added")
         con.commit()
 
 

@@ -738,6 +738,13 @@ def payment_setup_kb(param):
 
     keyboard.add(
         InlineKeyboardButton(
+            text="💳 Способы оплаты",
+            callback_data='payment_methods_setup'
+        )
+    )
+
+    keyboard.add(
+        InlineKeyboardButton(
             text="💰 Прайс \"ПФ Авито\"",
             callback_data='price_edit:avito_pf'
         )
@@ -799,6 +806,29 @@ def payment_setup_kb(param):
            text=main_menu,
            callback_data='to_admin_menu'
        )
+    )
+    return keyboard
+
+def payment_methods_admin_kb() -> InlineKeyboardMarkup:
+    from services.payment_methods import METHODS, is_enabled, can_disable
+    keyboard = InlineKeyboardMarkup()
+    for method, label in METHODS.items():
+        enabled = is_enabled(method)
+        if enabled:
+            icon = "✅"
+            suffix = " (единственный)" if not can_disable(method) else ""
+        else:
+            icon = "❎"
+            suffix = ""
+        keyboard.add(
+            InlineKeyboardButton(
+                text=f"{icon} {label}{suffix}",
+                callback_data=f"payment_method_toggle:{method}"
+            )
+        )
+    keyboard.row(
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="price_setup"),
+        InlineKeyboardButton(text=main_menu, callback_data='to_admin_menu')
     )
     return keyboard
 

@@ -1709,6 +1709,39 @@ async def admin_call_payment_toggle(call: types.CallbackQuery, state: FSMContext
        STR = "Касса сейчас отключена. Включить?"
     await call.message.answer(text=STR, reply_markup=payment_setup_kb(str(not pay_work)))
 
+
+@dp.callback_query_handler(text="payment_methods_setup", state="*")
+async def admin_call_payment_methods_setup(call: types.CallbackQuery, state: FSMContext):
+    try:
+        await call.message.delete()
+    except:
+        print('Error deleting message!')
+    await call.message.answer(
+        "💳 Способы оплаты:",
+        reply_markup=payment_methods_admin_kb()
+    )
+
+
+@dp.callback_query_handler(text_startswith="payment_method_toggle:", state="*")
+async def admin_call_payment_method_toggle(call: types.CallbackQuery, state: FSMContext):
+    from services.payment_methods import set_enabled, is_enabled
+    method = call.data.split(":")[1]
+    currently_enabled = is_enabled(method)
+    try:
+        set_enabled(method, not currently_enabled)
+    except ValueError as e:
+        await call.answer(str(e), show_alert=True)
+        return
+    try:
+        await call.message.delete()
+    except:
+        print('Error deleting message!')
+    await call.message.answer(
+        "💳 Способы оплаты:",
+        reply_markup=payment_methods_admin_kb()
+    )
+
+
 #Интерфейс
 @dp.callback_query_handler(text="interface_setup", state="*")
 async def admin_call_interface_setup(call: types.CallbackQuery, state: FSMContext):

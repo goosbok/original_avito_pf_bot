@@ -656,10 +656,10 @@ async def refill(message: Message, state: FSMContext):
             print("Error deleting message!")
     else:
         #await message.answer_sticker("CAACAgIAAxkBAAKsC2ZiFkw2x6LCIMANpdUYdwFmX6XnAAIuQQACL3WRSy5s2sn5ZuS8NQQ")
-        STR = get_string('str_refil_balance')
-        f_amount = format_decimal(amount)
-        STR = STR.format(f_amount)
-        msg = await message.answer(STR, reply_markup=yes_no_kb())
+        from services.payment_methods import get_enabled as _get_payment_methods
+        enabled_methods = _get_payment_methods()
+        STR = get_string('str_select_payment_method').format(format_decimal(amount))
+        msg = await message.answer(STR, reply_markup=payment_methods_kb(enabled_methods))
         async with state.proxy() as data:
             data['price'] = amount
     try:
@@ -744,6 +744,121 @@ async def refill_balance(call: CallbackQuery, state: FSMContext):
             await bot.send_message(chat_id=str(result.referrer_id), text=STR4)
             ref_user_str = ref_user.get('user_name') or ref_user['id']
             print(f"Юзер {ref_user_str} получил пополнение на {result.referrer_bonus} руб.")
+
+
+async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount: int) -> None:
+    await state.finish()
+    manager_nick = get_setting('manager_nick') or 'support'
+    f_amount = format_decimal(int(amount))
+    user_id = call.from_user.id
+    copy_text = f"Хочу пополнить баланс на {amount}₽. Мой ID: {user_id}"
+    STR = get_string('str_manual_payment').format(f_amount, copy_text)
+    await call.message.answer(STR, reply_markup=manual_payment_kb(manager_nick))
+    try:
+        await call.message.delete()
+    except:
+        print("Error deleting message!")
+
+
+async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amount: int) -> None:
+    from services.refill import (
+        create_invoice as svc_create_invoice,
+        finalize_with_referral_bonus,
+    )
+    from services.exceptions import PaymentError, UserNotFound
+    from services.identity import get_or_create_user_by_telegram
+
+    await call.message.delete()
+    user_id = call.from_user.id
+
+    internal_user_id = get_or_create_user_by_telegram(
+        tg_id=user_id,
+        user_name=call.from_user.username,
+        first_name=call.from_user.first_name,
+    )
+
+    try:
+        payment_url, payment_id = svc_create_invoice(internal_user_id, int(amount))
+    except PaymentError:
+        support_nick = get_nick('manager_nick')
+        msg = get_string('str_payment_error').format(support_nick)
+        await bot.send_message(chat_id=user_id, text=msg, reply_markup=payment_error_kb())
+        return
+
+    STR1 = get_string('str_debet_money').format(format_decimal(amount))
+
+    if user_id != 6988175544 and user_id != 257838190:
+        await bot.send_message(
+            chat_id=user_id, text=STR1,
+            reply_markup=yookassa_kb(int(amount), payment_url),
+        )
+        success = await check_payment_status(payment_id)
+    else:
+        success = True
+
+    if not success:
+        STR6 = get_string('str_pay_error').format(get_nick('manager_nick'))
+        await bot.send_message(chat_id=user_id, text=STR6)
+        return
+
+    try:
+        result = finalize_with_referral_bonus(
+            internal_user_id, int(amount),
+            source_type="telegram",
+        )
+    except UserNotFound:
+        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        return
+    except Exception as ex:
+        print(f'Error:\n{ex}')
+        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        return
+
+    usr = get_user(id=internal_user_id)
+    user_string = await get_user_string_without_first_name(usr)
+    f_amount = format_decimal(amount)
+    f_balance = format_decimal(result.user_balance)
+
+    STR2 = get_string('str_usr_pay_success').format(f_amount, f_balance)
+    await bot.send_message(chat_id=user_id, text=STR2, reply_markup=user_back_kb('user:profile'))
+    STR3 = get_string('str_adm_pay_success').format(f_amount, user_string, f_balance)
+    await send_admins(STR3)
+    print(f"Юзер {usr['id']}: {usr['user_name']} пополнил баланс на {amount} руб.")
+
+    if result.referrer_bonus > 0 and result.referrer_id is not None:
+        ref_user = get_user(id=str(result.referrer_id))
+        if ref_user:
+            f_add_bal = format_decimal(result.referrer_bonus)
+            f_new_bal = format_decimal(result.referrer_new_balance)
+            STR4 = get_string('str_ref_balance_refil').format(f_add_bal, f_new_bal)
+            await bot.send_message(chat_id=str(result.referrer_id), text=STR4)
+            ref_user_str = ref_user.get('user_name') or ref_user['id']
+            print(f"Юзер {ref_user_str} получил пополнение на {result.referrer_bonus} руб.")
+
+
+@dp.callback_query_handler(text_startswith="pay_method:", state="refill_balance")
+async def select_payment_method(call: CallbackQuery, state: FSMContext):
+    from services.payment_methods import is_enabled as _is_method_enabled
+    method = call.data.split(":")[1]
+
+    if not _is_method_enabled(method):
+        await call.answer("Этот способ оплаты недоступен", show_alert=True)
+        return
+
+    state_data = await state.get_data()
+    amount = state_data.get('price')
+    if amount is None:
+        await state.finish()
+        await call.message.answer(get_string('str_error'), reply_markup=get_menu_kb())
+        return
+
+    if method == "manual":
+        await _handle_manual_payment(call, state, amount)
+    elif method == "yookassa":
+        await _handle_yookassa_payment(call, state, amount)
+    else:
+        await call.answer("Неизвестный способ оплаты", show_alert=True)
+
 
 ###############################################################################################
 #############################             ВИДОСИК              ################################

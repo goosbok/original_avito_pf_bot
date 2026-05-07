@@ -834,6 +834,7 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
             await bot.send_message(chat_id=str(result.referrer_id), text=STR4)
             ref_user_str = ref_user.get('user_name') or ref_user['id']
             print(f"Юзер {ref_user_str} получил пополнение на {result.referrer_bonus} руб.")
+    await state.finish()
 
 
 @dp.callback_query_handler(text_startswith="pay_method:", state="refill_balance")

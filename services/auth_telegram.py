@@ -51,14 +51,22 @@ def resolve_telegram_id(identifier: str) -> int:
 def _send_telegram_message(bot_token: str, telegram_id: int, text: str) -> None:
     """Отправить сообщение через Bot HTTP API. На сетевые ошибки — RuntimeError."""
     from data import config
+    from services.exceptions import BotCantReachUser
     base = getattr(config, "BOT_HTTP_API_BASE", "https://api.telegram.org")
     url = f"{base}/bot{bot_token}/sendMessage"
     try:
         resp = httpx.post(url, json={"chat_id": telegram_id, "text": text}, timeout=10.0)
     except httpx.HTTPError as exc:
         raise RuntimeError(f"bot send failed: {exc}") from exc
-    if resp.status_code != 200:
-        raise RuntimeError(f"bot send returned {resp.status_code}: {resp.text}")
+    if resp.status_code == 200:
+        return
+    error_text = resp.text.lower()
+    if "chat not found" in error_text or "bot was blocked" in error_text or resp.status_code == 403:
+        raise BotCantReachUser(
+            f"Не удалось отправить код: бот не может написать пользователю {telegram_id}. "
+            f"Убедитесь, что вы начали диалог с ботом."
+        )
+    raise RuntimeError(f"bot send returned {resp.status_code}: {resp.text}")
 
 
 def request_code(

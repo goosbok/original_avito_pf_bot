@@ -17,6 +17,7 @@ router = APIRouter(prefix="/api/auth/telegram", tags=["auth"])
 
 @router.post("/request-code", status_code=204, response_model=None)
 async def request_code(body: OTPRequestBody) -> None:
+    from services.exceptions import BotCantReachUser
     try:
         auth_telegram.request_code(body.identifier)
     except OTPCooldown as exc:
@@ -27,8 +28,9 @@ async def request_code(body: OTPRequestBody) -> None:
         ) from exc
     except OTPInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BotCantReachUser as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        # bot send failed
         raise HTTPException(status_code=502, detail=f"could not deliver code: {exc}") from exc
 
 

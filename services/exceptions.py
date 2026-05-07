@@ -69,3 +69,11 @@ class InvalidAPIKey(ServiceError):
 
 class EmailAlreadyRegistered(ServiceError):
     pass
+
+
+class BotCantReachUser(ServiceError):
+    """Telegram bot could not deliver a message to the user.
+
+    Typical causes: user never started the bot, or has blocked it.
+    This is a user-actionable error, not a server failure.
+    """

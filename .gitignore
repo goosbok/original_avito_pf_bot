@@ -4,3 +4,6 @@ utils/dev-trees-*.json
 __pycache__/
 *.pyc
 .pytest_cache/
+.claude/
+data/database.db
+log.txt

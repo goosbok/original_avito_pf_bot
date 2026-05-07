@@ -15,7 +15,7 @@ from data.loader import dp, bot
 from keyboards.users_menu import *
 from utils.other import *
 from utils.sender import *
-from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
+from utils.sqlite3 import get_user, get_user_by_tg_id, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
 
 from handlers.admin_functions import *
 from utils.yookassa_refil import create_invoice, check_payment_status
@@ -113,14 +113,11 @@ async def info(call: CallbackQuery, state: FSMContext):
         STR = get_string('str_rules_text')
         await call.message.answer(STR, reply_markup=get_menu_kb())
     elif text == 'start':
-        BTN = get_string('btn_video_guide')
-        button = InlineKeyboardButton(
-            text=BTN,
-            callback_data="how_to"
-        )
+        BTN = get_string('btn_video_guide') or '🎬 Видео-инструкция'
+        button = InlineKeyboardButton(text=BTN, callback_data="how_to")
         keyboard = get_menu_kb()
         keyboard["inline_keyboard"].insert(0, [button])
-        STR = get_string('str_how_to_start_text')
+        STR = get_string('str_how_to_start_text') or get_string('str_tasks_text') or '📖 Как начать работу'
         await call.message.answer(STR, reply_markup=keyboard)
     elif text == 'support':
         STR = get_string('str_support_text')
@@ -151,7 +148,7 @@ async def user(call: CallbackQuery, state: FSMContext):
     action = data[1]
     if action == 'profile':
         #await call.message.answer("Личный кабинет:", reply_markup=profile_kb())
-        user = get_user(id=call.from_user.id)
+        user = get_user_by_tg_id(call.from_user.id)
         profile_string = get_string('str_user_profile')
         ref_link = f"{config.botlink}?start={call.from_user.id}"
         rferals_count = get_referals_count(user)
@@ -559,7 +556,7 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text="order_confirm", state='*')
 async def confirm_order(call: CallbackQuery, state: FSMContext):
-    user = get_user(id=call.from_user.id)
+    user = get_user_by_tg_id(call.from_user.id)
     async with state.proxy() as data:
         if user['balance'] >= data['total_price']:
             update_user(id=user['id'], balance=user['balance']-data['total_price'])
@@ -620,7 +617,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext):
 @dp.callback_query_handler(text_startswith="menu", state='*')
 async def to_main_menu(call: CallbackQuery, state: FSMContext):
     await state.finish()
-    STR = get_string('srt_select_variant_pf')
+    STR = get_string('str_select_action') or get_string('srt_select_variant_pf') or '📋 Главное меню'
     await call.message.answer(STR, reply_markup=get_menu_kb())
 
     try:
@@ -904,7 +901,7 @@ async def review_add_link(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text="rev_confirm", state='*')
 async def call_confirm_review(call: CallbackQuery, state: FSMContext):
-    user = get_user(id=call.from_user.id)
+    user = get_user_by_tg_id(call.from_user.id)
     state_data = await state.get_data()
     amount = state_data['amount']
     service = state_data['service']
@@ -961,7 +958,7 @@ async def call_avito_del_review(call: CallbackQuery, state: FSMContext):
 @dp.message_handler(text_startswith="https:", state=avito.delete_review)
 async def avito_del_review(message: types.Message, state: FSMContext):
     link = message.text
-    user = get_user(id=message.from_user.id)
+    user = get_user_by_tg_id(message.from_user.id)
     #amount = 7000
     amount = int(get_price('price_avito_del_review'))
     service = 'avito'
@@ -1076,7 +1073,7 @@ async def user_call_seo_yes(call: CallbackQuery, state: FSMContext):
     months_count = int(state_data['months'])
     total_price = state_data['total_price']
     link = state_data['link']
-    user = get_user(id=call.from_user.id)
+    user = get_user_by_tg_id(call.from_user.id)
     manager = get_nick('manager_nick')
     if user['balance'] >= total_price:
         update_user(id=user['id'], balance=user['balance']-total_price)

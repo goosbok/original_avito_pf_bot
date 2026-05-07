@@ -342,6 +342,25 @@ def get_user(**kwargs):
         return con.execute(queryy, params).fetchone()
 
 
+def get_user_by_tg_id(tg_id):
+    """Look up a user by Telegram ID.
+
+    Supports both legacy users (users.id == tg_id) and users created via the
+    identity service (users.id is auto-increment; linked via auth_providers).
+    """
+    u = get_user(id=tg_id)
+    if u:
+        return u
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        return con.execute(
+            "SELECT u.* FROM users u "
+            "JOIN auth_providers ap ON ap.user_id = u.id "
+            "WHERE ap.provider = 'telegram' AND ap.identifier = ?",
+            (str(tg_id),),
+        ).fetchone()
+
+
 # Редактирование пользователя
 def update_user(id, **kwargs):
     with sqlite3.connect(path_db) as con:

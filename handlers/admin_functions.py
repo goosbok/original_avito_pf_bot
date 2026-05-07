@@ -388,7 +388,7 @@ async def change_balance(message: types.Message, state: FSMContext):
     new_balance = message.text
     state_data = await state.get_data()
     ch_usr = state_data['usr']
-    adm_user = get_user(id=message.from_user.id)
+    adm_user = get_user_by_tg_id(message.from_user.id)
     #usr_str = await get_user_string(ch_usr['id'])
     usr_str = await get_user_string_without_first_name(ch_usr)
     try:
@@ -415,7 +415,7 @@ async def set_vip(call: types.CallbackQuery):
 async def vip_set(message: types.Message, state: FSMContext):
     try:
         usr = await find_user(message.text)
-        adm_usr = get_user(id=message.from_user.id)
+        adm_usr = get_user_by_tg_id(message.from_user.id)
         #usr_str = await get_user_string(usr['id'])
         usr_str = await get_user_string_without_first_name(usr)
         if usr['is_vip'] != 1:
@@ -443,7 +443,7 @@ async def vip_unset(message: types.Message, state: FSMContext):
     try:
         #usr = get_user(id=message.text)
         usr = await find_user(message.text)
-        adm_usr = get_user(id=message.from_user.id)
+        adm_usr = get_user_by_tg_id(message.from_user.id)
         #usr_str = await get_user_string(usr['id'])
         usr_str = await get_user_string_without_first_name(usr)
         if usr['is_vip'] != 0:

@@ -67,7 +67,6 @@ def test_sqlite3_get_string_returns_fallback_without_db(key, tmp_path, monkeypat
     even when the strings table is empty (fresh volume / new deploy).
     """
     import sqlite3 as _sqlite3
-    import importlib
     import utils.sqlite3 as m
 
     db_path = str(tmp_path / "test.db")

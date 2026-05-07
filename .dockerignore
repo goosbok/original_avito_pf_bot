@@ -1,0 +1,12 @@
+.git
+.venv
+.claude
+.env
+__pycache__
+*.pyc
+.pytest_cache
+data/database.db
+log.txt
+ids.txt
+docs
+images/IMG_2661.MP4

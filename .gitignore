@@ -1,5 +1,5 @@
 .venv/
-data/config.py
+.env
 utils/dev-trees-*.json
 __pycache__/
 *.pyc

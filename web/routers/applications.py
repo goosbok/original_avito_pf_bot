@@ -44,7 +44,7 @@ async def list_apps(user_id: int = Depends(require_user)) -> list[ApplicationInf
     ]
 
 
-@router.delete("/{app_id}", status_code=204)
+@router.delete("/{app_id}", status_code=204, response_model=None)
 async def revoke_app(app_id: int, user_id: int = Depends(require_user)) -> None:
     try:
         applications.revoke(app_id, user_id)

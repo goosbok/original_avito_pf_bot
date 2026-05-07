@@ -15,7 +15,7 @@ from web.schemas import OTPRequestBody, OTPVerifyBody, TokenResponse
 router = APIRouter(prefix="/api/auth/telegram", tags=["auth"])
 
 
-@router.post("/request-code", status_code=204)
+@router.post("/request-code", status_code=204, response_model=None)
 async def request_code(body: OTPRequestBody) -> None:
     try:
         auth_telegram.request_code(body.identifier)

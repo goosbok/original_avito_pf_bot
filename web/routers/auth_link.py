@@ -26,7 +26,7 @@ from web.schemas import (
 router = APIRouter(prefix="/api/auth/link", tags=["auth-link"])
 
 
-@router.post("/email", status_code=204)
+@router.post("/email", status_code=204, response_model=None)
 async def link_email(
     body: EmailRegisterRequest,
     user_id: int = Depends(require_user),
@@ -41,7 +41,7 @@ async def link_email(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.post("/telegram/request-code", status_code=204)
+@router.post("/telegram/request-code", status_code=204, response_model=None)
 async def link_telegram_request(
     body: OTPRequestBody,
     user_id: int = Depends(require_user),
@@ -61,7 +61,7 @@ async def link_telegram_request(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@router.post("/telegram/verify-code", status_code=204)
+@router.post("/telegram/verify-code", status_code=204, response_model=None)
 async def link_telegram_verify(
     body: OTPVerifyBody,
     user_id: int = Depends(require_user),
@@ -77,7 +77,7 @@ async def link_telegram_verify(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
-@router.delete("/{provider}/{identifier}", status_code=204)
+@router.delete("/{provider}/{identifier}", status_code=204, response_model=None)
 async def unlink(
     provider: str,
     identifier: str,

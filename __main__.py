@@ -11,6 +11,7 @@ fig = Figlet(font='slant', width=200)
 print(f"{Fore.RED}{fig.renderText('ABUTO by OEvg85')}{Fore.RESET}")
 
 import asyncio
+import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from handlers.admin_functions import *
 from handlers.main_start import *
@@ -50,7 +51,8 @@ async def serve_web():
 async def on_startup(dp: Dispatcher):
 #    sql_start()
     logger.info("Bot startup")
-    asyncio.create_task(serve_web())
+    if os.getenv("START_WEB", "1") != "0":
+        asyncio.create_task(serve_web())
     print(Fore.MAGENTA + fig.renderText('launched') + Fore.RESET)
 
 

@@ -1,0 +1,40 @@
+# Запуск:  docker compose up -d
+# Тесты:   docker compose --profile test run --rm test
+# Сборка:  docker compose build
+#
+# Перед первым запуском:
+#   cp .env.example .env  и заполнить BOT_TOKEN, JWT_SECRET и остальное
+
+services:
+  bot:
+    build: .
+    command: python __main__.py
+    env_file:
+      - path: .env
+        required: false   # тесты не требуют .env; для бота/апи он обязателен
+    environment:
+      - START_WEB=0
+    volumes:
+      - storage:/app/storage
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: uvicorn web.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - path: .env
+        required: false   # тесты не требуют .env; для бота/апи он обязателен
+    volumes:
+      - storage:/app/storage   # shared SQLite with bot
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  test:
+    build: .
+    command: pytest -v
+    profiles:
+      - test
+
+volumes:
+  storage:

@@ -199,7 +199,9 @@ def get_string(param):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         str_value = con.execute("SELECT * FROM strings WHERE parametr = ?", (param,)).fetchone()
-        if str_value:
+        # Fall back to defaults when row missing OR value is empty/null —
+        # otherwise a placeholder row in the DB silently breaks .format() calls.
+        if str_value and str_value['value']:
             return str_value['value']
         return _STRING_DEFAULTS.get(param) or globals().get(param)
 
@@ -209,10 +211,9 @@ def get_setting(param):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         setting = con.execute("SELECT * FROM settings WHERE parametr = ?", (param,)).fetchone()
-        if setting:
+        if setting and setting['value']:
             return setting['value']
-        else:
-            return globals().get(param)
+        return globals().get(param)
 
 def get_setting_from_base(param):
     with sqlite3.connect(path_db) as con:

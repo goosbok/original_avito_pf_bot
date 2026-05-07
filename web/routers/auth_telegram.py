@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from services import auth_telegram
-from services.exceptions import OTPCooldown, OTPExpired, OTPInvalid
+from services.exceptions import BotCantReachUser, OTPCooldown, OTPExpired, OTPInvalid
 from web.auth import create_jwt
 from web.schemas import OTPRequestBody, OTPVerifyBody, TokenResponse
 
@@ -17,7 +17,6 @@ router = APIRouter(prefix="/api/auth/telegram", tags=["auth"])
 
 @router.post("/request-code", status_code=204, response_model=None)
 async def request_code(body: OTPRequestBody) -> None:
-    from services.exceptions import BotCantReachUser
     try:
         auth_telegram.request_code(body.identifier)
     except OTPCooldown as exc:

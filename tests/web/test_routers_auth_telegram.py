@@ -103,3 +103,5 @@ def test_request_code_bot_blocked_returns_400(client, monkeypatch):
 
     r = client.post("/api/auth/telegram/request-code", json={"identifier": "12345"})
     assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "бот" in detail.lower() or "bot" in detail.lower()

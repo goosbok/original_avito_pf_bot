@@ -15,7 +15,7 @@ import httpx
 
 from services import identity, otp
 from services.db import connect
-from services.exceptions import OTPInvalid
+from services.exceptions import BotCantReachUser, OTPInvalid
 
 
 # Telegram's official minimum is 5, but we relax to 1 to support short test usernames
@@ -51,7 +51,6 @@ def resolve_telegram_id(identifier: str) -> int:
 def _send_telegram_message(bot_token: str, telegram_id: int, text: str) -> None:
     """Отправить сообщение через Bot HTTP API. На сетевые ошибки — RuntimeError."""
     from data import config
-    from services.exceptions import BotCantReachUser
     base = getattr(config, "BOT_HTTP_API_BASE", "https://api.telegram.org")
     url = f"{base}/bot{bot_token}/sendMessage"
     try:

@@ -62,7 +62,7 @@
             errEl.textContent = "";
 
             const identifier = document.getElementById("identifier").value.trim();
-            if (!identifier) { errEl.textContent = "Введите username или телефон."; return; }
+            if (!identifier) { errEl.textContent = "Введите username или числовой Telegram ID."; return; }
 
             btn.disabled = true;
             btn.textContent = "Отправляю...";

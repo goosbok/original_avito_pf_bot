@@ -13,6 +13,12 @@ print(f"{Fore.RED}{fig.renderText('ABUTO by OEvg85')}{Fore.RESET}")
 import asyncio
 import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+# DB must exist before handler modules are imported — users_menu.py queries
+# the settings table at module level (get_price calls on lines 10-15).
+from utils.sqlite3 import create_db as _init_db
+_init_db()
+
 from handlers.admin_functions import *
 from handlers.main_start import *
 from data.loader import dp
@@ -83,7 +89,5 @@ def run_bot_forever(restart_delay_seconds: int = 5):
 
 if __name__ == '__main__':
     from middlewares import *
-    from utils.sqlite3 import create_db
-    create_db()
     dp.setup_middleware(ExistsUserMiddleware())
     run_bot_forever()

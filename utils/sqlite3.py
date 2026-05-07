@@ -154,6 +154,8 @@ def get_price(param):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         setting = con.execute("SELECT * FROM settings WHERE parametr = ?", (param,)).fetchone()
+        if not setting:
+            return globals().get(param)
         if setting['value'].isdigit():
             return int(setting['value'])
         else:

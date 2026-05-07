@@ -62,6 +62,11 @@ async def serve_web():
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
     _log.info("Bot startup")
+    # Reset allowed_updates so Telegram delivers all update types.
+    # Without this, a stale webhook config (e.g. allowed_updates=["message"])
+    # survives bot restarts and silently drops callback_query updates.
+    await dp.bot.delete_webhook(drop_pending_updates=False)
+    _log.info("Webhook cleared, polling with all update types")
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())
     print(Fore.MAGENTA + fig.renderText('launched') + Fore.RESET)

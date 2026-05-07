@@ -15,7 +15,7 @@ import httpx
 
 from services import identity, otp
 from services.db import connect
-from services.exceptions import OTPInvalid
+from services.exceptions import BotCantReachUser, OTPInvalid
 
 
 # Telegram's official minimum is 5, but we relax to 1 to support short test usernames
@@ -57,8 +57,15 @@ def _send_telegram_message(bot_token: str, telegram_id: int, text: str) -> None:
         resp = httpx.post(url, json={"chat_id": telegram_id, "text": text}, timeout=10.0)
     except httpx.HTTPError as exc:
         raise RuntimeError(f"bot send failed: {exc}") from exc
-    if resp.status_code != 200:
-        raise RuntimeError(f"bot send returned {resp.status_code}: {resp.text}")
+    if resp.status_code == 200:
+        return
+    error_text = resp.text.lower()
+    if "chat not found" in error_text or "bot was blocked" in error_text or resp.status_code == 403:
+        raise BotCantReachUser(
+            f"Не удалось отправить код: бот не может написать пользователю {telegram_id}. "
+            f"Убедитесь, что вы начали диалог с ботом."
+        )
+    raise RuntimeError(f"bot send returned {resp.status_code}: {resp.text}")
 
 
 def request_code(

@@ -67,6 +67,27 @@ def add_string_to_base(parametr, description, str_value):
             print(f"{Fore.RED}Error. The parameter has not been added:{Fore.RESET}\n{e}")
 
 
+_STRING_DEFAULTS: dict[str, str] = {
+    "btn_how_to_start": "🕐 Как начать работу",
+    "btn_avito": "🚀 Накрутка ПФ Авито",
+    "btn_profile": "🪪 Личный кабинет",
+    "btn_channel": "🔗 Наш телеграм канал",
+    "btn_main_menu": "🧊 Главное меню",
+    "btn_yes": "✅ Да",
+    "btn_no": "❎ Нет",
+    "btn_all_completed": "✅ Выполненные",
+    "btn_all_posted": "✍️ Размещённые",
+    "btn_avito_cases": "🔗 Кейсы Авито",
+    "btn_seo_howto": "❓ Как работает",
+    "btn_seo_why": "💡 Зачем нужно",
+    "btn_seo_result": "📊 Результат",
+    "btn_seo_order": "🚀 Заказать",
+    "btn_rules": "🔰 Правила",
+    "btn_support": "🧑‍💻 Поддержка",
+    "btn_qna": "📲 FAQ / Кейсы",
+    "btn_promocodes": "🔮 Промокоды",
+}
+
 #Получаем строку из базы или из конфига
 def get_string(param):
     with sqlite3.connect(path_db) as con:
@@ -74,8 +95,7 @@ def get_string(param):
         str_value = con.execute("SELECT * FROM strings WHERE parametr = ?", (param,)).fetchone()
         if str_value:
             return str_value['value']
-        else:
-            return globals().get(param)
+        return _STRING_DEFAULTS.get(param) or globals().get(param)
 
 
 #Получаем настройку из базы или из конфига

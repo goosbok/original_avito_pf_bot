@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from services import auth_telegram
-from services.exceptions import OTPCooldown, OTPExpired, OTPInvalid
+from services.exceptions import BotCantReachUser, OTPCooldown, OTPExpired, OTPInvalid
 from web.auth import create_jwt
 from web.schemas import OTPRequestBody, OTPVerifyBody, TokenResponse
 
@@ -27,8 +27,9 @@ async def request_code(body: OTPRequestBody) -> None:
         ) from exc
     except OTPInvalid as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BotCantReachUser as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        # bot send failed
         raise HTTPException(status_code=502, detail=f"could not deliver code: {exc}") from exc
 
 

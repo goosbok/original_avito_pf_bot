@@ -25,9 +25,9 @@
 
     <!-- Step 1: request code -->
     <div id="step1">
-        <p class="hint">Введите ваш Telegram username или номер телефона. Бот отправит вам одноразовый код.</p>
-        <label for="identifier">Username или телефон</label>
-        <input id="identifier" type="text" placeholder="@username или +79001234567">
+        <p class="hint">Введите ваш Telegram username или числовой Telegram ID. Бот отправит вам одноразовый код.</p>
+        <label for="identifier">Username или Telegram ID</label>
+        <input id="identifier" type="text" placeholder="@username или 123456789">
         <button id="request-btn">Получить код</button>
         <div id="err1" class="err"></div>
     </div>
@@ -62,7 +62,7 @@
             errEl.textContent = "";
 
             const identifier = document.getElementById("identifier").value.trim();
-            if (!identifier) { errEl.textContent = "Введите username или телефон."; return; }
+            if (!identifier) { errEl.textContent = "Введите username или числовой Telegram ID."; return; }
 
             btn.disabled = true;
             btn.textContent = "Отправляю...";
@@ -74,7 +74,12 @@
                 document.getElementById("step2").style.display = "block";
                 document.getElementById("code").focus();
             } catch (e) {
-                errEl.textContent = String(e);
+                const msg = String(e);
+                if (msg.includes("бот") || msg.includes("bot") || msg.includes("chat not found")) {
+                    errEl.innerHTML = msg + '<br><a href="https://t.me/AVITOPF_bot" target="_blank">Открыть бот →</a>';
+                } else {
+                    errEl.textContent = msg;
+                }
                 btn.disabled = false;
                 btn.textContent = "Получить код";
             }

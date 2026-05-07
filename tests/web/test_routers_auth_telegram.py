@@ -67,3 +67,41 @@ def test_invalid_code_format_422(client):
         "identifier": "777", "code": "abc",
     })
     assert r.status_code == 422
+
+
+def test_request_code_chat_not_found_returns_400(client, monkeypatch):
+    """Telegram 'chat not found' must surface as HTTP 400, not 502."""
+    from unittest.mock import MagicMock
+
+    fake_response = MagicMock()
+    fake_response.status_code = 400
+    fake_response.text = '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}'
+
+    monkeypatch.setattr(
+        "services.auth_telegram.httpx.post",
+        lambda *a, **kw: fake_response,
+    )
+
+    r = client.post("/api/auth/telegram/request-code", json={"identifier": "12345"})
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "бот" in detail.lower() or "start" in detail.lower() or "bot" in detail.lower()
+
+
+def test_request_code_bot_blocked_returns_400(client, monkeypatch):
+    """Telegram 'bot was blocked by the user' must also surface as HTTP 400."""
+    from unittest.mock import MagicMock
+
+    fake_response = MagicMock()
+    fake_response.status_code = 403
+    fake_response.text = '{"ok":false,"error_code":403,"description":"Forbidden: bot was blocked by the user"}'
+
+    monkeypatch.setattr(
+        "services.auth_telegram.httpx.post",
+        lambda *a, **kw: fake_response,
+    )
+
+    r = client.post("/api/auth/telegram/request-code", json={"identifier": "12345"})
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "бот" in detail.lower() or "bot" in detail.lower()

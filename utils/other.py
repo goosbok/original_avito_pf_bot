@@ -12,6 +12,8 @@ def get_date():
     return this_date
 
 def format_decimal(value):
+    if value is None or value == "":
+        value = 0
     decimal_value = Decimal(value)
     formatted_value = f"{decimal_value:,.2f}".replace(',', ' ')
     return formatted_value
@@ -36,7 +38,9 @@ def link_cleaner(link):
     return cleaned_link
 
 def str2bool(value):
-  return value.lower() in ("yes", "true", "1")
+    if value is None:
+        return False
+    return str(value).lower() in ("yes", "true", "1")
 
 def str2dict(str_value):
     result_dict = ast.literal_eval(str_value)

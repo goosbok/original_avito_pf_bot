@@ -254,10 +254,17 @@ async def profile(call: CallbackQuery, state: FSMContext):
             await call.message.answer(STR.format(manager_nick), reply_markup=user_back_kb('user:profile'))
     elif action == 'listord':
         try:
-            orders = user_orders_all(call.from_user.id)
-            orders_array = listord_array(orders)
-            await state.update_data(orders=orders, array=orders_array)
-            await call.message.answer(f"Страница 1 из {len(orders)}\n{orders_array[0]}", reply_markup=show_user_order_by_index(len(orders)-1, len(orders)))
+            orders = user_orders_all(call.from_user.id) or []
+            if not orders:
+                STR = get_string('str_error_get_orders') or '📭 У вас пока нет заказов.'
+                await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
+            else:
+                orders_array = listord_array(orders)
+                await state.update_data(orders=orders, array=orders_array)
+                await call.message.answer(
+                    f"Страница 1 из {len(orders)}\n{orders_array[0]}",
+                    reply_markup=show_user_order_by_index(len(orders) - 1, len(orders)),
+                )
         except Exception:
             logger.exception("profile listord: failed for user_id=%s", call.from_user.id)
             STR = get_string('str_error')

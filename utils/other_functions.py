@@ -56,7 +56,9 @@ async def send_managers(msg: str):
             pass
 
 def str2bool(value):
-  return value.lower() in ("yes", "true", "1")
+    if value is None:
+        return False
+    return str(value).lower() in ("yes", "true", "1")
 
 def str2dict(str_value):
     result_dict = ast.literal_eval(str_value)

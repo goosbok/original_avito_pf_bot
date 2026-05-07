@@ -194,6 +194,24 @@ _STRING_DEFAULTS: dict[str, str] = {
     "str_seo_admin_msg": "🔍 SEO-заказ #{}\n📅 {} мес.\n💰 {} ₽\n👤 {}\n📊 {}\n📅 {}\n🔗 {}",
 }
 
+# Defaults for the `settings` table — used when row is missing or value is empty.
+_SETTING_DEFAULTS: dict[str, str] = {
+    "payment_work": "true",
+    "min_amount": "100",
+    "manager_nick": "support",
+    "nick_manager_reviews": "support",
+    "channel_link": "https://t.me/pf_avito_top",
+    "egg_sticker": "",
+}
+
+# Defaults for the `settings` table when used as prices (numeric or dict-as-string).
+_PRICE_DEFAULTS: dict[str, str] = {
+    "price_avito_pf": "6",
+    "price_seo": "1500",
+    "price_avito_del_review": "7000",
+    "seo_price": "1500",
+}
+
 #Получаем строку из базы или из конфига
 def get_string(param):
     with sqlite3.connect(path_db) as con:
@@ -213,7 +231,7 @@ def get_setting(param):
         setting = con.execute("SELECT * FROM settings WHERE parametr = ?", (param,)).fetchone()
         if setting and setting['value']:
             return setting['value']
-        return globals().get(param)
+        return _SETTING_DEFAULTS.get(param) or globals().get(param)
 
 def get_setting_from_base(param):
     with sqlite3.connect(path_db) as con:
@@ -281,13 +299,23 @@ def get_price(param):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         setting = con.execute("SELECT * FROM settings WHERE parametr = ?", (param,)).fetchone()
-        if not setting:
-            return globals().get(param)
-        if setting['value'].isdigit():
-            return int(setting['value'])
-        else:
-            price_dict = str2dict(setting['value'])
-            return price_dict
+    raw = setting['value'] if (setting and setting['value']) else (
+        _PRICE_DEFAULTS.get(param) or globals().get(param)
+    )
+    if raw is None:
+        return None
+    # Numeric price (e.g. "6") → int; dict-as-string (e.g. "{'5': 600}") → dict.
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, int):
+        return raw
+    raw_str = str(raw).strip()
+    if raw_str.isdigit():
+        return int(raw_str)
+    try:
+        return str2dict(raw_str)
+    except (ValueError, SyntaxError):
+        return None
 
 def edit_price(param, prices):
     req = "UPDATE settings SET value = ? WHERE parametr = ?"

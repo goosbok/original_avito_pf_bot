@@ -10,12 +10,23 @@ import csv
 import tempfile
 from googleapiclient.http import MediaFileUpload
 
-CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'  # имя файла с закрытым ключом
+CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'
 
-credentials = ServiceAccountCredentials.from_json_keyfile_name(CREDENTIALS_FILE, ['https://www.googleapis.com/auth/spreadsheets',
-                                                                                  'https://www.googleapis.com/auth/drive'])
-httpAuth = credentials.authorize(httplib2.Http())
-service = apiclient.discovery.build('sheets', 'v4', http = httpAuth)
+credentials = None
+httpAuth = None
+service = None
+
+
+def _init():
+    global credentials, httpAuth, service
+    if service is not None:
+        return
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(
+        CREDENTIALS_FILE,
+        ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'],
+    )
+    httpAuth = credentials.authorize(httplib2.Http())
+    service = apiclient.discovery.build('sheets', 'v4', http=httpAuth)
 
 def get_user_str(user):
     if user['user_name']:
@@ -24,13 +35,7 @@ def get_user_str(user):
         return str(user['id'])
 
 def create_sheet():
-    """
-    Создает отчет по заказам в Google Sheets.
-    Использует CSV для минимизации потребления памяти:
-    1. Записывает данные в CSV построчно (БД → файл пакетами)
-    2. Загружает CSV в Google Drive одним запросом
-    3. Применяет форматирование через API
-    """
+    _init()
     csv_file = None
     try:
         d = datetime.now()
@@ -187,6 +192,7 @@ def create_sheet():
         raise
 
 def create_orders_report(user_id):
+    _init()
     orders = all_orders()
     users = all_users()
     d=datetime.now()
@@ -291,6 +297,7 @@ def create_orders_report(user_id):
     return spreadsheet['spreadsheetUrl']
 
 def create_refills_report(user_id):
+    _init()
     refills = all_refills()
     users = all_users()
     d=datetime.now()
@@ -376,6 +383,7 @@ def create_refills_report(user_id):
     return spreadsheet['spreadsheetUrl']
 
 def create_reviews_report(orders):
+    _init()
     users = all_users()
     excludes = get_report_exclude()
     d=datetime.now()

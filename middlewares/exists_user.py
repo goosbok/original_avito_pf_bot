@@ -42,10 +42,9 @@ class ExistsUserMiddleware(BaseMiddleware):
             if db_user['first_name'] != first_name:
                 update_user(user_id, first_name=first_name)
 
-    async def on_process_message(self, message: Message, data: dict):
-        logger.debug("message: user_id=%s text=%r", message.from_user.id if message.from_user else None, message.text)
+    async def on_pre_process_message(self, message: Message, data: dict):
         await self._ensure_user(message.from_user, data)
 
-    async def on_process_callback_query(self, call: CallbackQuery, data: dict):
-        logger.debug("callback: user_id=%s data=%r", call.from_user.id if call.from_user else None, call.data)
+    async def on_pre_process_callback_query(self, call: CallbackQuery, data: dict):
+        logger.info("callback received: user_id=%s data=%r", call.from_user.id if call.from_user else None, call.data)
         await self._ensure_user(call.from_user, data)

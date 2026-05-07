@@ -22,18 +22,25 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
-logger = logging.getLogger("bot_runner")
+# Use a private name so star-imports below cannot overwrite it.
+_log = logging.getLogger("bot_runner")
 
 # DB must exist before handler modules are imported — users_menu.py queries
 # the settings table at module level (get_price calls on lines 10-15).
 from utils.sqlite3 import create_db as _init_db
 _init_db()
 
-logger.info("Importing handlers...")
+_log.info("Importing handlers...")
 from handlers.admin_functions import *
 from handlers.main_start import *
 from data.loader import dp
-logger.info("Handlers imported successfully")
+_log.info("Handlers imported successfully")
+
+@dp.errors_handler()
+async def _global_error_handler(update, exception):
+    _log.exception("Unhandled exception for update %s", update, exc_info=exception)
+    return True
+
 
 async def serve_web():
     import uvicorn
@@ -54,7 +61,7 @@ async def serve_web():
 
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
-    logger.info("Bot startup")
+    _log.info("Bot startup")
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())
     print(Fore.MAGENTA + fig.renderText('launched') + Fore.RESET)
@@ -62,7 +69,7 @@ async def on_startup(dp: Dispatcher):
 
 # Выполнение функции после выключения бота
 async def on_shutdown(dp: Dispatcher):
-    logger.info("Bot shutdown")
+    _log.info("Bot shutdown")
     await dp.storage.close()
     await dp.storage.wait_closed()
     await (await dp.bot.get_session()).close()
@@ -71,19 +78,19 @@ async def on_shutdown(dp: Dispatcher):
 def run_bot_forever(restart_delay_seconds: int = 5):
     while True:
         try:
-            logger.info("Starting polling")
+            _log.info("Starting polling")
             executor.start_polling(
                 dp,
                 on_startup=on_startup,
                 on_shutdown=on_shutdown,
                 skip_updates=True,
             )
-            logger.warning("Polling stopped without exception. Restart in %s sec", restart_delay_seconds)
+            _log.warning("Polling stopped without exception. Restart in %s sec", restart_delay_seconds)
         except KeyboardInterrupt:
-            logger.info("Bot stopped by KeyboardInterrupt")
+            _log.info("Bot stopped by KeyboardInterrupt")
             break
         except Exception:
-            logger.exception("Unhandled exception in polling loop. Restart in %s sec", restart_delay_seconds)
+            _log.exception("Unhandled exception in polling loop. Restart in %s sec", restart_delay_seconds)
 
         time.sleep(restart_delay_seconds)
 

@@ -22,6 +22,7 @@ from utils.yookassa_refil import create_invoice, check_payment_status
 import asyncio
 
 logger = logging.getLogger(__name__)
+logger.info("user_functions.py loaded — registering handlers")
 
 class FSMToken(StatesGroup):
     promik = State()
@@ -1102,3 +1103,11 @@ async def user_call_seo_yes(call: CallbackQuery, state: FSMContext):
         await call.message.delete()
     except:
         logger.debug("could not delete message")
+
+
+# ── diagnostic: fires for any callback that no other handler matched ──────────
+@dp.callback_query_handler(state='*')
+async def unhandled_callback(call: types.CallbackQuery, state: FSMContext):
+    logger.warning("UNHANDLED callback: user_id=%s data=%r state=%s",
+                   call.from_user.id, call.data, await state.get_state())
+    await call.answer()

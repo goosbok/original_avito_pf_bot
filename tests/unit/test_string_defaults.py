@@ -59,3 +59,28 @@ def test_design_has_fallback_for_button_key(key):
     assert isinstance(value, str) and value.strip(), (
         f"design.py fallback for '{key}' is empty or not a string"
     )
+
+
+@pytest.mark.parametrize("key", REQUIRED_BUTTON_KEYS)
+def test_sqlite3_get_string_returns_fallback_without_db(key, tmp_path, monkeypatch):
+    """get_string() from utils.sqlite3 must return a non-None value for all btn_* keys
+    even when the strings table is empty (fresh volume / new deploy).
+    """
+    import sqlite3 as _sqlite3
+    import importlib
+    import utils.sqlite3 as m
+
+    db_path = str(tmp_path / "test.db")
+    with _sqlite3.connect(db_path) as con:
+        con.execute(
+            "CREATE TABLE strings (parametr TEXT PRIMARY KEY, description TEXT, value TEXT)"
+        )
+        con.commit()
+
+    monkeypatch.setattr(m, "path_db", db_path)
+
+    value = m.get_string(key)
+    assert value is not None, (
+        f"utils.sqlite3.get_string('{key}') returned None with empty strings table"
+    )
+    assert isinstance(value, str) and value.strip()

@@ -414,3 +414,12 @@ def del_reviews_array(orders: list[dict]):
                f"🗓 Дата: {order['date']}")
         orders_array.append(msg)
     return orders_array
+
+str_select_payment_method = "💳 Пополнение на <b>{}</b>₽\n\nВыберите способ оплаты:"
+
+str_manual_payment = (
+    "💳 Ручная оплата на <b>{}</b>₽\n\n"
+    "Напишите менеджеру следующее сообщение\n"
+    "(нажмите, чтобы скопировать):\n\n"
+    "<code>{}</code>"
+)

@@ -43,9 +43,18 @@ def resolve_telegram_id(identifier: str) -> int:
             "SELECT id FROM users WHERE LOWER(user_name) = LOWER(?)",
             (username,),
         ).fetchone()
-    if row is None:
-        raise OTPInvalid("telegram user not found in our system; start the bot first")
-    return int(row["id"])
+        if row is None:
+            raise OTPInvalid("telegram user not found in our system; start the bot first")
+        user_id = int(row["id"])
+        # Modern users: Telegram ID is in auth_providers, not users.id (which is auto-increment).
+        # Legacy bot users: users.id IS the Telegram ID (no auth_providers row).
+        provider_row = con.execute(
+            "SELECT identifier FROM auth_providers WHERE user_id = ? AND provider = 'telegram'",
+            (user_id,),
+        ).fetchone()
+    if provider_row is not None:
+        return int(provider_row["identifier"])
+    return user_id
 
 
 def _send_telegram_message(bot_token: str, telegram_id: int, text: str) -> None:

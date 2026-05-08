@@ -1,7 +1,7 @@
 """Pydantic-схемы для запросов и ответов веб-API."""
 from __future__ import annotations
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class RefillRequest(BaseModel):
@@ -75,3 +75,59 @@ class ApplicationInfo(BaseModel):
     api_key_prefix: str
     created_at: str
     revoked_at: str | None
+
+
+import re as _re
+
+
+class PFPriceResponse(BaseModel):
+    price_per_unit: int
+
+
+class PFOrderRequest(BaseModel):
+    links: list[str] = Field(min_length=1)
+    days: int = Field(gt=0)
+    fix_count: int = Field(ge=5)
+    contacts: bool
+
+    @field_validator("links")
+    @classmethod
+    def links_must_be_avito(cls, v: list[str]) -> list[str]:
+        for link in v:
+            if not _re.search(r'avito\.ru', link):
+                raise ValueError(f"invalid avito link: {link}")
+        return v
+
+
+class PFOrderResponse(BaseModel):
+    order_id: int
+    total_price: int
+    status: str
+
+
+class OrderItem(BaseModel):
+    order_id: int
+    price: int
+    position_name: str
+    status: str
+    links: str
+    date: str
+    contacts: bool
+
+
+class OrderListResponse(BaseModel):
+    items: list[OrderItem]
+    total: int
+    page: int
+    page_size: int
+
+
+class SupportMessageCreate(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class SupportMessageItem(BaseModel):
+    id: int
+    direction: str
+    text: str
+    created_at: str

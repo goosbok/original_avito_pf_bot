@@ -56,10 +56,10 @@ async def click_first_matching_button(
 ) -> Message:
     """Click the first inline button whose text contains *pattern* and return the bot reply."""
     if message and message.reply_markup:
-        for row in message.reply_markup.rows:
-            for btn in row.buttons:
+        for i, row in enumerate(message.reply_markup.rows):
+            for j, btn in enumerate(row.buttons):
                 if pattern in btn.text:
-                    await btn.click()
+                    await message.click(i, j)
                     await asyncio.sleep(timeout)
                     msgs = await client.get_messages(BOT, limit=1)
                     return msgs[0] if msgs else None

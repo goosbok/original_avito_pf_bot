@@ -374,6 +374,16 @@ def del_admin(user_id):
     else:
         print(f"Admin with user_id {user_id_str} not found.")
 
+def get_tg_id_for_user(internal_user_id: int) -> "int | None":
+    """Return the Telegram chat_id for an internal user PK, or None if not found."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        row = con.execute(
+            "SELECT identifier FROM auth_providers WHERE user_id = ? AND provider = 'telegram'",
+            (internal_user_id,)
+        ).fetchone()
+    return int(row["identifier"]) if row else None
+
 #Исключения
 def get_spam_exclude():
     usrs = []

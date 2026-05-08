@@ -1,7 +1,7 @@
 import logging
 import colorama
 from aiogram.dispatcher import FSMContext
-from aiogram.types import Message, CallbackQuery, ContentType
+from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardButton
 from aiogram.types import InputMediaVideo
 from aiogram.utils.markdown import hlink
 from aiogram import types
@@ -11,13 +11,37 @@ from aiogram.utils.exceptions import RetryAfter
 
 from data import config
 from data.config import price_google, price_yandex, price_vk, price_flamp, price_2gis, price_avito, services
-from data.loader import dp, bot
-from keyboards.users_menu import *
-from utils.other import *
-from utils.sender import *
-from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
+import re
 
-from handlers.admin_functions import *
+from data.loader import dp, bot
+from keyboards.users_menu import (
+    get_menu_kb, user_back_kb, menu_btn_kb,
+    pf_kb, pf_period_kb, profile_kb,
+    yes_no_kb, yes_no_contact_kb, yes_no_order_kb,
+    qna_avito_kb, seo_boost_kb, seo_months, seo_order_confirm,
+    reviews_kb, reviews_count, yes_no_reviews,
+    show_user_order_by_index,
+    yookassa_kb, payment_methods_kb, manual_payment_kb, payment_error_kb,
+)
+from utils.other import (
+    get_user_string_without_first_name,
+    get_days_suffix, format_decimal,
+    split_messages, str2bool, declension_months,
+    get_referals_count, link_cleaner,
+)
+from utils.sender import send_admins
+from utils.sqlite3 import (
+    get_user, add_refill, user_orders_all, add_order, get_order,
+    update_user, get_users_last_order, delete_user, get_refill,
+    add_order_reviews, get_users_last_order_reviews,
+    get_string, get_setting, get_price,
+    get_balancik, add_balance,
+    get_promocode, activate_promocode, update_promocode,
+    get_all_qna_avito,
+    add_order_delreview, get_users_last_order_delreviews,
+    add_order_seo, get_user_last_order_seo,
+)
+from design import listord_array
 from utils.yookassa_refil import create_invoice, check_payment_status
 import asyncio
 

@@ -2,12 +2,13 @@ import colorama
 from aiogram.dispatcher import FSMContext
 from aiogram.types import Message
 
-from data.loader import *
+from data.loader import bot, storage, dp
 from utils.sqlite3 import get_user, update_user, all_users
-from design import *
-from keyboards.inline_keyboards import *
-
-from handlers.admin_functions import *
+from design import (
+    yes_refer, refer_not_in_base, invite_yourself,
+    start_text, start_text_ref,
+)
+from keyboards.inline_keyboards import get_menu_kb
 
 async def get_user_name(user):
     if user.first_name:

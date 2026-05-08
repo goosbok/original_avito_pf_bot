@@ -1,6 +1,10 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from utils.sqlite3 import get_user, get_string, get_setting, get_all_qna_avito, get_admins, get_price
-from design import *
+from data import config
+from design import (
+    profile, main_menu,
+    refill_balance, list_orders,
+)
 from utils.other_functions import str2bool
 
 months_names = {'1': 'Январь', '2': 'Февраль', '3': 'Март', '4': 'Апрель',

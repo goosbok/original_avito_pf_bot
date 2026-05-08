@@ -3,7 +3,11 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 # A previous local get_string() shadowed the canonical one via star-imports
 # and silently dropped _STRING_DEFAULTS fallbacks, breaking every handler.
 from utils.sqlite3 import get_user, get_string, get_string_from_base, get_setting, get_all_qna_avito, get_admins
-from design import *
+from design import (
+    rules, support, qna, promocodes, profile, main_menu,
+    refill_balance, list_orders,
+)
+from data import config
 from data.config import price_google, price_yandex, price_vk, price_flamp, price_2gis, price_avito
 from utils.other_functions import str2bool
 

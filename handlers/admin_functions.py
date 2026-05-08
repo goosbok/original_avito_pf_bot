@@ -7,7 +7,6 @@ from aiogram.utils.markdown import hlink
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils.exceptions import BotBlocked
-from keyboards.inline_keyboards import months_names
 import matplotlib.pyplot as plt
 import io
 
@@ -17,17 +16,63 @@ import math
 import time
 from datetime import timedelta, datetime
 
-from utils.sqlite3 import *
+from utils.sqlite3 import (
+    get_user, get_user_by_tg_id, update_user, delete_user, all_users,
+    get_all_vip, add_order, get_order, delete_order, get_users_last_order,
+    edit_order, all_orders, all_orders_by_status, user_orders_all,
+    add_order_reviews, get_users_last_order_reviews, get_order_reviews,
+    user_orders_all_reviews, add_order_delreview,
+    get_users_last_order_delreviews, get_order_delreviews,
+    user_orders_all_delreviews,
+    get_user_all_refills, all_refills,
+    get_string, get_setting, get_setting_from_base, get_string_from_base,
+    get_all_strings, get_all_settings, add_string_to_base, add_setting_to_base,
+    edit_string, edit_setting,
+    get_price, edit_price,
+    get_admins, add_admin, del_admin,
+    get_spam_exclude, add_spam_exclude,
+    get_report_exclude, add_report_exclude,
+    add_promocode, all_promocodes, get_promocode, update_promocode,
+    del_promo,
+    get_all_qna_avito,
+    edit_order_reviews, edit_order_delreviews,
+    delete_order_reviews, delete_order_delreviews,
+    all_orders_reviews, all_orders_delreviews,
+)
 
 import random
 
 from data import config
-from data.config import *
+from data.config import services
 from data.loader import dp, bot
-from design import *
-from keyboards.inline_keyboards import *
-from utils.other import *
-from utils.sender import *
+from design import (
+    listord_array, order_text, reviews_array, del_reviews_array,
+    magic_ref, magic_report, magic_gen_str,
+    sheet_complete, user_not_in_base,
+)
+from keyboards.inline_keyboards import (
+    admin, setup_kb, setup_variables_kb, setup_strings_kb,
+    str_visual_edit_kb, btn_visual_edit_kb,
+    payment_setup_kb, payment_methods_admin_kb,
+    setup_admins, del_admin_kb,
+    magic_kb, gsheets_url, messages_kb,
+    users_man_kb, promo_codes_kb, orders_kb,
+    admin_back_kb,
+    show_admin_order_by_index,
+    magic_general_kb, magic_referals_kb, refill_ref_kb,
+    spam_send_kb,
+    money_by_years, money_by_month,
+    reviews_man_kb, show_admin_review_by_index,
+    edit_price_kb,
+    months_names,
+)
+from utils.other import (
+    get_user_string_without_first_name, get_user_string_with_first_name,
+    get_days_suffix, format_decimal,
+    split_messages, str2bool,
+    declension_review, decline_order,
+)
+from utils.sender import send_admins, send_admin, send_managers
 from utils.googlesheets import create_sheet, create_orders_report, create_refills_report, create_reviews_report
 
 logger = logging.getLogger(__name__)
@@ -131,15 +176,15 @@ async def find_user(param):
     return user
 
 @dp.message_handler(commands=['admin'], state='*')
-async def adminka(message: Message, state: FSMContext):
+async def adminka(message: Message, state: FSMContext, user_id: int):
     await state.finish()
-    if str(message.from_user.id) in get_admins():
+    if str(user_id) in get_admins():
         await bot.send_message(chat_id=message.from_user.id, text="👋 Добро пожаловать в админ панель!", reply_markup=admin())
 
 @dp.message_handler(commands="delete")
-async def cmd_del_order(message: types.Message):
+async def cmd_del_order(message: types.Message, user_id: int):
     order_id = message.text[8:]
-    userok = message.from_user.id
+    userok = str(user_id)
     admins = get_admins()
     if userok in admins:
         try:
@@ -494,7 +539,7 @@ async def send_spam(state: FSMContext):
         text = state_data['text']
         start_time = time.monotonic()
         for user in users:
-            if user['id'] not in admins and user['is_vip'] != 1:
+            if str(user['id']) not in admins and user['is_vip'] != 1:
                 try:
                     await bot.send_message(user['id'], text=text)
                     sended += 1
@@ -508,7 +553,7 @@ async def send_spam(state: FSMContext):
         caption = state_data['caption']
         start_time = time.monotonic()
         for user in users:
-            if user['id'] not in admins and user['is_vip'] != 1:
+            if str(user['id']) not in admins and user['is_vip'] != 1:
                 try:
                     await bot.send_photo(chat_id=user['id'], photo=photo_id, caption=caption)
                     sended += 1
@@ -520,10 +565,11 @@ async def send_spam(state: FSMContext):
     end_time = time.monotonic()
     sec = await conv_delta(timedelta(seconds=end_time - start_time))
     for admin in admins:
+        admin_tg_id = get_tg_id_for_user(int(admin)) or int(admin)
         try:
             random_sticker = random.choice(spam_ok_stickers)
-            await bot.send_sticker(chat_id=admin, sticker=random_sticker)
-            await bot.send_message(chat_id=admin, text=f"⚠️Рассылка сообщений завершена!\nПользователей в базе <b>{total_users}</b> из них <b>{sended}</b> доставлено, <b>{not_sended}</b> не доставлено, время рассылки <b>{sec}</b>", reply_markup=admin_back_kb('messages_menu'))
+            await bot.send_sticker(chat_id=admin_tg_id, sticker=random_sticker)
+            await bot.send_message(chat_id=admin_tg_id, text=f"⚠️Рассылка сообщений завершена!\nПользователей в базе <b>{total_users}</b> из них <b>{sended}</b> доставлено, <b>{not_sended}</b> не доставлено, время рассылки <b>{sec}</b>", reply_markup=admin_back_kb('messages_menu'))
         except Exception as e:
             logger.exception("sender: failed to send to admin_id=%s", admin)
     await state.finish()
@@ -567,13 +613,14 @@ async def input_admin_message(call: types.CallbackQuery):
         logger.debug("could not delete message")
 
 @dp.message_handler(state=admin_message.send)
-async def send_admin_message(message: types.Message, state: FSMContext):
+async def send_admin_message(message: types.Message, state: FSMContext, user_id: int):
     admins = get_admins()
     for admin in admins:
-        if admin != message.from_user.id:
-            await bot.send_message(chat_id=admin, text=message.text, disable_web_page_preview=True)
+        admin_tg_id = get_tg_id_for_user(int(admin)) or int(admin)
+        if admin != str(user_id):
+            await bot.send_message(chat_id=admin_tg_id, text=message.text, disable_web_page_preview=True)
         else:
-            await bot.send_message(chat_id=admin, text="Сообщение отправлено!", disable_web_page_preview=True)
+            await bot.send_message(chat_id=admin_tg_id, text="Сообщение отправлено!", disable_web_page_preview=True)
     await state.finish()
 
 @dp.callback_query_handler(text="coder_send")

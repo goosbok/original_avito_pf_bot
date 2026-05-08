@@ -29,6 +29,10 @@ app.include_router(auth_link_router)
 app.include_router(auth_telegram_router)
 app.include_router(me_router)
 
+from web.routers.orders import router as orders_router  # noqa: E402
+
+app.include_router(orders_router)
+
 from pathlib import Path  # noqa: E402
 
 from fastapi.staticfiles import StaticFiles  # noqa: E402

@@ -15,7 +15,7 @@ from data.loader import dp, bot
 from keyboards.users_menu import *
 from utils.other import *
 from utils.sender import *
-from utils.sqlite3 import get_user, get_user_by_tg_id, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
+from utils.sqlite3 import get_user, add_refill, user_orders_all, add_order, get_order, update_user, get_users_last_order, delete_user, get_refill, add_order_reviews, get_users_last_order_reviews
 
 from handlers.admin_functions import *
 from utils.yookassa_refil import create_invoice, check_payment_status
@@ -687,8 +687,8 @@ async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount:
     await state.finish()
     manager_nick = get_setting('manager_nick') or 'support'
     f_amount = format_decimal(int(amount))
-    user_id = call.from_user.id
-    copy_text = f"Хочу пополнить баланс на {amount}₽. Мой ID: {user_id}"
+    tg_id = call.from_user.id
+    copy_text = f"Хочу пополнить баланс на {amount}₽. Мой ID: {tg_id}"
     STR = get_string('str_manual_payment').format(f_amount, copy_text)
     await call.message.answer(STR, reply_markup=manual_payment_kb(manager_nick))
     try:

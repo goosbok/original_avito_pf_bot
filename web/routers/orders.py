@@ -91,6 +91,7 @@ async def create_pf_order(
 async def _notify_new_order(user_id: int, order_id: int, total_price: int) -> None:
     try:
         from data.loader import bot
+        from services import identity as identity_svc
         from utils.other import format_decimal
         from utils.sender import send_admins
         from utils.sqlite3 import get_tg_id_for_user, get_users_last_order
@@ -99,23 +100,43 @@ async def _notify_new_order(user_id: int, order_id: int, total_price: int) -> No
         if order is None:
             return
 
-        f_price = format_decimal(total_price)
-        links_str = ""
-        for link in str(order["links"] or "").split(","):
-            link = link.strip().strip("'\"[]")
-            if link:
-                links_str += f"\n<code>{link}</code>"
+        user = identity_svc.get_user(user_id)
+        providers = identity_svc.list_providers(user_id)
+        tg_id = get_tg_id_for_user(user_id)
+        email = next((p["identifier"] for p in providers if p["provider"] == "email"), None)
 
-        adm_msg = (
-            f"🌐 <b>Новый заказ #{order['increment']} (веб)</b>\n"
-            f"Цена: {f_price} ₽\n"
-            f"Параметры: {order['position_name']}\n"
-            f"Контакты: {'Да' if order['contacts'] else 'Нет'}\n"
-            f"Ссылки:{links_str}"
-        )
+        f_price = format_decimal(total_price)
+
+        if tg_id and user.user_name:
+            user_str = f"@{user.user_name} | <a href='tg://user?id={tg_id}'>{tg_id}</a>"
+        elif tg_id:
+            user_str = f"<a href='tg://user?id={tg_id}'>{tg_id}</a>"
+        elif user.user_name:
+            user_str = f"@{user.user_name}"
+        else:
+            user_str = f"id={user_id}"
+
+        links_list = [l.strip().strip("'\"[]") for l in str(order["links"] or "").split(",") if l.strip().strip("'\"[]")]
+        links_str = "".join(f"\n<code>{l}</code>" for l in links_list)
+
+        lines = [
+            f"🌐 <b>Новый заказ #{order['increment']} (веб)</b>",
+            f"💰 Сумма: <b>{f_price} ₽</b>",
+            f"👤 Пользователь: {user_str}",
+        ]
+        if email:
+            lines.append(f"📧 Email: {email}")
+        lines += [
+            f"📋 Тариф: {order['position_name']}",
+            f"📊 Статус: {order['status']}",
+            f"📞 Контакт: {'Да' if order['contacts'] else 'Нет'}",
+            f"📅 Дата: {order['date']}",
+            f"🔗 Ссылок: {len(links_list)}{links_str}",
+        ]
+
+        adm_msg = "\n".join(lines)
         await send_admins(adm_msg)
 
-        tg_id = get_tg_id_for_user(user_id)
         if tg_id:
             await bot.send_message(
                 chat_id=tg_id,

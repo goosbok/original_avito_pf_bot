@@ -166,7 +166,6 @@ async def to_admin_menu(call: CallbackQuery, state: FSMContext):
 async def profile(call: CallbackQuery, state: FSMContext):
     await state.finish()
     await state.update_data(page=call.data)
-    user_id = call.from_user.id
     await call.message.answer("🐹 Управление пользователями:", reply_markup=users_man_kb())
     try:
         await call.message.delete()
@@ -213,7 +212,6 @@ async def call_show_promik(call: types.CallbackQuery, state: FSMContext):
         await call.message.delete()
     except:
         logger.debug("could not delete message")
-    user_id = call.from_user.id
     prm = "Найдены промокоды:\n"
     all_promo = all_promocodes()
     prm = '\n'.join(['❎' if promo['isactivated'] == 1 else '✅' + f"<code>{promo['code']}</code> цена: {promo['price']} руб." for promo in all_promo])
@@ -384,11 +382,11 @@ async def usr_sel(message: types.Message, state: FSMContext):
         await state.finish()
 
 @dp.message_handler(state=balance.change_balance)
-async def change_balance(message: types.Message, state: FSMContext):
+async def change_balance(message: types.Message, state: FSMContext, user_id: int):
     new_balance = message.text
     state_data = await state.get_data()
     ch_usr = state_data['usr']
-    adm_user = get_user_by_tg_id(message.from_user.id)
+    adm_user = get_user(id=user_id)
     #usr_str = await get_user_string(ch_usr['id'])
     usr_str = await get_user_string_without_first_name(ch_usr)
     try:
@@ -403,7 +401,6 @@ async def change_balance(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(text="set_vip")
 async def set_vip(call: types.CallbackQuery):
-    user_id = call.from_user.id
     await call.message.answer("⚙️ Введите ID или логин пользователя:")
     try:
         await call.message.delete()
@@ -412,10 +409,10 @@ async def set_vip(call: types.CallbackQuery):
     await vip.set_status.set()
 
 @dp.message_handler(state=vip.set_status)
-async def vip_set(message: types.Message, state: FSMContext):
+async def vip_set(message: types.Message, state: FSMContext, user_id: int):
     try:
         usr = await find_user(message.text)
-        adm_usr = get_user_by_tg_id(message.from_user.id)
+        adm_usr = get_user(id=user_id)
         #usr_str = await get_user_string(usr['id'])
         usr_str = await get_user_string_without_first_name(usr)
         if usr['is_vip'] != 1:
@@ -439,11 +436,11 @@ async def unset_vip(call: types.CallbackQuery):
     await vip.unset_status.set()
 
 @dp.message_handler(state=vip.unset_status)
-async def vip_unset(message: types.Message, state: FSMContext):
+async def vip_unset(message: types.Message, state: FSMContext, user_id: int):
     try:
         #usr = get_user(id=message.text)
         usr = await find_user(message.text)
-        adm_usr = get_user_by_tg_id(message.from_user.id)
+        adm_usr = get_user(id=user_id)
         #usr_str = await get_user_string(usr['id'])
         usr_str = await get_user_string_without_first_name(usr)
         if usr['is_vip'] != 0:
@@ -602,7 +599,6 @@ async def send_coder_message(message: types.Message, state: FSMContext):
 async def orders_man(call: CallbackQuery, state: FSMContext):
     await state.finish()
     await state.update_data(page=call.data)
-    user_id = call.from_user.id
     orders = all_orders()
     orders_cnt = len(orders)
     ord_dec = decline_order(orders_cnt)

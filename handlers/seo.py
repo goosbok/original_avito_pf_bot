@@ -113,6 +113,14 @@ async def seo_link_add(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(text_startswith="seo_yes:", state='*')
 async def user_call_seo_yes(call: CallbackQuery, state: FSMContext, user_id: int):
     state_data = await state.get_data()
+    if not all(k in state_data for k in ('months', 'total_price', 'link')):
+        STR = get_string('str_error') or '⚠️ Заказ устарел. Начните оформление заново.'
+        await call.message.answer(STR, reply_markup=get_menu_kb())
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        return
     months_count = int(state_data['months'])
     total_price = state_data['total_price']
     link = state_data['link']

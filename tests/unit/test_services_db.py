@@ -19,4 +19,4 @@ def test_connect_uses_current_path_db(tmp_db: Path) -> None:
     """Если monkeypatch path_db меняет путь — connect должен его подхватить."""
     with connect() as con:
         rows = con.execute("PRAGMA table_info(orders)").fetchall()
-    assert len(rows) == 8
+    assert len(rows) == 9  # increment, user_id, price, position_name, status, links, date, contacts, user_name

@@ -220,6 +220,14 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
 async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
     user = get_user(id=user_id)
     async with state.proxy() as data:
+        if 'total_price' not in data:
+            STR = get_string('str_error') or '⚠️ Заказ устарел. Начните оформление заново.'
+            await call.message.answer(STR, reply_markup=get_menu_kb())
+            try:
+                await call.message.delete()
+            except Exception:
+                pass
+            return
         if user['balance'] >= data['total_price']:
             update_user(id=user['id'], balance=user['balance']-data['total_price'])
             add_order(user_id=user['id'],

@@ -120,6 +120,14 @@ async def review_add_link(message: types.Message, state: FSMContext):
 async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: int):
     user = get_user(id=user_id)
     state_data = await state.get_data()
+    if not all(k in state_data for k in ('amount', 'service', 'link')):
+        STR = get_string('str_error') or '⚠️ Заказ устарел. Начните оформление заново.'
+        await call.message.answer(STR, reply_markup=get_menu_kb())
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        return
     amount = state_data['amount']
     service = state_data['service']
     link = state_data['link']

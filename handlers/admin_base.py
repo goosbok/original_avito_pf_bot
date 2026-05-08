@@ -53,19 +53,19 @@ async def find_user(param):
 
 
 @dp.message_handler(commands=['admin'], state='*')
-async def adminka(message: Message, state: FSMContext, user_id: int):
+async def adminka(message: Message, state: FSMContext):
     await state.finish()
-    if str(user_id) in get_admins():
+    # Admins are stored as Telegram IDs; compare against from_user.id, not the
+    # internal user PK that the middleware injects as user_id.
+    if str(message.from_user.id) in get_admins():
         from keyboards.inline_keyboards import admin
         await bot.send_message(chat_id=message.from_user.id, text="👋 Добро пожаловать в админ панель!", reply_markup=admin())
 
 
 @dp.message_handler(commands="delete")
-async def cmd_del_order(message: types.Message, user_id: int):
+async def cmd_del_order(message: types.Message):
     order_id = message.text[8:]
-    userok = str(user_id)
-    admins = get_admins()
-    if userok in admins:
+    if str(message.from_user.id) in get_admins():
         try:
             order = get_order(id=order_id)
             delete_order(id=order_id)
@@ -80,10 +80,11 @@ user_promo_codes = {}
 
 @dp.callback_query_handler(text="to_admin_menu", state='*')
 async def to_admin_menu(call: CallbackQuery, state: FSMContext):
+    if str(call.from_user.id) not in get_admins():
+        return
     await state.finish()
-    user_id = call.from_user.id
     from keyboards.inline_keyboards import admin
-    await bot.send_message(chat_id=user_id, text="👋 Добро пожаловать в админ панель!", reply_markup=admin())
+    await bot.send_message(chat_id=call.from_user.id, text="👋 Добро пожаловать в админ панель!", reply_markup=admin())
     try:
         await call.message.delete()
     except:

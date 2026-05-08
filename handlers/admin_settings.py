@@ -27,7 +27,7 @@ from utils.sqlite3 import (
     get_admins, add_admin, del_admin,
     get_spam_exclude, add_spam_exclude,
     get_report_exclude, add_report_exclude,
-    all_orders,
+    all_orders, get_tg_id_for_user,
 )
 
 from utils.other import (
@@ -456,7 +456,9 @@ async def admin_add_admin(message: types.Message, state: FSMContext):
             user = await find_user(user_id_str)
             if user:
                 usr_str = await get_user_string_without_first_name(user)
-                add_admin(str(user['id']))
+                # Admins are keyed by TG ID; resolve internal ID → TG ID.
+                tg_id = get_tg_id_for_user(user['id'])
+                add_admin(str(tg_id) if tg_id else str(user['id']))
                 await message.answer(f'✅ Пользователь {usr_str} стал админом!', reply_markup=admin_back_kb("admins_setup"))
             else:
                 await message.answer(f'⚠️ Пользователь {user_id_str} не найден в базе. Введите ID нового пользователя!')

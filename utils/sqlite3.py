@@ -1010,7 +1010,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
 
 
 def apply_phase2_migrations():
-    """Идемпотентно добавляет колонки source-tracking в refills и link в reviews."""
+    """Идемпотентно добавляет колонки — запускается при каждом старте."""
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         existing_refills = {row['name'] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
@@ -1027,6 +1027,10 @@ def apply_phase2_migrations():
         if 'link' not in existing_reviews:
             con.execute("ALTER TABLE reviews ADD COLUMN link TEXT")
             print("reviews.link added")
+        existing_orders = {row['name'] for row in con.execute("PRAGMA table_info(orders)").fetchall()}
+        if 'user_name' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN user_name TEXT")
+            print("orders.user_name added")
         con.commit()
 
 
@@ -1035,11 +1039,11 @@ def create_db():
         con.row_factory = dict_factory
         for idx, (table, ddl, cols) in enumerate(get_schema_statements(), start=1):
             existing = con.execute(f"PRAGMA table_info({table})").fetchall()
-            if len(existing) == cols:
-                print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
-            else:
+            if len(existing) == 0:
                 con.execute(ddl)
                 print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
+            else:
+                print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
         con.commit()
     apply_phase2_migrations()
 

@@ -1006,6 +1006,18 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (user_id_to_link) REFERENCES users(id))",
             9,
         ),
+        (
+            "support_messages",
+            "CREATE TABLE support_messages("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "direction TEXT NOT NULL,"
+            "text TEXT NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "tg_message_id INTEGER,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            6,
+        ),
     ]
 
 
@@ -1055,3 +1067,52 @@ def get_nick(param):
         return value
     else:
         return None
+
+
+def user_orders_paginated(user_id, limit=20, offset=0):
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        return con.execute(
+            "SELECT * FROM orders WHERE user_id = ? ORDER BY increment DESC LIMIT ? OFFSET ?",
+            (user_id, limit, offset),
+        ).fetchall()
+
+
+def user_orders_count(user_id):
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        result = con.execute(
+            "SELECT COUNT(*) as cnt FROM orders WHERE user_id = ?",
+            (user_id,),
+        ).fetchone()
+        return (result["cnt"] if result else 0)
+
+
+def support_add_message(user_id, direction, text, tg_message_id=None):
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        cur = con.execute(
+            "INSERT INTO support_messages(user_id, direction, text, created_at, tg_message_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, direction, text, get_date(), tg_message_id),
+        )
+        con.commit()
+        return cur.lastrowid
+
+
+def support_get_messages(user_id, limit=100):
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        return con.execute(
+            "SELECT * FROM support_messages WHERE user_id = ? ORDER BY id ASC LIMIT ?",
+            (user_id, limit),
+        ).fetchall()
+
+
+def support_find_by_tg_message_id(tg_message_id):
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        return con.execute(
+            "SELECT * FROM support_messages WHERE tg_message_id = ?",
+            (tg_message_id,),
+        ).fetchone()

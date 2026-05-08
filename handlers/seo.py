@@ -99,7 +99,7 @@ async def seo_link_add(message: types.Message, state: FSMContext):
     state_data = await state.get_data()
     months_count = int(state_data['months'])
     months_suffix = state_data['suffix']
-    price = int(get_setting('seo_price'))
+    price = int(get_price('seo_price'))
     link = message.text
     total_price = price * months_count
     MSG = get_string('str_seo_order')

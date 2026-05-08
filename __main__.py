@@ -31,7 +31,6 @@ from utils.sqlite3 import create_db as _init_db
 _init_db()
 
 _log.info("Importing handlers...")
-from handlers.admin_functions import *
 from handlers.main_start import *
 from data.loader import dp
 _log.info("Handlers imported successfully")

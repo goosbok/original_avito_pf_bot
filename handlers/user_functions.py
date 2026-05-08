@@ -56,8 +56,7 @@ async def cmd_id(message: types.Message):
     await message.answer(STR.format(message.from_user.id))
 
 @dp.message_handler(commands="delme")
-async def cmd_delme(message: types.Message):
-    user_id = message.from_user.id
+async def cmd_delme(message: types.Message, user_id: int):
     logger.info("cmd_delme: user_id=%s", user_id)
     try:
         delete_user(id=user_id)
@@ -141,13 +140,13 @@ async def user_call_qna_avito(call: CallbackQuery, state: FSMContext):
             await call.message.answer(qna['value'], reply_markup=qna_avito_kb())
 
 @dp.callback_query_handler(text_startswith="user:", state='*')
-async def user(call: CallbackQuery, state: FSMContext):
+async def user(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("user callback: user_id=%s data=%s", call.from_user.id, call.data)
     await state.finish()
     data = call.data.split(":")
     action = data[1]
     if action == 'profile':
-        user = get_user_by_tg_id(call.from_user.id)
+        user = get_user(id=user_id)
         if user is None:
             await call.message.answer(get_string('str_error') or '⚠️ Ошибка', reply_markup=get_menu_kb())
             return
@@ -168,8 +167,7 @@ async def user(call: CallbackQuery, state: FSMContext):
 
 
 @dp.message_handler(state=FSMToken.promik)
-async def promik(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
+async def promik(message: types.Message, state: FSMContext, user_id: int):
     code = message.text
     promocode = get_promocode(code=code)
     user = message.from_user
@@ -177,7 +175,7 @@ async def promik(message: types.Message, state: FSMContext):
     if promocode:
         if promocode['isactivated'] == 0:
             activate_promocode(code)
-            balance = get_balancik(message.from_user.id)
+            balance = get_balancik(user_id)
             balance = balance + int(promocode['price'])
             add_balance(balance, user_id)
             STR = get_string('str_promo_activated')
@@ -197,7 +195,7 @@ async def promik(message: types.Message, state: FSMContext):
             if not promocode['prom_users']:
                 users_str = user_id
                 update_promocode(increment=promocode['increment'], prom_users=users_str)
-                balance = get_balancik(message.from_user.id)
+                balance = get_balancik(user_id)
                 balance = balance + int(promocode['price'])
                 add_balance(balance, user_id)
                 STR = get_string('str_promo_activated')
@@ -216,7 +214,7 @@ async def promik(message: types.Message, state: FSMContext):
                     users_str = ','.join(users_array)
 
                     update_promocode(increment=promocode['increment'], prom_users=users_str)
-                    balance = get_balancik(message.from_user.id)
+                    balance = get_balancik(user_id)
                     balance = balance + int(promocode['price'])
                     add_balance(balance, user_id)
                     STR = get_string('str_promo_activated')
@@ -238,7 +236,7 @@ async def promik(message: types.Message, state: FSMContext):
         logger.warning("promik: code not found in db code=%s user=%s", code, user_id)
 
 @dp.callback_query_handler(text_startswith="profile:", state='*')
-async def profile(call: CallbackQuery, state: FSMContext):
+async def profile(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("profile callback: user_id=%s data=%s", call.from_user.id, call.data)
     await state.finish()
     data = call.data.split(":")
@@ -254,7 +252,7 @@ async def profile(call: CallbackQuery, state: FSMContext):
             await call.message.answer(STR.format(manager_nick), reply_markup=user_back_kb('user:profile'))
     elif action == 'listord':
         try:
-            orders = user_orders_all(call.from_user.id) or []
+            orders = user_orders_all(user_id) or []
             if not orders:
                 STR = get_string('str_error_get_orders') or '📭 У вас пока нет заказов.'
                 await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
@@ -301,7 +299,7 @@ async def user_call_show_order_by_index(call: types.CallbackQuery, state: FSMCon
         await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
 
 @dp.callback_query_handler(text_startswith="user_show_all:", state="*")
-async def user_call_show_by_status(call: types.CallbackQuery, state: FSMContext):
+async def user_call_show_by_status(call: types.CallbackQuery, state: FSMContext, user_id: int):
     try:
         await call.message.delete()
     except:
@@ -310,12 +308,12 @@ async def user_call_show_by_status(call: types.CallbackQuery, state: FSMContext)
 
     if action == 'completed':
         orders = []
-        for order in user_orders_all(call.from_user.id):
+        for order in user_orders_all(user_id):
             if order['status'] == 'Completed':
                 orders.append(order)
     elif action == 'posted':
         orders = []
-        for order in user_orders_all(call.from_user.id):
+        for order in user_orders_all(user_id):
             if order['status'] == 'Posted':
                 orders.append(order)
     try:
@@ -328,13 +326,13 @@ async def user_call_show_by_status(call: types.CallbackQuery, state: FSMContext)
         await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
 
 @dp.callback_query_handler(text="user_show_all:orders", state="*")
-async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext):
+async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext, user_id: int):
     try:
         await call.message.delete()
     except:
         logger.debug("could not delete message")
     state_data = await state.get_data()
-    orders = user_orders_all(call.from_user.id)
+    orders = user_orders_all(user_id)
     if 'index' in state_data:
         index = state_data['index']
     else:
@@ -362,9 +360,9 @@ async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext
         await call.message.answer(STR, reply_markup=user_back_kb(f'user:profile'))
 
 @dp.callback_query_handler(text_startswith="repeat:", state="*")
-async def call_repeat(call: types.CallbackQuery, state: FSMContext):
+async def call_repeat(call: types.CallbackQuery, state: FSMContext, user_id: int):
     index = call.data.split(":")[1]
-    order = user_orders_all(call.from_user.id)[int(index)]
+    order = user_orders_all(user_id)[int(index)]
     links = order['links'].split('\n')
     async with state.proxy() as data:
         data['links'] = links
@@ -564,8 +562,8 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
         await call.message.answer(STR, reply_markup=get_menu_kb())
 
 @dp.callback_query_handler(text="order_confirm", state='*')
-async def confirm_order(call: CallbackQuery, state: FSMContext):
-    user = get_user_by_tg_id(call.from_user.id)
+async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
+    user = get_user(id=user_id)
     async with state.proxy() as data:
         if user['balance'] >= data['total_price']:
             update_user(id=user['id'], balance=user['balance']-data['total_price'])
@@ -635,12 +633,12 @@ async def to_main_menu(call: CallbackQuery, state: FSMContext):
         logger.debug("could not delete message")
 
 @dp.message_handler(lambda message: message.text.isdigit(), state="check_order")
-async def check_order(message: Message, state: FSMContext):
+async def check_order(message: Message, state: FSMContext, user_id: int):
     await state.finish()
     order_id = int(message.text)
     try:
         order = get_order(order_id)
-        if order['user_id'] == message.from_user.id:
+        if order['user_id'] == user_id:
             STR = get_string('str_order_status_txt')
             STR = STR.format(order['increment'], order['status'])
             msg = await message.answer(STR, reply_markup=menu_btn_kb())
@@ -659,7 +657,7 @@ async def check_order(message: Message, state: FSMContext):
 
 
 @dp.message_handler(lambda message: message.text.isdigit(), state="refill_balance")
-async def refill(message: Message, state: FSMContext):
+async def refill(message: Message, state: FSMContext, user_id: int):
     amount = int(message.text)
     min_amount = int(get_setting('min_amount'))
     if amount < min_amount:
@@ -685,7 +683,7 @@ async def refill(message: Message, state: FSMContext):
         logger.debug("could not delete message")
 
 
-async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount: int) -> None:
+async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount: int, user_id: int) -> None:
     await state.finish()
     manager_nick = get_setting('manager_nick') or 'support'
     f_amount = format_decimal(int(amount))
@@ -699,36 +697,29 @@ async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount:
         logger.debug("could not delete message")
 
 
-async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amount: int) -> None:
+async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amount: int, user_id: int) -> None:
     from services.refill import (
         create_invoice as svc_create_invoice,
         finalize_with_referral_bonus,
     )
     from services.exceptions import PaymentError, UserNotFound
-    from services.identity import get_or_create_user_by_telegram
 
     await call.message.delete()
-    user_id = call.from_user.id
-
-    internal_user_id = get_or_create_user_by_telegram(
-        tg_id=user_id,
-        user_name=call.from_user.username,
-        first_name=call.from_user.first_name,
-    )
+    tg_id = call.from_user.id
 
     try:
-        payment_url, payment_id = svc_create_invoice(internal_user_id, int(amount))
+        payment_url, payment_id = svc_create_invoice(user_id, int(amount))
     except PaymentError:
         support_nick = get_nick('manager_nick')
         msg = get_string('str_payment_error').format(support_nick)
-        await bot.send_message(chat_id=user_id, text=msg, reply_markup=payment_error_kb())
+        await bot.send_message(chat_id=tg_id, text=msg, reply_markup=payment_error_kb())
         return
 
     STR1 = get_string('str_debet_money').format(format_decimal(amount))
 
-    if user_id != 6988175544 and user_id != 257838190:
+    if tg_id != 6988175544 and tg_id != 257838190:
         await bot.send_message(
-            chat_id=user_id, text=STR1,
+            chat_id=tg_id, text=STR1,
             reply_markup=yookassa_kb(int(amount), payment_url),
         )
         success = await check_payment_status(payment_id)
@@ -737,29 +728,29 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
 
     if not success:
         STR6 = get_string('str_pay_error').format(get_nick('manager_nick'))
-        await bot.send_message(chat_id=user_id, text=STR6)
+        await bot.send_message(chat_id=tg_id, text=STR6)
         return
 
     try:
         result = finalize_with_referral_bonus(
-            internal_user_id, int(amount),
+            user_id, int(amount),
             source_type="telegram",
         )
     except UserNotFound:
-        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        await bot.send_message(chat_id=tg_id, text=get_string('str_error'))
         return
     except Exception:
         logger.exception("yookassa payment: finalize_with_referral_bonus failed for user_id=%s", user_id)
-        await bot.send_message(chat_id=user_id, text=get_string('str_error'))
+        await bot.send_message(chat_id=tg_id, text=get_string('str_error'))
         return
 
-    usr = get_user(id=internal_user_id)
+    usr = get_user(id=user_id)
     user_string = await get_user_string_without_first_name(usr)
     f_amount = format_decimal(amount)
     f_balance = format_decimal(result.user_balance)
 
     STR2 = get_string('str_usr_pay_success').format(f_amount, f_balance)
-    await bot.send_message(chat_id=user_id, text=STR2, reply_markup=user_back_kb('user:profile'))
+    await bot.send_message(chat_id=tg_id, text=STR2, reply_markup=user_back_kb('user:profile'))
     STR3 = get_string('str_adm_pay_success').format(f_amount, user_string, f_balance)
     await send_admins(STR3)
     logger.info("payment success: user_id=%s amount=%s", usr['id'], amount)
@@ -777,7 +768,7 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
 
 
 @dp.callback_query_handler(text_startswith="pay_method:", state="refill_balance")
-async def select_payment_method(call: CallbackQuery, state: FSMContext):
+async def select_payment_method(call: CallbackQuery, state: FSMContext, user_id: int):
     from services.payment_methods import is_enabled as _is_method_enabled
     method = call.data.split(":")[1]
 
@@ -793,9 +784,9 @@ async def select_payment_method(call: CallbackQuery, state: FSMContext):
         return
 
     if method == "manual":
-        await _handle_manual_payment(call, state, amount)
+        await _handle_manual_payment(call, state, amount, user_id)
     elif method == "yookassa":
-        await _handle_yookassa_payment(call, state, amount)
+        await _handle_yookassa_payment(call, state, amount, user_id)
     else:
         await call.answer("Неизвестный способ оплаты", show_alert=True)
 
@@ -909,8 +900,8 @@ async def review_add_link(message: types.Message, state: FSMContext):
         await message.answer(STR1)
 
 @dp.callback_query_handler(text="rev_confirm", state='*')
-async def call_confirm_review(call: CallbackQuery, state: FSMContext):
-    user = get_user_by_tg_id(call.from_user.id)
+async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: int):
+    user = get_user(id=user_id)
     state_data = await state.get_data()
     amount = state_data['amount']
     service = state_data['service']
@@ -918,7 +909,7 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext):
     if user['balance'] >= int(amount):
         update_user(id=user['id'], balance=user['balance']-int(amount))
         add_order_reviews(user_id=user['id'], price=amount, service=service, link=link, status='Posted')
-        order = get_users_last_order_reviews(str(call.from_user.id))
+        order = get_users_last_order_reviews(str(user_id))
         manager = get_nick('nick_manager_reviews')
         STR = get_string('str_review_confirm').format(order['increment'], manager)
         MSG = get_string('str_new_review_admin_report')
@@ -965,16 +956,16 @@ async def call_avito_del_review(call: CallbackQuery, state: FSMContext):
     await avito.delete_review.set()
 
 @dp.message_handler(text_startswith="https:", state=avito.delete_review)
-async def avito_del_review(message: types.Message, state: FSMContext):
+async def avito_del_review(message: types.Message, state: FSMContext, user_id: int):
     link = message.text
-    user = get_user_by_tg_id(message.from_user.id)
+    user = get_user(id=user_id)
     #amount = 7000
     amount = int(get_price('price_avito_del_review'))
     service = 'avito'
     if user['balance'] >= amount:
         update_user(id=user['id'], balance=user['balance']-int(amount))
         add_order_delreview(user['id'], amount, service, link, 'Размещен')
-        order = get_users_last_order_delreviews(str(message.from_user.id))
+        order = get_users_last_order_delreviews(str(user_id))
         #await send_admins(new_order_review_text(order))
         manager = get_nick('manager_nick')
         STR = get_string('str_review_confirm').format(order['increment'], manager)
@@ -1077,19 +1068,19 @@ async def seo_link_add(message: types.Message, state: FSMContext):
     await message.answer(MSG, reply_markup=seo_order_confirm(total_price))
 
 @dp.callback_query_handler(text_startswith="seo_yes:", state='*')
-async def user_call_seo_yes(call: CallbackQuery, state: FSMContext):
+async def user_call_seo_yes(call: CallbackQuery, state: FSMContext, user_id: int):
     state_data = await state.get_data()
     months_count = int(state_data['months'])
     total_price = state_data['total_price']
     link = state_data['link']
-    user = get_user_by_tg_id(call.from_user.id)
+    user = get_user(id=user_id)
     manager = get_nick('manager_nick')
     if user['balance'] >= total_price:
         update_user(id=user['id'], balance=user['balance']-total_price)
         add_order_seo(user_id=user['id'], price=total_price, months=months_count, status="Размещён",
         link=str(link).replace(']','').replace('[',''))
         adm_message = get_string('str_seo_admin_msg')
-        o = get_user_last_order_seo(call.from_user.id)
+        o = get_user_last_order_seo(user_id)
         f_price = format_decimal(int(o['price']))
         username = await get_user_string_without_first_name(user)
         MSG = adm_message.format(o['increment'], o['months'], f_price, username, o['status'], o['date'], o['link'])

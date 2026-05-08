@@ -39,9 +39,8 @@ async def get_refer_name(user_id):
         return None
 
 @dp.message_handler(commands=['start'], state="*")
-async def main_start(message: Message, state: FSMContext):
+async def main_start(message: Message, state: FSMContext, user_id: int):
     await state.finish()
-    user_id = message.from_user.id
     user = get_user(id=user_id)
     usr = message.from_user
     args = message.get_args()

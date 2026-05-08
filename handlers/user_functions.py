@@ -24,6 +24,17 @@ import asyncio
 logger = logging.getLogger(__name__)
 logger.info("user_functions.py loaded — registering handlers")
 
+
+def _get_tg_id_for_user(internal_user_id: int) -> "int | None":
+    """Look up Telegram chat_id for a user from auth_providers."""
+    from services.db import connect
+    with connect() as con:
+        row = con.execute(
+            "SELECT identifier FROM auth_providers WHERE user_id = ? AND provider = 'telegram'",
+            (internal_user_id,)
+        ).fetchone()
+    return int(row["identifier"]) if row else None
+
 class FSMToken(StatesGroup):
     promik = State()
 
@@ -51,7 +62,7 @@ def get_nick(param):
 
 @dp.message_handler(commands="id")
 async def cmd_id(message: types.Message):
-    logger.info("cmd_id: user_id=%s", message.from_user.id)
+    logger.info("cmd_id: tg_id=%s", message.from_user.id)
     STR = get_string('str_your_id')
     await message.answer(STR.format(message.from_user.id))
 
@@ -94,7 +105,7 @@ async def pre_checkout_query(pre_checkout_q: types.PreCheckoutQuery):
 
 @dp.callback_query_handler(text_startswith="info:", state='*')
 async def info(call: CallbackQuery, state: FSMContext):
-    logger.info("info callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("info callback: tg_id=%s data=%s", call.from_user.id, call.data)
     await state.finish()
     data = call.data.split(':')
     text = data[1]
@@ -129,7 +140,7 @@ async def info(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text_startswith="qna_avito", state='*')
 async def user_call_qna_avito(call: CallbackQuery, state: FSMContext):
-    logger.info("qna_avito callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("qna_avito callback: tg_id=%s data=%s", call.from_user.id, call.data)
     all_qna = get_all_qna_avito()
     try:
         await call.message.delete()
@@ -141,7 +152,7 @@ async def user_call_qna_avito(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text_startswith="user:", state='*')
 async def user(call: CallbackQuery, state: FSMContext, user_id: int):
-    logger.info("user callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("user callback: tg_id=%s data=%s", call.from_user.id, call.data)
     await state.finish()
     data = call.data.split(":")
     action = data[1]
@@ -151,7 +162,7 @@ async def user(call: CallbackQuery, state: FSMContext, user_id: int):
             await call.message.answer(get_string('str_error') or '⚠️ Ошибка', reply_markup=get_menu_kb())
             return
         profile_string = get_string('str_user_profile')
-        ref_link = f"{config.botlink}?start={call.from_user.id}"
+        ref_link = f"{config.botlink}?start={user_id}"
         rferals_count = get_referals_count(user)
         f_balance = format_decimal(user['balance'])
         await call.message.answer(text=profile_string.format(f_balance, ref_link, rferals_count), disable_web_page_preview=True, reply_markup=profile_kb())
@@ -237,7 +248,7 @@ async def promik(message: types.Message, state: FSMContext, user_id: int):
 
 @dp.callback_query_handler(text_startswith="profile:", state='*')
 async def profile(call: CallbackQuery, state: FSMContext, user_id: int):
-    logger.info("profile callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("profile callback: tg_id=%s data=%s", call.from_user.id, call.data)
     await state.finish()
     data = call.data.split(":")
     action = data[1]
@@ -264,7 +275,7 @@ async def profile(call: CallbackQuery, state: FSMContext, user_id: int):
                     reply_markup=show_user_order_by_index(len(orders) - 1, len(orders)),
                 )
         except Exception:
-            logger.exception("profile listord: failed for user_id=%s", call.from_user.id)
+            logger.exception("profile listord: failed for tg_id=%s", call.from_user.id)
             STR = get_string('str_error')
             await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
     elif action == 'ordstatus':
@@ -348,7 +359,7 @@ async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext
                     await call.message.answer(orders_array[i], reply_markup=user_back_kb('profile:listord'))
             except RetryAfter as e:
                 wait_time = e.timeout
-                logger.warning("flood control: waiting %s sec for user_id=%s", wait_time, call.from_user.id)
+                logger.warning("flood control: waiting %s sec for tg_id=%s", wait_time, call.from_user.id)
                 await asyncio.sleep(wait_time)  # Ожидание перед повторной попыткой
                 if i < len(orders_array) - 1:
                     await call.message.answer(orders_array[i])
@@ -373,7 +384,7 @@ async def call_repeat(call: types.CallbackQuery, state: FSMContext, user_id: int
 
 @dp.callback_query_handler(text_startswith="tarifs:", state='*')
 async def tarif(call: CallbackQuery, state: FSMContext):
-    logger.info("tarif callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("tarif callback: tg_id=%s data=%s", call.from_user.id, call.data)
     #await state.finish()
     async with state.proxy() as data:
         if 'links' not in data:
@@ -405,7 +416,7 @@ async def call_review_bonus(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text_startswith="pf:", state='*')
 async def pf(call: CallbackQuery, state: FSMContext):
-    logger.info("pf callback: user_id=%s data=%s", call.from_user.id, call.data)
+    logger.info("pf callback: tg_id=%s data=%s", call.from_user.id, call.data)
     call_data = call.data.split(":")
     if call_data[1].isdigit():
         days = call_data[1]
@@ -761,7 +772,8 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
             f_add_bal = format_decimal(result.referrer_bonus)
             f_new_bal = format_decimal(result.referrer_new_balance)
             STR4 = get_string('str_ref_balance_refil').format(f_add_bal, f_new_bal)
-            await bot.send_message(chat_id=str(result.referrer_id), text=STR4)
+            ref_tg_id = _get_tg_id_for_user(result.referrer_id) or result.referrer_id
+            await bot.send_message(chat_id=ref_tg_id, text=STR4)
             ref_user_str = ref_user.get('user_name') or ref_user['id']
             logger.info("referral bonus: referrer=%s bonus=%s", ref_user_str, result.referrer_bonus)
     await state.finish()
@@ -909,7 +921,7 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: i
     if user['balance'] >= int(amount):
         update_user(id=user['id'], balance=user['balance']-int(amount))
         add_order_reviews(user_id=user['id'], price=amount, service=service, link=link, status='Posted')
-        order = get_users_last_order_reviews(str(user_id))
+        order = get_users_last_order_reviews(user_id)
         manager = get_nick('nick_manager_reviews')
         STR = get_string('str_review_confirm').format(order['increment'], manager)
         MSG = get_string('str_new_review_admin_report')
@@ -965,7 +977,7 @@ async def avito_del_review(message: types.Message, state: FSMContext, user_id: i
     if user['balance'] >= amount:
         update_user(id=user['id'], balance=user['balance']-int(amount))
         add_order_delreview(user['id'], amount, service, link, 'Размещен')
-        order = get_users_last_order_delreviews(str(user_id))
+        order = get_users_last_order_delreviews(user_id)
         #await send_admins(new_order_review_text(order))
         manager = get_nick('manager_nick')
         STR = get_string('str_review_confirm').format(order['increment'], manager)

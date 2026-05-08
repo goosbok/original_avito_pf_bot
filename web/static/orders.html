@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Мои заказы</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f4f6f8; }
+    .header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 14px 24px;
+              display: flex; align-items: center; gap: 16px; }
+    .header h1 { margin: 0; font-size: 20px; flex: 1; }
+    .btn { display: inline-block; padding: 8px 16px; font-size: 14px; border-radius: 6px;
+           cursor: pointer; text-decoration: none; border: 1px solid #ccc;
+           background: #fff; color: #333; }
+    .btn:hover { background: #f0f0f0; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .main { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+         color: #555; font-weight: 600; white-space: nowrap; }
+    td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+                    font-size: 11px; font-weight: 600; }
+    .status-posted { background: #dff0d8; color: #3c763d; }
+    .status-other { background: #f5f5f5; color: #555; }
+    .links-cell { max-width: 240px; font-size: 11px; word-break: break-all; color: #555; }
+    .pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+    .page-info { font-size: 13px; color: #666; }
+    .empty-state { text-align: center; color: #aaa; padding: 40px 0; font-size: 15px; }
+    .err { color: #c00; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <a href="cabinet.html" class="btn">← Назад</a>
+  <h1>Мои заказы</h1>
+</div>
+
+<div class="main">
+  <div class="card">
+    <div id="orders-content"><div class="empty-state">Загрузка…</div></div>
+    <div class="pagination" id="pagination" style="display:none;">
+      <button class="btn" id="prev-btn" disabled>← Назад</button>
+      <span class="page-info" id="page-info"></span>
+      <button class="btn" id="next-btn" disabled>Вперёд →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem("access_token");
+if (!token) { window.location.href = "/index.html"; }
+
+async function api(method, path) {
+  const r = await fetch(path, { headers: { "Authorization": `Bearer ${token}` } });
+  if (r.status === 401) { localStorage.removeItem("access_token"); window.location.href = "/index.html"; }
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.json();
+}
+
+const PAGE_SIZE = 20;
+let currentPage = 1;
+let totalItems = 0;
+
+async function loadOrders(page) {
+  const content = document.getElementById("orders-content");
+  const pagination = document.getElementById("pagination");
+  try {
+    const data = await api("GET", `/api/orders?page=${page}&page_size=${PAGE_SIZE}`);
+    totalItems = data.total;
+    currentPage = data.page;
+
+    if (!data.items.length) {
+      content.innerHTML = '<div class="empty-state">Заказов пока нет.<br><a href="pf-order.html">Создать первый заказ →</a></div>';
+      pagination.style.display = "none";
+      return;
+    }
+
+    const rows = data.items.map(o => {
+      const statusClass = o.status === "Posted" ? "status-posted" : "status-other";
+      const links = parseLinks(o.links);
+      const linksHtml = links.slice(0, 3).map(l =>
+        `<a href="${escHtml(l)}" target="_blank" rel="noopener" style="display:block;color:#0077cc;">${escHtml(l.replace(/https?:\/\/(www\.)?avito\.ru/, "avito.ru"))}</a>`
+      ).join("") + (links.length > 3 ? `<span style="color:#aaa;">ещё ${links.length-3}…</span>` : "");
+
+      return `<tr>
+        <td>#${o.order_id}</td>
+        <td style="white-space:nowrap;">${o.date ? o.date.substring(0, 16).replace("T", " ") : "—"}</td>
+        <td>${escHtml(o.position_name)}</td>
+        <td style="white-space:nowrap;">${o.price} ₽</td>
+        <td>${o.contacts ? "Да" : "Нет"}</td>
+        <td><span class="status-badge ${statusClass}">${escHtml(o.status)}</span></td>
+        <td class="links-cell">${linksHtml}</td>
+      </tr>`;
+    }).join("");
+
+    content.innerHTML = `<table>
+      <thead><tr>
+        <th>#</th><th>Дата</th><th>Параметры</th>
+        <th>Сумма</th><th>Контакты</th><th>Статус</th><th>Ссылки</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+    const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+    document.getElementById("page-info").textContent =
+      `Стр. ${currentPage} из ${totalPages} (всего ${totalItems})`;
+    document.getElementById("prev-btn").disabled = currentPage <= 1;
+    document.getElementById("next-btn").disabled = currentPage >= totalPages;
+    pagination.style.display = totalPages > 1 ? "flex" : "none";
+
+  } catch (e) {
+    content.innerHTML = `<div class="err">Ошибка загрузки: ${e}</div>`;
+  }
+}
+
+function parseLinks(raw) {
+  const matches = (raw || "").match(/https?:\/\/[^\s'"[\],]+/g);
+  return matches || [];
+}
+
+function escHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+document.getElementById("prev-btn").onclick = () => loadOrders(currentPage - 1);
+document.getElementById("next-btn").onclick = () => loadOrders(currentPage + 1);
+
+loadOrders(1);
+</script>
+</body>
+</html>

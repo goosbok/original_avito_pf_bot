@@ -908,8 +908,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "links TEXT,"
             "date TIMESTAMP,"
             "contacts BOOLEN DEFAULT False,"
+            "user_name TEXT,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            8,
+            9,
         ),
         (
             "promocodes",

@@ -1,8 +1,8 @@
 """Identity layer — управление пользователями и привязанными способами входа.
 
 Один user_id → много auth_providers. user_id всегда внутренний (auto-increment в users).
-Существующие telegram-юзеры остались с users.id == telegram_id (исторический artifact),
-но обращаться к ним нужно через identity.get_user_id_by_telegram(tg_id), не напрямую.
+После миграции Phase 4 все пользователи имеют запись в auth_providers; legacy-путь
+users.id == telegram_id удалён.
 """
 from __future__ import annotations
 
@@ -136,22 +136,13 @@ def get_or_create_user_by_telegram(
     """Главный entry-point для бота.
 
     Если для tg_id есть auth_providers(provider='telegram') — возвращаем user_id.
-    Иначе создаём нового юзера (или находим legacy-запись с users.id == tg_id, если есть)
-    и привязываем telegram.
+    Иначе создаём нового юзера и привязываем telegram.
     """
     user_id = find_user_id_by_provider("telegram", str(tg_id))
     if user_id is not None:
         return user_id
 
-    # Legacy fallback: возможно, существует запись users(id=tg_id) ещё с до-Phase-2 времён,
-    # но миграция её не пропустила (rare). Переиспользуем.
-    with connect() as con:
-        row = con.execute("SELECT id FROM users WHERE id = ?", (tg_id,)).fetchone()
-    if row is not None:
-        link_provider(tg_id, "telegram", str(tg_id))
-        return tg_id
-
-    # Создаём нового
+    # New user
     new_id = _create_user(user_name=user_name, first_name=first_name, ref_id=ref_id)
     link_provider(new_id, "telegram", str(tg_id))
     return new_id

@@ -78,18 +78,3 @@ def test_unlink_and_relink(tmp_db: Path) -> None:
     assert identity.find_user_id_by_provider("email", "a@b.com") is None
     identity.link_provider(uid, "email", "a@b.com", credential_hash="h")
     assert identity.find_user_id_by_provider("email", "a@b.com") == uid
-
-
-def test_legacy_telegram_user_picked_up_when_users_row_exists(tmp_db: Path) -> None:
-    """Симулируем юзера, который остался без auth_providers (миграция не зацепила)."""
-    import sqlite3
-    with sqlite3.connect(tmp_db) as con:
-        con.execute(
-            "INSERT INTO users(id, user_name, first_name, balance, reg_date) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (777, "legacy", "L", 100, "2026-01-01"),
-        )
-        con.commit()
-    uid = identity.get_or_create_user_by_telegram(777, user_name="legacy")
-    assert uid == 777
-    assert identity.find_user_id_by_provider("telegram", "777") == 777

@@ -488,14 +488,7 @@ def get_user(**kwargs):
 
 
 def get_user_by_tg_id(tg_id):
-    """Look up a user by Telegram ID.
-
-    Supports both legacy users (users.id == tg_id) and users created via the
-    identity service (users.id is auto-increment; linked via auth_providers).
-    """
-    u = get_user(id=tg_id)
-    if u:
-        return u
+    """Look up a user by Telegram ID via auth_providers."""
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         return con.execute(

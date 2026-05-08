@@ -22,8 +22,11 @@ _SUPPORT_TAG = "Вопрос из веб"
 
 
 @router.get("/messages", response_model=list[SupportMessageItem])
-async def get_messages(user_id: int = Depends(require_user)) -> list[SupportMessageItem]:
-    msgs = support_svc.get_conversation(user_id)
+async def get_messages(
+    since_id: int = 0,
+    user_id: int = Depends(require_user),
+) -> list[SupportMessageItem]:
+    msgs = support_svc.get_conversation(user_id, since_id=since_id)
     return [
         SupportMessageItem(
             id=m["id"],

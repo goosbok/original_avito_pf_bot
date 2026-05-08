@@ -1100,12 +1100,12 @@ def support_add_message(user_id, direction, text, tg_message_id=None):
         return cur.lastrowid
 
 
-def support_get_messages(user_id, limit=100):
+def support_get_messages(user_id, limit=100, since_id=0):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         return con.execute(
-            "SELECT * FROM support_messages WHERE user_id = ? ORDER BY id ASC LIMIT ?",
-            (user_id, limit),
+            "SELECT * FROM support_messages WHERE user_id = ? AND id > ? ORDER BY id ASC LIMIT ?",
+            (user_id, since_id, limit),
         ).fetchall()
 
 

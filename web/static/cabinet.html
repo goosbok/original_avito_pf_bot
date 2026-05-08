@@ -207,16 +207,15 @@ async function loadRecentOrders() {
 }
 
 let chatMessages = [];
-async function loadChat() {
-  try {
-    const msgs = await api("GET", "/api/support/messages");
-    chatMessages = msgs;
-    renderChat();
-  } catch (_) {}
+let lastMsgId = 0;
+
+function isAtBottom(box) {
+  return box.scrollHeight - box.scrollTop - box.clientHeight < 80;
 }
 
-function renderChat() {
+function renderChat(forceScroll) {
   const box = document.getElementById("chat-box");
+  const atBottom = isAtBottom(box);
   if (!chatMessages.length) {
     box.innerHTML = '<div class="empty-state" id="chat-empty">Нет сообщений. Задайте вопрос.</div>';
     return;
@@ -229,7 +228,27 @@ function renderChat() {
       <div class="msg-meta">${label} · ${m.created_at ? m.created_at.substring(0, 16).replace("T", " ") : ""}</div>
     </div>`;
   }).join("");
-  box.scrollTop = box.scrollHeight;
+  if (forceScroll || atBottom) box.scrollTop = box.scrollHeight;
+}
+
+async function loadChat() {
+  try {
+    const msgs = await api("GET", "/api/support/messages");
+    chatMessages = msgs;
+    lastMsgId = msgs.length ? msgs[msgs.length - 1].id : 0;
+    renderChat(true);
+  } catch (_) {}
+}
+
+async function pollNewMessages() {
+  try {
+    const newMsgs = await api("GET", `/api/support/messages?since_id=${lastMsgId}`);
+    if (!newMsgs.length) return;
+    const hasAdminMsg = newMsgs.some(m => m.direction !== "user");
+    chatMessages = chatMessages.concat(newMsgs);
+    lastMsgId = newMsgs[newMsgs.length - 1].id;
+    renderChat(hasAdminMsg);
+  } catch (_) {}
 }
 
 document.getElementById("chat-send").onclick = async () => {
@@ -243,8 +262,7 @@ document.getElementById("chat-send").onclick = async () => {
   try {
     await api("POST", "/api/support/messages", { text });
     input.value = "";
-    chatMessages.push({ direction: "user", text, created_at: new Date().toISOString() });
-    renderChat();
+    await pollNewMessages();
   } catch (e) {
     errEl.textContent = "Ошибка: " + e;
   } finally {
@@ -252,7 +270,7 @@ document.getElementById("chat-send").onclick = async () => {
   }
 };
 
-setInterval(loadChat, 15000);
+setInterval(pollNewMessages, 3000);
 
 let providersCache = [];
 async function loadProviders() {

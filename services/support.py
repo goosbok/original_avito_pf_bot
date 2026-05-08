@@ -18,8 +18,8 @@ def create_admin_reply(user_id: int, text: str, tg_message_id: int | None = None
     return support_add_message(user_id, "admin", text, tg_message_id)
 
 
-def get_conversation(user_id: int) -> list[dict]:
-    return support_get_messages(user_id)
+def get_conversation(user_id: int, since_id: int = 0) -> list[dict]:
+    return support_get_messages(user_id, since_id=since_id)
 
 
 def find_message_by_tg_id(tg_message_id: int) -> dict | None:

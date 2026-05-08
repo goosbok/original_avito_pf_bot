@@ -20,7 +20,9 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 API_ID   = int(os.environ["TEST_TG_API_ID"])
 API_HASH = os.environ["TEST_TG_API_HASH"]
-BOT      = os.environ.get("BOT_LINK", "").replace("https://t.me/", "@") or "@opt_test_bot"
+# TEST_BOT_LINK overrides BOT_LINK so tests always target the test bot, not production
+_bot_link = os.environ.get("TEST_BOT_LINK") or os.environ.get("BOT_LINK", "")
+BOT      = _bot_link.replace("https://t.me/", "@") or "@opt_test_bot"
 SESSION  = str(Path(__file__).resolve().parents[2] / ".test_session")
 
 

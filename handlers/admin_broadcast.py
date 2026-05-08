@@ -79,12 +79,16 @@ async def send_spam(state: FSMContext):
         text = state_data['text']
         start_time = time.monotonic()
         for user in users:
-            if str(user['id']) not in admins and user['is_vip'] != 1:
+            tg_id = get_tg_id_for_user(user['id'])
+            if tg_id is None:
+                not_sended += 1
+                continue
+            if str(tg_id) not in admins and user['is_vip'] != 1:
                 try:
-                    await bot.send_message(user['id'], text=text)
+                    await bot.send_message(tg_id, text=text)
                     sended += 1
                 except:
-                    logger.warning("spam: failed to send to user_id=%s", user["id"])
+                    logger.warning("spam: failed to send to tg_id=%s", tg_id)
                     not_sended += 1
             else:
                 not_sended += 1
@@ -93,12 +97,16 @@ async def send_spam(state: FSMContext):
         caption = state_data['caption']
         start_time = time.monotonic()
         for user in users:
-            if str(user['id']) not in admins and user['is_vip'] != 1:
+            tg_id = get_tg_id_for_user(user['id'])
+            if tg_id is None:
+                not_sended += 1
+                continue
+            if str(tg_id) not in admins and user['is_vip'] != 1:
                 try:
-                    await bot.send_photo(chat_id=user['id'], photo=photo_id, caption=caption)
+                    await bot.send_photo(chat_id=tg_id, photo=photo_id, caption=caption)
                     sended += 1
                 except:
-                    logger.warning("spam: failed to send to user_id=%s", user["id"])
+                    logger.warning("spam: failed to send to tg_id=%s", tg_id)
                     not_sended += 1
             else:
                 not_sended += 1
@@ -154,11 +162,12 @@ async def input_admin_message(call: types.CallbackQuery):
 
 
 @dp.message_handler(state=admin_message.send)
-async def send_admin_message(message: types.Message, state: FSMContext, user_id: int):
+async def send_admin_message(message: types.Message, state: FSMContext):
     admins = get_admins()
+    sender_tg_id = str(message.from_user.id)
     for admin in admins:
         admin_tg_id = get_tg_id_for_user(int(admin)) or int(admin)
-        if admin != str(user_id):
+        if admin != sender_tg_id:
             await bot.send_message(chat_id=admin_tg_id, text=message.text, disable_web_page_preview=True)
         else:
             await bot.send_message(chat_id=admin_tg_id, text="Сообщение отправлено!", disable_web_page_preview=True)

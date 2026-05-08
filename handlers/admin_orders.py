@@ -249,9 +249,10 @@ async def order_finish(message: types.Message, state: FSMContext):
     order = message.text
     edit_order(status="Completed", order=order)
     order1 = get_order(order)
-    id = order1['user_id']
-    info = get_user(id=id)
-    await bot.send_message(chat_id=id, text=f"✅ Ваш заказ №{order} выполнен.")
+    internal_id = order1['user_id']
+    tg_id = get_tg_id_for_user(internal_id)
+    if tg_id:
+        await bot.send_message(chat_id=tg_id, text=f"✅ Ваш заказ №{order} выполнен.")
     await bot.send_message(chat_id=message.from_user.id, text="✅ Успешно")
     await state.finish()
 

@@ -1,392 +1,433 @@
 <!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <title>Личный кабинет</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 560px; margin: 60px auto; padding: 0 16px; }
-        .card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-top: 16px; }
-        h2 { margin: 0 0 12px; font-size: 18px; }
-        button { padding: 8px 14px; font-size: 14px; cursor: pointer; border: 1px solid #ccc;
-                 border-radius: 6px; background: #fff; }
-        button:hover { background: #f0f0f0; }
-        button.danger { border-color: #c00; color: #c00; }
-        button.danger:hover { background: #fff0f0; }
-        button.primary { background: #0088cc; color: #fff; border-color: #0088cc; }
-        button.primary:hover { background: #006fa8; }
-        button:disabled { opacity: .5; cursor: default; }
-        input.refill-input { padding: 8px 10px; font-size: 16px; width: 160px; margin-right: 8px; }
-        .err { color: #c00; margin-top: 12px; white-space: pre-wrap; font-size: 14px; }
-        .ok  { color: #080; margin-top: 12px; font-size: 14px; }
-        .provider-row, .app-row { display: flex; align-items: center; gap: 8px;
-                                   margin-bottom: 8px; flex-wrap: wrap; }
-        .provider-row span, .app-row span { flex: 1; font-size: 14px; }
-        .api-key-box { background: #f5f5f5; border: 1px solid #ccc; border-radius: 4px;
-                       padding: 6px 10px; font-family: monospace; font-size: 13px;
-                       word-break: break-all; margin-top: 6px; }
-        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
-                         align-items: center; justify-content: center; z-index: 100; }
-        .modal-overlay.open { display: flex; }
-        .modal { background: #fff; border-radius: 10px; padding: 24px; max-width: 360px; width: 90%; }
-        .modal h3 { margin: 0 0 16px; }
-        .modal input { display: block; width: 100%; padding: 8px; font-size: 15px;
-                       margin-bottom: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-        .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
-        #link-modal-err { color: #c00; font-size: 13px; margin-top: 8px; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Личный кабинет</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f4f6f8; color: #1a1a1a; }
+    .header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 14px 24px;
+              display: flex; align-items: center; justify-content: space-between; }
+    .header h1 { margin: 0; font-size: 20px; }
+    .header-right { display: flex; align-items: center; gap: 16px; font-size: 14px; }
+    .badge { background: #e8f4fd; color: #0077cc; border-radius: 20px;
+             padding: 4px 12px; font-weight: 600; }
+    a.logout { color: #888; text-decoration: none; font-size: 13px; }
+    a.logout:hover { color: #c00; }
+    .main { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+    .section-title { font-size: 16px; font-weight: 700; margin: 0 0 12px; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 20px; margin-bottom: 20px; }
+    .services-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .service-card { border: 1px solid #cce4f7; border-radius: 8px; padding: 16px;
+                    text-decoration: none; color: inherit; display: block;
+                    transition: background .15s; }
+    .service-card:hover { background: #f0f8ff; }
+    .service-card .sc-title { font-weight: 600; font-size: 15px; margin-bottom: 4px; }
+    .service-card .sc-desc { font-size: 13px; color: #666; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 8px 10px; border-bottom: 2px solid #e0e0e0;
+         color: #555; font-weight: 600; }
+    td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 10px;
+                    font-size: 11px; font-weight: 600; }
+    .status-posted { background: #dff0d8; color: #3c763d; }
+    .status-other { background: #f5f5f5; color: #555; }
+    .btn { display: inline-block; padding: 8px 16px; font-size: 14px; border-radius: 6px;
+           cursor: pointer; text-decoration: none; border: 1px solid #ccc;
+           background: #fff; color: #333; }
+    .btn:hover { background: #f0f0f0; }
+    .btn.primary { background: #0088cc; color: #fff; border-color: #0088cc; }
+    .btn.primary:hover { background: #006fa8; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .chat-box { border: 1px solid #e0e0e0; border-radius: 8px; height: 280px;
+                overflow-y: auto; padding: 12px; background: #fafafa;
+                display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .msg { max-width: 80%; padding: 8px 12px; border-radius: 8px; font-size: 14px;
+           line-height: 1.4; word-break: break-word; }
+    .msg.user { align-self: flex-end; background: #dcf8c6; }
+    .msg.admin { align-self: flex-start; background: #fff; border: 1px solid #e0e0e0; }
+    .msg-meta { font-size: 11px; color: #aaa; margin-top: 3px; }
+    .chat-input-row { display: flex; gap: 8px; }
+    textarea.chat-input { flex: 1; padding: 8px 10px; font-size: 14px; resize: vertical;
+                          border: 1px solid #ccc; border-radius: 6px; min-height: 60px;
+                          font-family: inherit; }
+    .err { color: #c00; font-size: 13px; margin-top: 6px; }
+    .empty-state { color: #aaa; font-size: 13px; text-align: center; padding: 20px 0; }
+  </style>
 </head>
 <body>
-    <h1>Личный кабинет</h1>
+<div class="header">
+  <h1>Личный кабинет</h1>
+  <div class="header-right">
+    <span id="profile-name">…</span>
+    <span class="badge" id="profile-balance">…</span>
+    <a href="index.html" class="logout" id="logout">Выйти</a>
+  </div>
+</div>
 
-    <!-- Profile & balance -->
-    <div id="profile" class="card">Загрузка...</div>
+<div class="main">
+  <div class="card">
+    <div class="section-title">Сервисы</div>
+    <div class="services-grid">
+      <a href="pf-order.html" class="service-card">
+        <div class="sc-title">📈 Авито ПФ</div>
+        <div class="sc-desc">Накрутка поведенческих факторов для объявлений</div>
+      </a>
+    </div>
+  </div>
 
-    <!-- Refill -->
+  <div class="card">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <div class="section-title" style="margin:0;">Последние заказы</div>
+      <a href="orders.html" class="btn" style="font-size:13px;">Все заказы →</a>
+    </div>
+    <div id="orders-container"><div class="empty-state">Загрузка…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Написать в поддержку</div>
+    <div class="chat-box" id="chat-box">
+      <div class="empty-state" id="chat-empty">Нет сообщений. Задайте вопрос.</div>
+    </div>
+    <div class="chat-input-row">
+      <textarea class="chat-input" id="chat-input" placeholder="Ваш вопрос…" rows="3"></textarea>
+      <button class="btn primary" id="chat-send" style="align-self:flex-end;">Отправить</button>
+    </div>
+    <div id="chat-err" class="err"></div>
+  </div>
+
+  <details>
+    <summary style="cursor:pointer; font-size:14px; color:#555; margin-bottom:12px;">
+      ⚙️ Настройки аккаунта
+    </summary>
     <div class="card">
-        <h2>Пополнить баланс</h2>
-        <input id="amount" class="refill-input" type="number" min="1" placeholder="Сумма, ₽">
-        <button id="refill-btn">Пополнить</button>
-        <div id="refill-status"></div>
+      <div class="section-title">Способы входа</div>
+      <div id="providers-list">Загрузка…</div>
+      <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" id="link-email-btn">+ Привязать Email</button>
+        <button class="btn" id="link-tg-btn">+ Привязать Telegram</button>
+      </div>
+      <div id="providers-err" class="err"></div>
     </div>
-
-    <!-- Providers -->
     <div class="card">
-        <h2>Способы входа</h2>
-        <div id="providers-list">Загрузка...</div>
-        <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap;">
-            <button id="link-email-btn">+ Привязать Email</button>
-            <button id="link-tg-btn">+ Привязать Telegram</button>
-        </div>
-        <div id="providers-err" class="err"></div>
+      <div class="section-title">API-приложения</div>
+      <div id="apps-list">Загрузка…</div>
+      <div style="margin-top:12px;">
+        <button class="btn primary" id="create-app-btn">Создать приложение</button>
+      </div>
+      <div id="apps-err" class="err"></div>
+      <div id="new-api-key-box" style="display:none; margin-top:12px;">
+        <b>Ваш API-ключ (показывается один раз):</b>
+        <div id="new-api-key" style="background:#f5f5f5;border:1px solid #ccc;border-radius:4px;
+             padding:6px 10px;font-family:monospace;font-size:13px;word-break:break-all;margin-top:6px;"></div>
+        <button class="btn" id="copy-key-btn" style="margin-top:8px;">Скопировать</button>
+      </div>
     </div>
+  </details>
+</div>
 
-    <!-- Applications -->
-    <div class="card">
-        <h2>Мои приложения</h2>
-        <div id="apps-list">Загрузка...</div>
-        <div style="margin-top:12px;">
-            <button id="create-app-btn" class="primary">Создать приложение</button>
-        </div>
-        <div id="apps-err" class="err"></div>
-        <div id="new-api-key-box" style="display:none; margin-top:12px;">
-            <b>Ваш API-ключ (показывается один раз):</b>
-            <div id="new-api-key" class="api-key-box"></div>
-            <button id="copy-key-btn" style="margin-top:8px;">Скопировать</button>
-        </div>
+<div id="link-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.4);
+     align-items:center; justify-content:center; z-index:100;">
+  <div style="background:#fff; border-radius:10px; padding:24px; max-width:360px; width:90%;">
+    <h3 id="link-modal-title" style="margin:0 0 16px;">Привязать</h3>
+    <div id="link-modal-step1">
+      <input id="link-modal-input" type="text" placeholder=""
+             style="display:block;width:100%;padding:8px;font-size:15px;margin-bottom:12px;
+                    border:1px solid #ccc;border-radius:6px;">
+      <div id="link-modal-err" class="err"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+        <button class="btn" id="link-modal-cancel">Отмена</button>
+        <button class="btn primary" id="link-modal-next">Далее</button>
+      </div>
     </div>
-
-    <p><a href="#" id="logout">Выйти</a></p>
-
-    <!-- Link-provider modal -->
-    <div id="link-modal" class="modal-overlay">
-        <div class="modal">
-            <h3 id="link-modal-title">Привязать</h3>
-            <div id="link-modal-step1">
-                <input id="link-modal-input" type="text" placeholder="">
-                <div id="link-modal-err"></div>
-                <div class="modal-btns">
-                    <button id="link-modal-cancel">Отмена</button>
-                    <button id="link-modal-next" class="primary">Далее</button>
-                </div>
-            </div>
-            <div id="link-modal-step2" style="display:none;">
-                <p style="font-size:14px;color:#555;margin:0 0 12px;">Код отправлен в Telegram. Введите его:</p>
-                <input id="link-modal-code" type="text" placeholder="Код" maxlength="10">
-                <div id="link-modal-err2" style="color:#c00;font-size:13px;margin-top:4px;"></div>
-                <div class="modal-btns">
-                    <button id="link-modal-cancel2">Отмена</button>
-                    <button id="link-modal-confirm" class="primary">Подтвердить</button>
-                </div>
-            </div>
-        </div>
+    <div id="link-modal-step2" style="display:none;">
+      <p id="link-modal-step2-hint" style="font-size:14px;color:#555;margin:0 0 12px;"></p>
+      <input id="link-modal-code" type="text" placeholder="Код" maxlength="10"
+             style="display:block;width:100%;padding:8px;font-size:15px;margin-bottom:12px;
+                    border:1px solid #ccc;border-radius:6px;">
+      <div id="link-modal-err2" class="err"></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+        <button class="btn" id="link-modal-cancel2">Отмена</button>
+        <button class="btn primary" id="link-modal-confirm">Подтвердить</button>
+      </div>
     </div>
+  </div>
+</div>
 
-    <script>
-        /* ── auth guard ── */
-        const token = localStorage.getItem("access_token");
-        if (!token) { window.location.href = "/index.html"; }
+<script>
+const token = localStorage.getItem("access_token");
+if (!token) { window.location.href = "/index.html"; }
 
-        /* ── api helper ── */
-        async function api(method, path, body) {
-            const opts = { method, headers: { "Content-Type": "application/json" } };
-            if (token) opts.headers["Authorization"] = `Bearer ${token}`;
-            if (body) opts.body = JSON.stringify(body);
-            const r = await fetch(path, opts);
-            if (r.status === 401) { localStorage.removeItem("access_token"); window.location.href = "/index.html"; }
-            if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
-            return r.status === 204 ? null : await r.json();
-        }
+async function api(method, path, body) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  if (token) opts.headers["Authorization"] = `Bearer ${token}`;
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (r.status === 401) { localStorage.removeItem("access_token"); window.location.href = "/index.html"; }
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.status === 204 ? null : await r.json();
+}
 
-        /* ── profile ── */
-        async function loadProfile() {
-            const el = document.getElementById("profile");
-            try {
-                const p = await api("GET", "/api/me");
-                el.innerHTML = `<b>${p.first_name || ""}</b> (@${p.user_name || "—"})<br>Баланс: <b>${p.balance} ₽</b>`;
-            } catch (e) {
-                el.textContent = "Не удалось загрузить профиль: " + e;
-            }
-        }
+async function loadProfile() {
+  try {
+    const p = await api("GET", "/api/me");
+    document.getElementById("profile-name").textContent = p.first_name || p.user_name || "—";
+    document.getElementById("profile-balance").textContent = `${p.balance} ₽`;
+  } catch (_) {}
+}
 
-        /* ── refill ── */
-        async function startRefill() {
-            const amount = Number(document.getElementById("amount").value);
-            const status = document.getElementById("refill-status");
-            status.className = ""; status.textContent = "Создаю инвойс...";
-            try {
-                const { payment_id, payment_url } = await api("POST", "/api/refill", { amount });
-                window.open(payment_url, "_blank");
-                status.textContent = "Ожидаю подтверждение оплаты...";
-                pollStatus(payment_id, status);
-            } catch (e) {
-                status.className = "err"; status.textContent = "Ошибка: " + e;
-            }
-        }
+async function loadRecentOrders() {
+  const container = document.getElementById("orders-container");
+  try {
+    const data = await api("GET", "/api/orders?page=1&page_size=20");
+    if (!data.items.length) {
+      container.innerHTML = '<div class="empty-state">Заказов ещё нет.</div>';
+      return;
+    }
+    const rows = data.items.map(o => {
+      const statusClass = o.status === "Posted" ? "status-posted" : "status-other";
+      return `<tr>
+        <td>#${o.order_id}</td>
+        <td>${o.date ? o.date.substring(0, 16).replace("T", " ") : "—"}</td>
+        <td>${escHtml(o.position_name)}</td>
+        <td>${o.price} ₽</td>
+        <td><span class="status-badge ${statusClass}">${escHtml(o.status)}</span></td>
+      </tr>`;
+    }).join("");
+    container.innerHTML = `<table>
+      <thead><tr><th>#</th><th>Дата</th><th>Параметры</th><th>Сумма</th><th>Статус</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch (e) {
+    container.innerHTML = `<div class="err">Не удалось загрузить заказы: ${e}</div>`;
+  }
+}
 
-        async function pollStatus(payment_id, statusEl) {
-            for (let i = 0; i < 60; i++) {
-                await new Promise(r => setTimeout(r, 5000));
-                try {
-                    const { status } = await api("GET", `/api/refill/${payment_id}/status`);
-                    if (status === "succeeded") {
-                        statusEl.className = "ok"; statusEl.textContent = "Оплата прошла, баланс обновлён.";
-                        loadProfile(); return;
-                    }
-                    if (status === "failed") {
-                        statusEl.className = "err"; statusEl.textContent = "Оплата не прошла."; return;
-                    }
-                } catch (_) {}
-            }
-            statusEl.className = "err"; statusEl.textContent = "Время ожидания истекло. Если оплатили — перезагрузите страницу.";
-        }
+let chatMessages = [];
+async function loadChat() {
+  try {
+    const msgs = await api("GET", "/api/support/messages");
+    chatMessages = msgs;
+    renderChat();
+  } catch (_) {}
+}
 
-        /* ── providers ── */
-        let providersCache = [];
+function renderChat() {
+  const box = document.getElementById("chat-box");
+  if (!chatMessages.length) {
+    box.innerHTML = '<div class="empty-state" id="chat-empty">Нет сообщений. Задайте вопрос.</div>';
+    return;
+  }
+  box.innerHTML = chatMessages.map(m => {
+    const dir = m.direction === "user" ? "user" : "admin";
+    const label = dir === "admin" ? "Поддержка" : "Вы";
+    return `<div class="msg ${dir}">
+      ${escHtml(m.text)}
+      <div class="msg-meta">${label} · ${m.created_at ? m.created_at.substring(0, 16).replace("T", " ") : ""}</div>
+    </div>`;
+  }).join("");
+  box.scrollTop = box.scrollHeight;
+}
 
-        async function loadProviders() {
-            const el = document.getElementById("providers-list");
-            const errEl = document.getElementById("providers-err");
-            try {
-                providersCache = await api("GET", "/api/me/providers");
-                renderProviders();
-            } catch (e) {
-                errEl.textContent = String(e);
-                el.textContent = "";
-            }
-        }
+document.getElementById("chat-send").onclick = async () => {
+  const input = document.getElementById("chat-input");
+  const errEl = document.getElementById("chat-err");
+  const text = input.value.trim();
+  errEl.textContent = "";
+  if (!text) return;
+  const btn = document.getElementById("chat-send");
+  btn.disabled = true;
+  try {
+    await api("POST", "/api/support/messages", { text });
+    input.value = "";
+    chatMessages.push({ direction: "user", text, created_at: new Date().toISOString() });
+    renderChat();
+  } catch (e) {
+    errEl.textContent = "Ошибка: " + e;
+  } finally {
+    btn.disabled = false;
+  }
+};
 
-        function renderProviders() {
-            const el = document.getElementById("providers-list");
-            if (!providersCache.length) { el.textContent = "Нет привязанных способов входа."; return; }
-            el.innerHTML = "";
-            const canDelete = providersCache.length > 1;
-            for (const p of providersCache) {
-                const row = document.createElement("div");
-                row.className = "provider-row";
-                const label = p.provider === "email" ? "Email" : "Telegram";
-                row.innerHTML = `<span><b>${label}</b>: ${p.identifier}</span>`;
-                if (canDelete) {
-                    const btn = document.createElement("button");
-                    btn.className = "danger";
-                    btn.textContent = "Удалить";
-                    btn.onclick = () => deleteProvider(p.provider, p.identifier, btn);
-                    row.appendChild(btn);
-                }
-                el.appendChild(row);
-            }
-        }
+setInterval(loadChat, 15000);
 
-        async function deleteProvider(provider, identifier, btn) {
-            if (!confirm(`Удалить ${provider} (${identifier})?`)) return;
-            btn.disabled = true;
-            const errEl = document.getElementById("providers-err");
-            errEl.textContent = "";
-            try {
-                await api("DELETE", `/api/auth/link/${provider}/${encodeURIComponent(identifier)}`);
-                await loadProviders();
-            } catch (e) {
-                errEl.textContent = String(e);
-                btn.disabled = false;
-            }
-        }
+let providersCache = [];
+async function loadProviders() {
+  try {
+    providersCache = await api("GET", "/api/me/providers");
+    renderProviders();
+  } catch (e) {
+    document.getElementById("providers-err").textContent = String(e);
+  }
+}
 
-        /* ── link-provider modal ── */
-        let linkMode = ""; // "email" | "telegram"
-        let linkIdentifier = "";
+function renderProviders() {
+  const el = document.getElementById("providers-list");
+  if (!providersCache.length) { el.textContent = "Нет привязанных способов входа."; return; }
+  el.innerHTML = "";
+  const canDelete = providersCache.length > 1;
+  for (const p of providersCache) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    const label = p.provider === "email" ? "Email" : "Telegram";
+    row.innerHTML = `<span style="flex:1;font-size:14px;"><b>${label}</b>: ${escHtml(p.identifier)}</span>`;
+    if (canDelete) {
+      const btn = document.createElement("button");
+      btn.className = "btn"; btn.style.color = "#c00"; btn.style.borderColor = "#c00";
+      btn.textContent = "Удалить";
+      btn.onclick = () => deleteProvider(p.provider, p.identifier, btn);
+      row.appendChild(btn);
+    }
+    el.appendChild(row);
+  }
+}
 
-        function openLinkModal(mode) {
-            linkMode = mode;
-            linkIdentifier = "";
-            document.getElementById("link-modal-title").textContent =
-                mode === "email" ? "Привязать Email" : "Привязать Telegram";
-            document.getElementById("link-modal-input").placeholder =
-                mode === "email" ? "you@example.com" : "@username или +7...";
-            document.getElementById("link-modal-input").value = "";
-            document.getElementById("link-modal-err").textContent = "";
-            document.getElementById("link-modal-step1").style.display = "";
-            document.getElementById("link-modal-step2").style.display = "none";
-            document.getElementById("link-modal").classList.add("open");
-        }
+async function deleteProvider(provider, identifier, btn) {
+  if (!confirm(`Удалить ${provider} (${identifier})?`)) return;
+  btn.disabled = true;
+  try {
+    await api("DELETE", `/api/auth/link/${provider}/${encodeURIComponent(identifier)}`);
+    await loadProviders();
+  } catch (e) {
+    document.getElementById("providers-err").textContent = String(e);
+    btn.disabled = false;
+  }
+}
 
-        function closeLinkModal() {
-            document.getElementById("link-modal").classList.remove("open");
-        }
+let linkMode = "", linkIdentifier = "";
+function openLinkModal(mode) {
+  linkMode = mode; linkIdentifier = "";
+  document.getElementById("link-modal-title").textContent =
+    mode === "email" ? "Привязать Email" : "Привязать Telegram";
+  document.getElementById("link-modal-input").placeholder =
+    mode === "email" ? "you@example.com" : "@username или +7...";
+  document.getElementById("link-modal-input").value = "";
+  document.getElementById("link-modal-err").textContent = "";
+  document.getElementById("link-modal-step1").style.display = "";
+  document.getElementById("link-modal-step2").style.display = "none";
+  document.getElementById("link-modal").style.display = "flex";
+}
+function closeLinkModal() { document.getElementById("link-modal").style.display = "none"; }
 
-        document.getElementById("link-email-btn").onclick = () => openLinkModal("email");
-        document.getElementById("link-tg-btn").onclick = () => openLinkModal("telegram");
-        document.getElementById("link-modal-cancel").onclick = closeLinkModal;
-        document.getElementById("link-modal-cancel2").onclick = closeLinkModal;
+document.getElementById("link-email-btn").onclick = () => openLinkModal("email");
+document.getElementById("link-tg-btn").onclick = () => openLinkModal("telegram");
+document.getElementById("link-modal-cancel").onclick = closeLinkModal;
+document.getElementById("link-modal-cancel2").onclick = closeLinkModal;
 
-        document.getElementById("link-modal-next").onclick = async () => {
-            const btn = document.getElementById("link-modal-next");
-            const errEl = document.getElementById("link-modal-err");
-            errEl.textContent = "";
-            const val = document.getElementById("link-modal-input").value.trim();
-            if (!val) { errEl.textContent = "Заполните поле."; return; }
-            linkIdentifier = val;
-            btn.disabled = true;
+document.getElementById("link-modal-next").onclick = async () => {
+  const btn = document.getElementById("link-modal-next");
+  const errEl = document.getElementById("link-modal-err");
+  errEl.textContent = "";
+  const val = document.getElementById("link-modal-input").value.trim();
+  if (!val) { errEl.textContent = "Заполните поле."; return; }
+  linkIdentifier = val;
+  btn.disabled = true;
+  try {
+    if (linkMode === "email") {
+      document.getElementById("link-modal-step2-hint").textContent = "Введите пароль:";
+      document.getElementById("link-modal-code").type = "password";
+    } else {
+      await api("POST", "/api/auth/link/telegram/request-code", { identifier: val });
+      document.getElementById("link-modal-step2-hint").textContent = "Код отправлен в Telegram:";
+      document.getElementById("link-modal-code").type = "text";
+    }
+    document.getElementById("link-modal-code").value = "";
+    document.getElementById("link-modal-step1").style.display = "none";
+    document.getElementById("link-modal-step2").style.display = "";
+  } catch (e) { errEl.textContent = String(e); }
+  finally { btn.disabled = false; }
+};
 
-            try {
-                if (linkMode === "email") {
-                    const password = val.includes("@") ? "" : val; // reuse field for email only
-                    // For email link we need email + password — use a simpler flow: field is email, ask password separately
-                    // Actually reuse the input as email; we need password too — prompt via second input
-                    // Repurpose step2 as password step for email
-                    document.getElementById("link-modal-step2").querySelector("p").textContent =
-                        "Введите пароль для нового email-аккаунта:";
-                    document.getElementById("link-modal-code").placeholder = "Пароль";
-                    document.getElementById("link-modal-code").type = "password";
-                    document.getElementById("link-modal-err2").textContent = "";
-                    document.getElementById("link-modal-code").value = "";
-                    document.getElementById("link-modal-step1").style.display = "none";
-                    document.getElementById("link-modal-step2").style.display = "";
-                } else {
-                    await api("POST", "/api/auth/link/telegram/request-code", { identifier: val });
-                    document.getElementById("link-modal-step2").querySelector("p").textContent =
-                        "Код отправлен в Telegram. Введите его:";
-                    document.getElementById("link-modal-code").placeholder = "Код";
-                    document.getElementById("link-modal-code").type = "text";
-                    document.getElementById("link-modal-err2").textContent = "";
-                    document.getElementById("link-modal-code").value = "";
-                    document.getElementById("link-modal-step1").style.display = "none";
-                    document.getElementById("link-modal-step2").style.display = "";
-                }
-            } catch (e) {
-                errEl.textContent = String(e);
-            } finally {
-                btn.disabled = false;
-            }
-        };
+document.getElementById("link-modal-confirm").onclick = async () => {
+  const btn = document.getElementById("link-modal-confirm");
+  const errEl = document.getElementById("link-modal-err2");
+  errEl.textContent = "";
+  const val = document.getElementById("link-modal-code").value.trim();
+  if (!val) { errEl.textContent = "Заполните поле."; return; }
+  btn.disabled = true;
+  try {
+    if (linkMode === "email") {
+      await api("POST", "/api/auth/link/email", { email: linkIdentifier, password: val });
+    } else {
+      await api("POST", "/api/auth/link/telegram/verify-code", { identifier: linkIdentifier, code: val });
+    }
+    closeLinkModal();
+    await loadProviders();
+  } catch (e) { errEl.textContent = String(e); btn.disabled = false; }
+};
 
-        document.getElementById("link-modal-confirm").onclick = async () => {
-            const btn = document.getElementById("link-modal-confirm");
-            const errEl = document.getElementById("link-modal-err2");
-            errEl.textContent = "";
-            const codeOrPass = document.getElementById("link-modal-code").value.trim();
-            if (!codeOrPass) { errEl.textContent = "Заполните поле."; return; }
-            btn.disabled = true;
+async function loadApps() {
+  const el = document.getElementById("apps-list");
+  try {
+    const apps = await api("GET", "/api/applications");
+    if (!apps.length) { el.textContent = "Нет приложений."; return; }
+    el.innerHTML = "";
+    for (const app of apps) {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+      const revoked = app.revoked_at ? ' <span style="color:#c00">[отозван]</span>' : "";
+      row.innerHTML = `<span style="flex:1;font-size:14px;"><b>${escHtml(app.name)}</b> — ключ: <code>${escHtml(app.api_key_prefix)}…</code>${revoked}</span>`;
+      if (!app.revoked_at) {
+        const btn = document.createElement("button");
+        btn.className = "btn"; btn.style.color = "#c00"; btn.style.borderColor = "#c00";
+        btn.textContent = "Удалить";
+        btn.onclick = () => deleteApp(app.id, btn);
+        row.appendChild(btn);
+      }
+      el.appendChild(row);
+    }
+  } catch (e) { document.getElementById("apps-err").textContent = String(e); }
+}
 
-            try {
-                if (linkMode === "email") {
-                    await api("POST", "/api/auth/link/email", { email: linkIdentifier, password: codeOrPass });
-                } else {
-                    await api("POST", "/api/auth/link/telegram/verify-code", { identifier: linkIdentifier, code: codeOrPass });
-                }
-                closeLinkModal();
-                await loadProviders();
-            } catch (e) {
-                errEl.textContent = String(e);
-                btn.disabled = false;
-            }
-        };
+async function deleteApp(id, btn) {
+  if (!confirm("Удалить приложение и отозвать API-ключ?")) return;
+  btn.disabled = true;
+  try {
+    await api("DELETE", `/api/applications/${id}`);
+    await loadApps();
+  } catch (e) { document.getElementById("apps-err").textContent = String(e); btn.disabled = false; }
+}
 
-        /* ── applications ── */
-        async function loadApps() {
-            const el = document.getElementById("apps-list");
-            const errEl = document.getElementById("apps-err");
-            try {
-                const apps = await api("GET", "/api/applications");
-                renderApps(apps);
-            } catch (e) {
-                errEl.textContent = String(e);
-                el.textContent = "";
-            }
-        }
+document.getElementById("create-app-btn").onclick = async () => {
+  const name = prompt("Название приложения:");
+  if (!name) return;
+  const btn = document.getElementById("create-app-btn");
+  btn.disabled = true;
+  try {
+    const app = await api("POST", "/api/applications", { name });
+    document.getElementById("new-api-key").textContent = app.api_key;
+    document.getElementById("new-api-key-box").style.display = "";
+    await loadApps();
+  } catch (e) { document.getElementById("apps-err").textContent = String(e); }
+  finally { btn.disabled = false; }
+};
 
-        function renderApps(apps) {
-            const el = document.getElementById("apps-list");
-            if (!apps.length) { el.textContent = "Нет приложений."; return; }
-            el.innerHTML = "";
-            for (const app of apps) {
-                const row = document.createElement("div");
-                row.className = "app-row";
-                const revoked = app.revoked_at ? ` <span style="color:#c00">[отозван]</span>` : "";
-                row.innerHTML = `<span><b>${app.name}</b> — ключ: <code>${app.api_key_prefix}…</code>${revoked}</span>`;
-                if (!app.revoked_at) {
-                    const btn = document.createElement("button");
-                    btn.className = "danger";
-                    btn.textContent = "Удалить";
-                    btn.onclick = () => deleteApp(app.id, btn);
-                    row.appendChild(btn);
-                }
-                el.appendChild(row);
-            }
-        }
+document.getElementById("copy-key-btn").onclick = () => {
+  const key = document.getElementById("new-api-key").textContent;
+  navigator.clipboard.writeText(key).then(() => {
+    document.getElementById("copy-key-btn").textContent = "Скопировано!";
+    setTimeout(() => { document.getElementById("copy-key-btn").textContent = "Скопировать"; }, 2000);
+  });
+};
 
-        async function deleteApp(id, btn) {
-            if (!confirm("Удалить приложение и отозвать API-ключ?")) return;
-            btn.disabled = true;
-            const errEl = document.getElementById("apps-err");
-            errEl.textContent = "";
-            try {
-                await api("DELETE", `/api/applications/${id}`);
-                await loadApps();
-            } catch (e) {
-                errEl.textContent = String(e);
-                btn.disabled = false;
-            }
-        }
+document.getElementById("logout").onclick = (e) => {
+  e.preventDefault();
+  localStorage.removeItem("access_token");
+  window.location.href = "/index.html";
+};
 
-        document.getElementById("create-app-btn").onclick = async () => {
-            const name = prompt("Название приложения:");
-            if (!name) return;
-            const btn = document.getElementById("create-app-btn");
-            const errEl = document.getElementById("apps-err");
-            const keyBox = document.getElementById("new-api-key-box");
-            errEl.textContent = "";
-            keyBox.style.display = "none";
-            btn.disabled = true;
-            try {
-                const app = await api("POST", "/api/applications", { name });
-                document.getElementById("new-api-key").textContent = app.api_key;
-                keyBox.style.display = "";
-                await loadApps();
-            } catch (e) {
-                errEl.textContent = String(e);
-            } finally {
-                btn.disabled = false;
-            }
-        };
+function escHtml(s) {
+  return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
 
-        document.getElementById("copy-key-btn").onclick = () => {
-            const key = document.getElementById("new-api-key").textContent;
-            navigator.clipboard.writeText(key).then(() => {
-                document.getElementById("copy-key-btn").textContent = "Скопировано!";
-                setTimeout(() => { document.getElementById("copy-key-btn").textContent = "Скопировать"; }, 2000);
-            });
-        };
-
-        /* ── logout ── */
-        document.getElementById("logout").onclick = (e) => {
-            e.preventDefault();
-            localStorage.removeItem("access_token");
-            window.location.href = "/index.html";
-        };
-
-        /* ── init ── */
-        loadProfile();
-        loadProviders();
-        loadApps();
-    </script>
+loadProfile();
+loadRecentOrders();
+loadChat();
+loadProviders();
+loadApps();
+</script>
 </body>
 </html>

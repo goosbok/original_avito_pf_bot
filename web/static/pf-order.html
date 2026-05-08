@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Новый заказ — Авито ПФ</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 0; background: #f4f6f8; }
+    .header { background: #fff; border-bottom: 1px solid #e0e0e0; padding: 14px 24px;
+              display: flex; align-items: center; gap: 16px; }
+    .header h1 { margin: 0; font-size: 20px; flex: 1; }
+    .btn { display: inline-block; padding: 8px 16px; font-size: 14px; border-radius: 6px;
+           cursor: pointer; text-decoration: none; border: 1px solid #ccc;
+           background: #fff; color: #333; }
+    .btn:hover { background: #f0f0f0; }
+    .btn.primary { background: #0088cc; color: #fff; border-color: #0088cc; font-size: 16px;
+                   width: 100%; padding: 12px; }
+    .btn.primary:hover:not(:disabled) { background: #006fa8; }
+    .btn:disabled { opacity: .5; cursor: default; }
+    .main { max-width: 560px; margin: 0 auto; padding: 24px 16px; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; }
+    .field { margin-bottom: 20px; }
+    label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #333; }
+    .hint { font-size: 12px; color: #888; margin-top: 4px; }
+    input[type=number], textarea {
+      width: 100%; padding: 10px 12px; font-size: 15px;
+      border: 1px solid #ccc; border-radius: 6px; font-family: inherit;
+    }
+    input[type=number]:focus, textarea:focus { outline: none; border-color: #0088cc; }
+    textarea { resize: vertical; min-height: 100px; }
+    .contacts-row { display: flex; gap: 12px; }
+    .contacts-row label { font-weight: normal; display: flex; align-items: center;
+                          gap: 6px; cursor: pointer; font-size: 15px; }
+    .price-box { background: #f0f8ff; border: 1px solid #cce4f7; border-radius: 8px;
+                 padding: 14px 16px; margin-bottom: 20px; font-size: 15px; }
+    .price-box .price-total { font-size: 22px; font-weight: 700; color: #0077cc; }
+    .err { color: #c00; font-size: 14px; margin-top: 12px; }
+    .success { color: #3c763d; background: #dff0d8; border-radius: 8px;
+               padding: 14px 16px; font-size: 15px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <a href="cabinet.html" class="btn">← Назад</a>
+  <h1>Авито ПФ — новый заказ</h1>
+  <span class="btn" id="balance-badge" style="background:#e8f4fd;color:#0077cc;border-color:#cce4f7;">…</span>
+</div>
+
+<div class="main">
+  <div class="card">
+    <div class="field">
+      <label for="links">Ссылки на объявления Авито</label>
+      <textarea id="links" placeholder="https://www.avito.ru/...&#10;https://www.avito.ru/..." rows="5"></textarea>
+      <div class="hint">Каждая ссылка с новой строки. Только avito.ru.</div>
+    </div>
+    <div class="field">
+      <label for="days">Количество дней</label>
+      <input type="number" id="days" min="1" value="7" placeholder="Дней">
+      <div class="hint">Минимум 1 день.</div>
+    </div>
+    <div class="field">
+      <label for="fix-count">Количество ПФ в день</label>
+      <input type="number" id="fix-count" min="5" value="50" placeholder="Показов/день">
+      <div class="hint">Минимум 5.</div>
+    </div>
+    <div class="field">
+      <label>Добавлять контакты в объявление?</label>
+      <div class="contacts-row">
+        <label><input type="radio" name="contacts" value="yes"> Да</label>
+        <label><input type="radio" name="contacts" value="no" checked> Нет</label>
+      </div>
+    </div>
+    <div class="price-box">
+      <div>Итого: <span class="price-total" id="price-total">—</span></div>
+      <div style="font-size:12px;color:#888;margin-top:4px;" id="price-breakdown"></div>
+    </div>
+    <button class="btn primary" id="submit-btn" disabled>Оформить заказ</button>
+    <div id="form-err" class="err"></div>
+    <div id="form-success" class="success" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+const token = localStorage.getItem("access_token");
+if (!token) { window.location.href = "/index.html"; }
+
+async function api(method, path, body) {
+  const opts = { method, headers: { "Content-Type": "application/json" } };
+  opts.headers["Authorization"] = `Bearer ${token}`;
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  if (r.status === 401) { localStorage.removeItem("access_token"); window.location.href = "/index.html"; }
+  if (!r.ok) throw new Error(`${r.status}: ${await r.text()}`);
+  return r.status === 204 ? null : await r.json();
+}
+
+let pricePerUnit = 1;
+
+async function init() {
+  try {
+    const [priceData, profile] = await Promise.all([
+      api("GET", "/api/orders/pf/price"),
+      api("GET", "/api/me"),
+    ]);
+    pricePerUnit = priceData.price_per_unit;
+    document.getElementById("balance-badge").textContent = `Баланс: ${profile.balance} ₽`;
+    recalcPrice();
+  } catch (e) {
+    document.getElementById("form-err").textContent = "Ошибка загрузки: " + e;
+  }
+}
+
+function parseLinks() {
+  return document.getElementById("links").value
+    .split("\n")
+    .map(l => l.trim())
+    .filter(l => l.length > 0 && l.includes("avito.ru"));
+}
+
+function recalcPrice() {
+  const days = parseInt(document.getElementById("days").value, 10) || 0;
+  const fix = parseInt(document.getElementById("fix-count").value, 10) || 0;
+  const links = parseLinks();
+  const btn = document.getElementById("submit-btn");
+  const totalEl = document.getElementById("price-total");
+  const breakdownEl = document.getElementById("price-breakdown");
+
+  if (days >= 1 && fix >= 5 && links.length >= 1) {
+    const total = pricePerUnit * fix * days * links.length;
+    totalEl.textContent = total + " ₽";
+    breakdownEl.textContent = `${pricePerUnit} ₽/ед × ${fix} ПФ/день × ${days} дн × ${links.length} ссылок`;
+    btn.disabled = false;
+  } else {
+    totalEl.textContent = "—";
+    breakdownEl.textContent = links.length === 0 ? "Добавьте ссылки avito.ru" :
+      days < 1 ? "Укажите кол-во дней" : "Минимум 5 ПФ/день";
+    btn.disabled = true;
+  }
+}
+
+document.getElementById("links").addEventListener("input", recalcPrice);
+document.getElementById("days").addEventListener("input", recalcPrice);
+document.getElementById("fix-count").addEventListener("input", recalcPrice);
+
+document.getElementById("submit-btn").onclick = async () => {
+  const btn = document.getElementById("submit-btn");
+  const errEl = document.getElementById("form-err");
+  const successEl = document.getElementById("form-success");
+  errEl.textContent = "";
+  successEl.style.display = "none";
+
+  const links = parseLinks();
+  const days = parseInt(document.getElementById("days").value, 10);
+  const fixCount = parseInt(document.getElementById("fix-count").value, 10);
+  const contacts = document.querySelector('input[name="contacts"]:checked').value === "yes";
+
+  if (!links.length || days < 1 || fixCount < 5) {
+    errEl.textContent = "Проверьте заполнение полей.";
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    const result = await api("POST", "/api/orders/pf", { links, days, fix_count: fixCount, contacts });
+    successEl.style.display = "";
+    successEl.innerHTML = `✅ Заказ <b>#${result.order_id}</b> принят!<br>
+      Списано: <b>${result.total_price} ₽</b><br>
+      <a href="cabinet.html" style="color:#3c763d;">← Вернуться в кабинет</a>`;
+    document.getElementById("links").value = "";
+    recalcPrice();
+  } catch (e) {
+    const msg = String(e);
+    if (msg.includes("402")) {
+      errEl.textContent = "Недостаточно средств на балансе. Пополните баланс.";
+    } else {
+      errEl.textContent = "Ошибка: " + msg;
+    }
+    btn.disabled = false;
+  }
+};
+
+init();
+</script>
+</body>
+</html>

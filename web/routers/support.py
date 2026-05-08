@@ -6,12 +6,15 @@ GET  /api/support/messages  — full conversation history for current user
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends
 
 from services import support as support_svc
 from web.deps import require_user
 from web.schemas import SupportMessageCreate, SupportMessageItem
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/support", tags=["support"])
 
@@ -79,4 +82,4 @@ async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
                 )
                 con.commit()
     except Exception:
-        pass
+        logger.exception("_forward_to_admins failed for user_id=%s", user_id)

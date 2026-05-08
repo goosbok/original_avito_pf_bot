@@ -7,6 +7,7 @@ POST /api/orders/pf         — create Avito PF order, deduct balance, notify
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -21,6 +22,8 @@ from web.schemas import (
     PFOrderResponse,
     PFPriceResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -119,4 +122,4 @@ async def _notify_new_order(user_id: int, order_id: int, total_price: int) -> No
                 text=f"✅ Заказ #{order['increment']} принят. Сумма: {f_price} ₽",
             )
     except Exception:
-        pass
+        logger.exception("_notify_new_order failed for user_id=%s", user_id)

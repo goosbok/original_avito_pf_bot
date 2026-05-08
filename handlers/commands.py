@@ -11,6 +11,7 @@ from keyboards.users_menu import (
     qna_avito_kb,
 )
 from utils.other import format_decimal
+from utils.sqlite3 import get_nick
 from utils.sqlite3 import (
     delete_user,
     get_string, get_setting, get_price,
@@ -20,16 +21,6 @@ from aiogram.types import InputMediaVideo
 
 logger = logging.getLogger(__name__)
 logger.info("commands.py loaded — registering handlers")
-
-
-def get_nick(param):
-    value = get_setting(param)
-    if value:
-        if not value.startswith('@'):
-            value = '@' + value
-        return value
-    else:
-        return None
 
 
 @dp.message_handler(commands="id")

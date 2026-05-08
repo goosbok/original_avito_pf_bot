@@ -1049,3 +1049,11 @@ def create_db():
         con.commit()
     apply_phase2_migrations()
 
+def get_nick(param):
+    value = get_setting(param)
+    if value:
+        if not value.startswith('@'):
+            value = '@' + value
+        return value
+    else:
+        return None

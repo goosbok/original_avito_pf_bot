@@ -1,24 +1,23 @@
 import logging
 from aiogram.dispatcher import FSMContext
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
-from data import config
 from data.loader import dp
 from keyboards.users_menu import (
     get_menu_kb, menu_btn_kb,
     reviews_kb, reviews_count, yes_no_reviews,
 )
 from utils.other import (
-    get_user_string_without_first_name,
     format_decimal,
+    get_user_string_without_first_name,
 )
 from utils.sender import send_admins
 from utils.sqlite3 import (
     get_user,
     update_user,
-    get_string, get_setting, get_price,
+    get_string, get_setting, get_price, get_nick,
     add_order_reviews, get_users_last_order_reviews,
     add_order_delreview, get_users_last_order_delreviews,
 )
@@ -34,16 +33,6 @@ class review(StatesGroup):
 
 class avito(StatesGroup):
     delete_review = State()
-
-
-def get_nick(param):
-    value = get_setting(param)
-    if value:
-        if not value.startswith('@'):
-            value = '@' + value
-        return value
-    else:
-        return None
 
 
 @dp.callback_query_handler(text="reviews", state='*')

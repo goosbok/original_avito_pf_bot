@@ -14,7 +14,6 @@ from keyboards.users_menu import (
     show_user_order_by_index,
 )
 from utils.other import (
-    get_user_string_without_first_name,
     format_decimal,
     str2bool,
     get_referals_count,
@@ -22,22 +21,12 @@ from utils.other import (
 from utils.sqlite3 import (
     get_user,
     user_orders_all, get_order,
-    get_string, get_setting,
+    get_string, get_setting, get_nick,
 )
 from design import listord_array
 
 logger = logging.getLogger(__name__)
 logger.info("profile.py loaded — registering handlers")
-
-
-def get_nick(param):
-    value = get_setting(param)
-    if value:
-        if not value.startswith('@'):
-            value = '@' + value
-        return value
-    else:
-        return None
 
 
 @dp.callback_query_handler(text="user:profile", state='*')

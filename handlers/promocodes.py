@@ -1,14 +1,14 @@
 import logging
 from aiogram.dispatcher import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from data.loader import dp
 from keyboards.users_menu import get_menu_kb, menu_btn_kb
 from utils.other import (
-    get_user_string_without_first_name,
     format_decimal,
+    get_user_string_without_first_name,
 )
 from utils.sender import send_admins
 from utils.sqlite3 import (

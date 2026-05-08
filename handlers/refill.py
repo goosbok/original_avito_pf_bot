@@ -1,6 +1,7 @@
 import logging
 from aiogram.dispatcher import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery
+from aiogram import types
 
 from data.loader import dp, bot
 from keyboards.users_menu import (
@@ -8,13 +9,13 @@ from keyboards.users_menu import (
     yookassa_kb, payment_methods_kb, manual_payment_kb, payment_error_kb,
 )
 from utils.other import (
-    get_user_string_without_first_name,
     format_decimal,
+    get_user_string_without_first_name,
 )
 from utils.sender import send_admins
 from utils.sqlite3 import (
     get_user,
-    get_string, get_setting, get_price,
+    get_string, get_setting, get_nick,
 )
 from utils.yookassa_refil import check_payment_status
 
@@ -33,18 +34,8 @@ def _get_tg_id_for_user(internal_user_id: int) -> "int | None":
     return int(row["identifier"]) if row else None
 
 
-def get_nick(param):
-    value = get_setting(param)
-    if value:
-        if not value.startswith('@'):
-            value = '@' + value
-        return value
-    else:
-        return None
-
-
 @dp.message_handler(lambda message: message.text.isdigit(), state="refill_balance")
-async def refill(message: Message, state: FSMContext, user_id: int):
+async def refill(message: types.Message, state: FSMContext, user_id: int):
     amount = int(message.text)
     min_amount = int(get_setting('min_amount'))
     if amount < min_amount:

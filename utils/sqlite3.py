@@ -374,6 +374,16 @@ def del_admin(user_id):
     else:
         print(f"Admin with user_id {user_id_str} not found.")
 
+def get_tg_id_for_user(internal_user_id: int) -> "int | None":
+    """Return the Telegram chat_id for an internal user PK, or None if not found."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        row = con.execute(
+            "SELECT identifier FROM auth_providers WHERE user_id = ? AND provider = 'telegram'",
+            (internal_user_id,)
+        ).fetchone()
+    return int(row["identifier"]) if row else None
+
 #Исключения
 def get_spam_exclude():
     usrs = []
@@ -478,14 +488,7 @@ def get_user(**kwargs):
 
 
 def get_user_by_tg_id(tg_id):
-    """Look up a user by Telegram ID.
-
-    Supports both legacy users (users.id == tg_id) and users created via the
-    identity service (users.id is auto-increment; linked via auth_providers).
-    """
-    u = get_user(id=tg_id)
-    if u:
-        return u
+    """Look up a user by Telegram ID via auth_providers."""
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         return con.execute(
@@ -905,8 +908,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "links TEXT,"
             "date TIMESTAMP,"
             "contacts BOOLEN DEFAULT False,"
+            "user_name TEXT,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            8,
+            9,
         ),
         (
             "promocodes",
@@ -1006,7 +1010,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
 
 
 def apply_phase2_migrations():
-    """Идемпотентно добавляет колонки source-tracking в refills и link в reviews."""
+    """Идемпотентно добавляет колонки — запускается при каждом старте."""
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         existing_refills = {row['name'] for row in con.execute("PRAGMA table_info(refills)").fetchall()}
@@ -1023,6 +1027,10 @@ def apply_phase2_migrations():
         if 'link' not in existing_reviews:
             con.execute("ALTER TABLE reviews ADD COLUMN link TEXT")
             print("reviews.link added")
+        existing_orders = {row['name'] for row in con.execute("PRAGMA table_info(orders)").fetchall()}
+        if 'user_name' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN user_name TEXT")
+            print("orders.user_name added")
         con.commit()
 
 
@@ -1031,11 +1039,19 @@ def create_db():
         con.row_factory = dict_factory
         for idx, (table, ddl, cols) in enumerate(get_schema_statements(), start=1):
             existing = con.execute(f"PRAGMA table_info({table})").fetchall()
-            if len(existing) == cols:
-                print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
-            else:
+            if len(existing) == 0:
                 con.execute(ddl)
                 print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
+            else:
+                print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
         con.commit()
     apply_phase2_migrations()
 
+def get_nick(param):
+    value = get_setting(param)
+    if value:
+        if not value.startswith('@'):
+            value = '@' + value
+        return value
+    else:
+        return None

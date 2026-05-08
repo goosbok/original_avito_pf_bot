@@ -2,12 +2,13 @@ import colorama
 from aiogram.dispatcher import FSMContext
 from aiogram.types import Message
 
-from data.loader import *
+from data.loader import bot, storage, dp
 from utils.sqlite3 import get_user, update_user, all_users
-from design import *
-from keyboards.inline_keyboards import *
-
-from handlers.admin_functions import *
+from design import (
+    yes_refer, refer_not_in_base, invite_yourself,
+    start_text, start_text_ref,
+)
+from keyboards.inline_keyboards import get_menu_kb
 
 async def get_user_name(user):
     if user.first_name:
@@ -39,9 +40,8 @@ async def get_refer_name(user_id):
         return None
 
 @dp.message_handler(commands=['start'], state="*")
-async def main_start(message: Message, state: FSMContext):
+async def main_start(message: Message, state: FSMContext, user_id: int):
     await state.finish()
-    user_id = message.from_user.id
     user = get_user(id=user_id)
     usr = message.from_user
     args = message.get_args()

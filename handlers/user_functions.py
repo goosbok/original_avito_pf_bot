@@ -21,6 +21,7 @@ from handlers.admin_functions import *
 #from handlers.robokassa import *
 from utils.yookassa_refil import create_invoice, check_payment_status
 import asyncio
+import traceback
 from utils.msql import sql_add_review, sql_get_last_review
 
 class FSMToken(StatesGroup):
@@ -682,7 +683,10 @@ async def refill_balance(call: CallbackQuery, state: FSMContext):
     # Генерируем URL оплаты
     try:
         payment_url, payment_id = create_invoice(user_id, int(amount))
-    except:
+    except Exception as e:
+        print(f"[YooKassa ERROR] user_id={user_id}, amount={amount}")
+        print(f"  Exception: {type(e).__name__}: {e}")
+        print(f"  Traceback:\n{traceback.format_exc()}")
         support_nick = get_nick('manager_nick')
         msg = get_string('str_payment_error')
         msg = msg.format(support_nick)

@@ -1,32 +1,38 @@
-<!doctype html>
-<html lang="ru">
+<!DOCTYPE html>
+<html lang="ru" data-theme="light" data-variant="classic">
 <head>
-    <meta charset="utf-8">
-    <title>Avito PF Bot — вход</title>
-    <style>
-        body { font-family: system-ui, sans-serif; max-width: 420px; margin: 100px auto; padding: 0 16px; text-align: center; }
-        h1 { margin-bottom: 8px; }
-        p { color: #555; margin-bottom: 32px; }
-        .btn { display: block; width: 100%; padding: 14px; font-size: 16px; margin-bottom: 12px;
-               border: 1px solid #ccc; border-radius: 8px; background: #fff; cursor: pointer; text-decoration: none;
-               color: #000; box-sizing: border-box; }
-        .btn:hover { background: #f5f5f5; }
-        .btn-primary { background: #0088cc; color: #fff; border-color: #0088cc; }
-        .btn-primary:hover { background: #006fa8; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProBoost — Платформа цифрового продвижения</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/platform.css" />
 </head>
 <body>
-    <h1>Avito PF Bot</h1>
-    <p>Выберите способ входа или создайте аккаунт</p>
+  <div id="root"></div>
 
-    <a class="btn btn-primary" href="/login_telegram.html">Войти через Telegram</a>
-    <a class="btn" href="/login.html">Войти через Email</a>
-    <a class="btn" href="/register.html">Зарегистрироваться</a>
+  <!-- API helper (must be before Babel scripts) -->
+  <script src="/api.js"></script>
 
-    <script>
-        if (localStorage.getItem("access_token")) {
-            window.location.href = "/cabinet.html";
-        }
-    </script>
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- Shared helpers (loads first — defines TweaksPanel, etc.) -->
+  <script type="text/babel" src="/tweaks-panel.jsx"></script>
+
+  <!-- Components (dependency order — imported by app.jsx) -->
+  <script type="text/babel" src="/components/AppHeader.jsx"></script>
+  <script type="text/babel" src="/components/Landing.jsx"></script>
+  <script type="text/babel" src="/components/Auth.jsx"></script>
+  <script type="text/babel" src="/components/Cabinet.jsx"></script>
+  <script type="text/babel" src="/components/OrderForm.jsx"></script>
+  <script type="text/babel" src="/components/Orders.jsx"></script>
+  <script type="text/babel" src="/components/Profile.jsx"></script>
+
+  <!-- Root app (last — uses all components) -->
+  <script type="text/babel" src="/app.jsx"></script>
 </body>
 </html>

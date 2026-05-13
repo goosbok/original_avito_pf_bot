@@ -12,6 +12,9 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  // Registration: 'form' (name/email/password) → 'code' (email verification)
+  const [regStep, setRegStep] = useState('form');
+  const [regCode, setRegCode] = useState('');
 
   const handleEmailLogin = async () => {
     if (!email || !password) return setError('Заполните все поля');
@@ -24,18 +27,67 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
     } finally { setLoading(false); }
   };
 
-  const handleRegister = async () => {
+  const handleRegisterRequest = async () => {
     if (!email || !password) return setError('Заполните все поля');
     if (password.length < 8) return setError('Пароль — минимум 8 символов');
+    setLoading(true); setError(''); setSuccess('');
+    try {
+      await api.post('/api/auth/email/register-request', {
+        email, password, first_name: name || null
+      });
+      setRegStep('code');
+      setRegCode('');
+      setSuccess('Код отправлен на ' + email);
+    } catch (e) {
+      if (e.status === 409) setError('Email уже зарегистрирован');
+      else if (e.status === 429) {
+        const sec = e.retry_after;
+        setError(sec
+          ? `Код уже отправлен. Попробуйте через ${sec} секунд.`
+          : 'Код уже отправлен. Попробуйте позже.');
+      } else if (e.status === 502) {
+        setError('Не удалось отправить код на email. Попробуйте позже или используйте другой email.');
+      } else if (e.status === 400) {
+        setError(e.message || 'Неверные данные');
+      } else {
+        setError(e.message || 'Ошибка регистрации');
+      }
+    } finally { setLoading(false); }
+  };
+
+  const handleRegisterVerify = async () => {
+    if (!regCode || regCode.length < 6) return setError('Введите 6-значный код');
     setLoading(true); setError('');
     try {
-      const data = await api.post('/api/auth/email/register', {
-        email, password, first_name: name || null
+      const data = await api.post('/api/auth/email/register-verify', {
+        email, code: regCode
       });
       onLogin(data.access_token);
     } catch (e) {
-      if (e.status === 409) setError('Email уже зарегистрирован');
-      else setError(e.message || 'Ошибка регистрации');
+      if (e.status === 401) setError('Неверный код');
+      else if (e.status === 410) setError('Код истёк. Запросите новый.');
+      else setError(e.message || 'Ошибка проверки кода');
+    } finally { setLoading(false); }
+  };
+
+  const handleResendRegisterCode = async () => {
+    setLoading(true); setError(''); setSuccess('');
+    try {
+      await api.post('/api/auth/email/register-request', {
+        email, password, first_name: name || null
+      });
+      setSuccess('Код отправлен на ' + email);
+    } catch (e) {
+      if (e.status === 429) {
+        const sec = e.retry_after;
+        setError(sec
+          ? `Код уже отправлен. Попробуйте через ${sec} секунд.`
+          : 'Код уже отправлен. Попробуйте позже.');
+      } else if (e.status === 502) {
+        setError('Не удалось отправить код на email. Попробуйте позже.');
+      } else {
+        setError(e.message || 'Ошибка отправки кода');
+      }
     } finally { setLoading(false); }
   };
 
@@ -157,37 +209,88 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
       <div className="card auth-card">
         <div className="auth-card__logo">{logoMark}</div>
         <h2 className="auth-card__title">Создать аккаунт</h2>
-        <p className="auth-card__sub">Email + пароль. Позже можно привязать Telegram.</p>
+        <p className="auth-card__sub">
+          {regStep === 'form'
+            ? 'Email + пароль. Позже можно привязать Telegram.'
+            : 'Подтвердите email — мы отправили вам 6-значный код.'}
+        </p>
         <div className="auth-form">
           {error && <div className="alert alert--error">{error}</div>}
-          <div className="form-field">
-            <label className="form-label">Имя (необязательно)</label>
-            <input className="input" placeholder="Алексей" value={name} onChange={e => setName(e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label className="form-label">Email</label>
-            <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label className="form-label">Пароль</label>
-            <input
-              className="input" type="password" placeholder="Минимум 8 символов"
-              value={password} onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleRegister()}
-            />
-            <div className="form-hint">Минимум 8 символов</div>
-          </div>
-          <button className="btn btn--primary btn--lg btn--full" onClick={handleRegister} disabled={loading}>
-            {loading ? 'Создание аккаунта...' : 'Создать аккаунт →'}
-          </button>
-          <div className="auth-divider"><span>или</span></div>
-          <button className="btn btn--ghost btn--full" onClick={() => setMode('login-tg')}>
-            Войти через Telegram
-          </button>
+          {success && regStep === 'code' && <div className="alert alert--success">{success}</div>}
+          {regStep === 'form' ? (
+            <>
+              <div className="form-field">
+                <label className="form-label">Имя (необязательно)</label>
+                <input className="input" placeholder="Алексей" value={name} onChange={e => setName(e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label className="form-label">Email</label>
+                <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label className="form-label">Пароль</label>
+                <input
+                  className="input" type="password" placeholder="Минимум 8 символов"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleRegisterRequest()}
+                />
+                <div className="form-hint">Минимум 8 символов</div>
+              </div>
+              <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterRequest} disabled={loading}>
+                {loading ? 'Отправка кода...' : 'Получить код на email →'}
+              </button>
+              <div className="auth-divider"><span>или</span></div>
+              <button
+                className="btn btn--ghost btn--full"
+                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('login-tg'); }}
+              >
+                Войти через Telegram
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="form-field">
+                <label className="form-label">6-значный код из email</label>
+                <input
+                  className="input"
+                  placeholder="123456"
+                  value={regCode}
+                  maxLength={6}
+                  inputMode="numeric"
+                  onChange={e => setRegCode(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={e => e.key === 'Enter' && handleRegisterVerify()}
+                  style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
+                  autoFocus
+                />
+                <div className="form-hint">Код отправлен на {email}. Действителен 10 минут.</div>
+              </div>
+              <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterVerify} disabled={loading}>
+                {loading ? 'Проверка...' : 'Создать аккаунт →'}
+              </button>
+              <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
+                <span style={{ color: 'var(--text-3)' }}>Не пришёл код?</span>{' '}
+                <span
+                  onClick={() => { if (!loading) handleResendRegisterCode(); }}
+                  style={{ color: 'var(--primary)', fontWeight: 600, cursor: loading ? 'default' : 'pointer' }}
+                >
+                  Отправить заново
+                </span>
+              </div>
+              <button
+                className="btn btn--ghost btn--sm btn--full"
+                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); }}
+              >
+                ← Назад
+              </button>
+            </>
+          )}
         </div>
         <div className="auth-links">
           Уже есть аккаунт?{' '}
-          <span onClick={() => setMode('login')} style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>Войти</span>
+          <span
+            onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('login'); }}
+            style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
+          >Войти</span>
         </div>
       </div>
     </div>
@@ -224,7 +327,10 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
         </div>
         <div className="auth-links">
           Нет аккаунта?{' '}
-          <span onClick={() => setMode('register')} style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>Зарегистрироваться</span>
+          <span
+            onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('register'); }}
+            style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
+          >Зарегистрироваться</span>
           {' · '}
           <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
         </div>

@@ -1,6 +1,35 @@
 // Profile page — show linked providers, allow linking email + TG
 const { useState: useProfileState, useEffect: useProfileEffect } = React;
 
+// IMPORTANT: defined at module scope (not inside ProfilePage). Defining it
+// inside the parent created a NEW component type on every parent render,
+// which made React unmount/remount the inputs underneath — focus dropped
+// after each keystroke (https://react.dev/learn/preserving-and-resetting-state).
+function ProviderCard({ title, icon, linked, linkedLabel, children }) {
+  return (
+    <div className="card" style={{ padding: '20px 24px', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: linked ? 0 : 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: 10, background: 'var(--primary-dim)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)'
+          }}>{icon}</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{title}</div>
+            {linked && <div style={{ fontSize: '0.8rem', color: 'var(--text-3)', marginTop: 2 }}>{linkedLabel}</div>}
+          </div>
+        </div>
+        {linked
+          ? <span className="badge badge--completed">✓ Привязан</span>
+          : <span className="badge badge--muted">Не привязан</span>
+        }
+      </div>
+      {!linked && <div style={{ marginTop: 16 }}>{children}</div>}
+    </div>
+  );
+}
+
 function ProfilePage({ user, onNavigate, botConfig }) {
   const [providers, setProviders] = useProfileState([]);
   const [emailInput, setEmailInput] = useProfileState('');
@@ -80,33 +109,15 @@ function ProfilePage({ user, onNavigate, botConfig }) {
     } catch (e) {
       if (e.status === 410) setTgError('Код истёк — запросите новый');
       else if (e.status === 401) setTgError('Неверный код');
-      else if (e.status === 409) setTgError('Telegram уже привязан к другому аккаунту');
+      else if (e.status === 409) setTgError(
+        'Этот Telegram уже привязан к другому аккаунту. ' +
+        'Войдите в тот аккаунт по номеру и отвяжите Telegram там, ' +
+        'либо напишите в поддержку — поможем разобраться.'
+      );
       else setTgError(e.message || 'Ошибка проверки кода');
     }
   };
 
-  const ProviderCard = ({ title, icon, linked, linkedLabel, children }) => (
-    <div className="card" style={{ padding: '20px 24px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: linked ? 0 : 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10, background: 'var(--primary-dim)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)'
-          }}>{icon}</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{title}</div>
-            {linked && <div style={{ fontSize: '0.8rem', color: 'var(--text-3)', marginTop: 2 }}>{linkedLabel}</div>}
-          </div>
-        </div>
-        {linked
-          ? <span className="badge badge--completed">✓ Привязан</span>
-          : <span className="badge badge--muted">Не привязан</span>
-        }
-      </div>
-      {!linked && <div style={{ marginTop: 16 }}>{children}</div>}
-    </div>
-  );
 
   return (
     <div className="page-wrap">

@@ -31,6 +31,13 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const [refillAmount, setRefillAmount] = useCabinetState(1000);
   const [refillStatus, setRefillStatus] = useCabinetState(null);
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
+  const [refillError, setRefillError] = useCabinetState('');
+
+  const openSupportForRefill = () => {
+    const text = `Возникла проблема при пополнении баланса на ${Number(refillAmount).toLocaleString('ru-RU')} ₽` +
+      (refillError ? ` (ошибка: ${refillError})` : '') + '. Помогите, пожалуйста.';
+    window.dispatchEvent(new CustomEvent('support-chat-send', { detail: { text } }));
+  };
 
   useCabinetEffect(() => {
     api.get('/api/orders?page=1&page_size=5').then(data => {
@@ -41,6 +48,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const handleRefill = async () => {
     if (!refillAmount || refillAmount < 100) return;
     setRefillStatus('pending');
+    setRefillError('');
     try {
       const data = await api.post('/api/refill', { amount: Number(refillAmount) });
       setRefillPaymentId(data.payment_id);
@@ -48,6 +56,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
       setRefillStatus('polling');
     } catch (e) {
       setRefillStatus('error');
+      setRefillError(e.message || `HTTP ${e.status || '?'}`);
     }
   };
 
@@ -61,6 +70,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
         setTimeout(() => { setRefillStatus(null); setRefillPaymentId(null); }, 4000);
       } else if (data.status === 'failed') {
         setRefillStatus('error');
+        setRefillError('Оплата не прошла (статус: failed)');
       }
     } catch (_) {}
   };
@@ -139,8 +149,21 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                 </div>
               )}
               {refillStatus === 'error' && (
-                <div className="balance-status" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem', background: 'var(--status-cancel-bg)', color: 'var(--status-cancel-text)' }}>
-                  ❌ Ошибка оплаты. Попробуйте снова.
+                <div className="balance-status" style={{ marginTop: 8, padding: '10px 12px', fontSize: '0.8rem', background: 'var(--status-cancel-bg)', color: 'var(--status-cancel-text)', lineHeight: 1.5 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 4 }}>❌ Не удалось пополнить</div>
+                  {refillError && <div style={{ marginBottom: 8, opacity: 0.9 }}>{refillError}</div>}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => { setRefillStatus(null); setRefillError(''); }}
+                      style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    >Попробовать снова</button>
+                    <button
+                      className="btn btn--secondary btn--sm"
+                      onClick={openSupportForRefill}
+                      style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                    >💬 Связаться с поддержкой</button>
+                  </div>
                 </div>
               )}
             </div>

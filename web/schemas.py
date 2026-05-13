@@ -182,3 +182,36 @@ class AdminBalanceAdjustResponse(BaseModel):
 
 class AdminVipToggle(BaseModel):
     is_vip: bool
+
+
+class AdminOrderItem(BaseModel):
+    order_id: int
+    user_id: int
+    user_name: str | None
+    price: int
+    position_name: str
+    status: str
+    links: str
+    date: str
+    contacts: bool
+
+
+class AdminOrderListResponse(BaseModel):
+    items: list[AdminOrderItem]
+    total: int
+    page: int
+    page_size: int
+
+
+_ORDER_STATUSES = ("Posted", "Completed", "Cancelled", "Pending")
+
+
+class AdminOrderStatusChange(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def status_must_be_known(cls, v: str) -> str:
+        if v not in _ORDER_STATUSES:
+            raise ValueError(f"status must be one of {_ORDER_STATUSES}")
+        return v

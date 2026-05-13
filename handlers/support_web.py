@@ -59,5 +59,26 @@ async def admin_reply_to_support(message: Message) -> None:
         except Exception:
             logger.warning("could not notify user_id=%s in TG", user_id)
 
-    await message.reply("✅ Ответ сохранён")
+    # ACK the admin with a 👍 reaction instead of a chat message — keeps the
+    # admin-bot conversation clean. aiogram 2.x has no helper for reactions,
+    # so we call Telegram's setMessageReaction directly via httpx.
+    try:
+        import httpx
+
+        from web.config import BOT_TOKEN
+        url = f"https://api.telegram.org/bot{BOT_TOKEN}/setMessageReaction"
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json={
+                "chat_id": message.chat.id,
+                "message_id": message.message_id,
+                "reaction": [{"type": "emoji", "emoji": "👍"}],
+            })
+        if resp.status_code != 200:
+            logger.warning(
+                "setMessageReaction failed: status=%s body=%s",
+                resp.status_code, resp.text[:200],
+            )
+    except Exception:
+        logger.exception("could not set 👍 reaction on admin reply")
+
     logger.info("support reply saved for user_id=%s, msg_id=%s", user_id, msg_id)

@@ -1,8 +1,22 @@
 // Auth screens: Email login, Telegram OTP login, Email register
-const { useState } = React;
+const { useState, useEffect } = React;
 
-const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
+const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
   const [mode, setMode] = useState(initialMode || 'login');
+
+  // Keep internal mode in sync when parent navigates between auth sub-modes
+  // (login → register, register → login-tg, etc.). Without this, useState's
+  // lazy init means clicks on header "Войти" / "Регистрация" do nothing when
+  // we're already on the auth route.
+  useEffect(() => { setMode(initialMode || 'login'); }, [initialMode]);
+
+  // Reset transient sub-flow state whenever mode changes (incl. from header nav).
+  useEffect(() => {
+    setError(''); setSuccess('');
+    setRegStep('form'); setRegCode('');
+    setOtpSent(false); setOtpCode('');
+  }, [mode]);
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -162,8 +176,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
             <div className="alert alert--error">
               {error}
               <div style={{ marginTop: 8, fontSize: '0.875rem' }}>
-                <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
-                  Открыть @AVITOPF_bot
+                <a href={(botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                  Открыть @{(botConfig && botConfig.bot_username) || 'AVITOPF_bot'} и отправить /connect
                 </a>
               </div>
             </div>
@@ -183,9 +197,9 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
                   onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
                 />
                 <div className="form-hint">
-                  Если бот ещё не знает ваш номер, откройте{' '}
-                  <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>@AVITOPF_bot</a>
-                  {' '}и отправьте <code>/connect</code>
+                  Если бот ещё не знает ваш номер,{' '}
+                  <a href={(botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>откройте @{(botConfig && botConfig.bot_username) || 'AVITOPF_bot'}</a>
+                  {' '}— он сразу попросит поделиться контактом
                 </div>
               </div>
               <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>

@@ -1,7 +1,7 @@
 // Profile page — show linked providers, allow linking email + TG
 const { useState: useProfileState, useEffect: useProfileEffect } = React;
 
-function ProfilePage({ user, onNavigate }) {
+function ProfilePage({ user, onNavigate, botConfig }) {
   const [providers, setProviders] = useProfileState([]);
   const [emailInput, setEmailInput] = useProfileState('');
   const [emailPass, setEmailPass] = useProfileState('');
@@ -177,8 +177,8 @@ function ProfilePage({ user, onNavigate }) {
                   <div className="alert alert--error">
                     {tgError}
                     <div style={{ marginTop: 8, fontSize: '0.875rem' }}>
-                      <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
-                        Открыть @AVITOPF_bot
+                      <a href={(botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                        Открыть @{(botConfig && botConfig.bot_username) || 'AVITOPF_bot'} и отправить /connect
                       </a>
                     </div>
                   </div>
@@ -194,8 +194,9 @@ function ProfilePage({ user, onNavigate }) {
                     onChange={e => setTgInput(e.target.value)}
                   />
                   <div className="form-hint">
-                    Если бот ещё не знает ваш номер, отправьте <code>/connect</code> боту{' '}
-                    <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>@AVITOPF_bot</a>
+                    Если бот ещё не знает ваш номер,{' '}
+                    <a href={(botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect'} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>откройте @{(botConfig && botConfig.bot_username) || 'AVITOPF_bot'}</a>
+                    {' '}— он сразу попросит поделиться контактом
                   </div>
                 </div>
                 <button className="btn btn--secondary" onClick={handleRequestTgCode} disabled={!tgInput}>

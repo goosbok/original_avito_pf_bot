@@ -46,6 +46,11 @@ async def main_start(message: Message, state: FSMContext, user_id: int):
     usr = message.from_user
     args = message.get_args()
     name = await get_user_name(usr)
+    if args == 'connect':
+        # Deep-link from web SPA: /start connect → trigger phone-sharing flow
+        from handlers.connect import prompt_for_contact
+        await prompt_for_contact(message)
+        return
     if args:
         if user['ref_user_name'] is not None:
             ref_name = await get_refer_name(user['ref_id'])

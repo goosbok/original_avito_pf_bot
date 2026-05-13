@@ -41,15 +41,21 @@ def _contact_keyboard() -> ReplyKeyboardMarkup:
     return kb
 
 
-@dp.message_handler(commands=["connect"], state="*")
-async def cmd_connect(message: Message, state: FSMContext) -> None:
-    """Prompt the user to share their phone number."""
-    await state.finish()
+async def prompt_for_contact(message: Message) -> None:
+    """Send the share-contact prompt + keyboard. Reused by /connect AND
+    /start connect deep-link from the web SPA."""
     await message.answer(
         "📱 Чтобы заходить на сайт по номеру телефона, "
         "поделитесь контактом кнопкой ниже.",
         reply_markup=_contact_keyboard(),
     )
+
+
+@dp.message_handler(commands=["connect"], state="*")
+async def cmd_connect(message: Message, state: FSMContext) -> None:
+    """Prompt the user to share their phone number."""
+    await state.finish()
+    await prompt_for_contact(message)
 
 
 @dp.message_handler(content_types=ContentType.CONTACT, state="*")

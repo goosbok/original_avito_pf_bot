@@ -16,6 +16,14 @@ function App() {
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [botConfig, setBotConfig] = useState(null);
+
+  // Load public config (bot deep-link, etc.) once
+  useEffect(() => {
+    api.get('/api/config').then(data => {
+      if (data && !data.__unauthorized) setBotConfig(data);
+    }).catch(() => {});
+  }, []);
 
   // Apply theme + variant to <html>
   useEffect(() => {
@@ -110,12 +118,12 @@ function App() {
   const renderScreen = () => {
     switch (route) {
       case 'landing':  return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
-      case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} />;
+      case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
       case 'order-pf': return <OrderFormPage balance={balance} onNavigate={handleNavigate} onOrderPlaced={handleOrderPlaced} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
       case 'order-detail': return <OrderDetailPage order={selectedOrder} onNavigate={handleNavigate} />;
-      case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} />;
+      case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;
       default:         return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
     }
   };

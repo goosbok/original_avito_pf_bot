@@ -23,10 +23,12 @@ window.api = {
     });
     if (res.status === 401) return { __unauthorized: true };
     if (!res.ok) {
+      const retryAfter = res.headers.get('Retry-After');
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       const e = new Error(this._formatDetail(err.detail));
       e.status = res.status;
       e.detail = err.detail;
+      if (retryAfter) e.retry_after = parseInt(retryAfter, 10) || retryAfter;
       throw e;
     }
     return res.json();
@@ -43,10 +45,12 @@ window.api = {
       body: JSON.stringify(body)
     });
     if (!res.ok) {
+      const retryAfter = res.headers.get('Retry-After');
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       const e = new Error(this._formatDetail(err.detail));
       e.status = res.status;
       e.detail = err.detail;
+      if (retryAfter) e.retry_after = parseInt(retryAfter, 10) || retryAfter;
       throw e;
     }
     if (res.status === 204) return null;

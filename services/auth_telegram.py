@@ -22,15 +22,88 @@ from services.exceptions import BotCantReachUser, OTPInvalid
 # (e.g. "bob") and avoid false rejects for names stored in our own DB.
 _USERNAME_RE = re.compile(r"^@?([A-Za-z0-9_]{1,32})$")
 
+# Strip whitespace, parentheses, dashes from user-entered phone numbers.
+_PHONE_STRIP_RE = re.compile(r"[\s()\-]+")
+
+
+def _normalize_phone(raw: str) -> str | None:
+    """Return E.164-ish phone (+digits) if the input looks like a phone, else None.
+
+    Rules:
+    - Strip whitespace, parentheses, dashes.
+    - If starts with '+' and the rest is all digits → keep as-is.
+    - If 11 digits starting with '8' → replace leading '8' with '+7' (RU).
+    - If 11 digits starting with '7' → prepend '+'.
+    - If 10–15 digits → prepend '+' (already international without the plus).
+    - Otherwise: None (not a phone).
+    """
+    s = _PHONE_STRIP_RE.sub("", raw)
+    if not s:
+        return None
+    if s.startswith("+"):
+        rest = s[1:]
+        if rest.isdigit() and 10 <= len(rest) <= 15:
+            return "+" + rest
+        return None
+    if not s.isdigit():
+        return None
+    # All digits at this point.
+    if len(s) == 11 and s.startswith("8"):
+        return "+7" + s[1:]
+    if len(s) == 11 and s.startswith("7"):
+        return "+" + s
+    if 10 <= len(s) <= 15:
+        return "+" + s
+    return None
+
+
+def _looks_like_phone(identifier: str) -> bool:
+    """Heuristic: does this look more like a phone than a numeric Telegram ID?"""
+    s = _PHONE_STRIP_RE.sub("", identifier)
+    if s.startswith("+"):
+        return True
+    if s.isdigit() and len(s) >= 10 and s[0] in ("7", "8"):
+        return True
+    return False
+
 
 def resolve_telegram_id(identifier: str) -> int:
     """Превратить введённое юзером в telegram_id.
 
     Поддерживается:
-    - numeric ID (как-есть)
+    - phone number (+79..., 89..., 79...) — нормализуем и ищем в auth_providers(provider='phone').
+    - numeric ID (как-есть).
     - @username или username (ищем в users.user_name; если не нашли — OTPInvalid).
     """
     identifier = identifier.strip()
+
+    # Phone path: check first so that numeric phones like 89001234567 / 79001234567
+    # don't get treated as Telegram numeric IDs.
+    if _looks_like_phone(identifier):
+        phone = _normalize_phone(identifier)
+        if phone is None:
+            raise OTPInvalid(f"unknown identifier format: {identifier!r}")
+        with connect() as con:
+            row = con.execute(
+                "SELECT user_id FROM auth_providers "
+                "WHERE provider = 'phone' AND identifier = ?",
+                (phone,),
+            ).fetchone()
+            if row is None:
+                raise OTPInvalid(
+                    "Этот номер не привязан к боту. Откройте @AVITOPF_bot "
+                    "и отправьте команду /connect — после этого вы сможете войти по телефону."
+                )
+            user_id = int(row["user_id"])
+            provider_row = con.execute(
+                "SELECT identifier FROM auth_providers "
+                "WHERE user_id = ? AND provider = 'telegram'",
+                (user_id,),
+            ).fetchone()
+        if provider_row is not None:
+            return int(provider_row["identifier"])
+        return user_id
+
     if identifier.isdigit():
         return int(identifier)
     m = _USERNAME_RE.match(identifier)

@@ -117,3 +117,84 @@ def test_verify_code_wrong_code(tmp_db: Path, monkeypatch):
     auth_telegram.request_code("111222")
     with pytest.raises(OTPInvalid):
         auth_telegram.verify_code_login("111222", "000000")
+
+
+# ── Phone-based resolver (Feature 1) ──────────────────────────────────────────
+
+def _seed_phone_user(tmp_db: Path, tg_id: int, phone: str) -> int:
+    """Seed a modern user with telegram + phone provider rows. Returns internal user_id."""
+    with sqlite3.connect(tmp_db) as con:
+        cur = con.execute(
+            "INSERT INTO users(user_name, first_name, balance, reg_date) "
+            "VALUES (?, ?, 0, ?)",
+            ("phoner", "P", "2026-01-01"),
+        )
+        internal_id = cur.lastrowid
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at) "
+            "VALUES (?, 'telegram', ?, '2026-01-01')",
+            (internal_id, str(tg_id)),
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at) "
+            "VALUES (?, 'phone', ?, '2026-01-01')",
+            (internal_id, phone),
+        )
+        con.commit()
+    return internal_id
+
+
+def test_resolve_phone_plus_format(tmp_db: Path):
+    _seed_phone_user(tmp_db, tg_id=10101, phone="+79001234567")
+    assert auth_telegram.resolve_telegram_id("+79001234567") == 10101
+
+
+def test_resolve_phone_eight_prefix_normalized(tmp_db: Path):
+    """89001234567 → +79001234567."""
+    _seed_phone_user(tmp_db, tg_id=20202, phone="+79001234567")
+    assert auth_telegram.resolve_telegram_id("89001234567") == 20202
+
+
+def test_resolve_phone_seven_prefix_normalized(tmp_db: Path):
+    """79001234567 → +79001234567."""
+    _seed_phone_user(tmp_db, tg_id=30303, phone="+79001234567")
+    assert auth_telegram.resolve_telegram_id("79001234567") == 30303
+
+
+def test_resolve_phone_with_punctuation(tmp_db: Path):
+    """User-typed +7 (900) 123-45-67 should still resolve."""
+    _seed_phone_user(tmp_db, tg_id=40404, phone="+79001234567")
+    assert auth_telegram.resolve_telegram_id("+7 (900) 123-45-67") == 40404
+
+
+def test_resolve_unknown_phone_raises(tmp_db: Path):
+    with pytest.raises(OTPInvalid) as exc_info:
+        auth_telegram.resolve_telegram_id("+79009998877")
+    msg = str(exc_info.value).lower()
+    # Russian, user-friendly message hinting at /connect.
+    assert "/connect" in msg or "connect" in msg
+
+
+def test_resolve_phone_returns_user_id_when_no_telegram_provider(tmp_db: Path):
+    """Phone linked to a user that has no telegram provider row falls back to users.id."""
+    with sqlite3.connect(tmp_db) as con:
+        cur = con.execute(
+            "INSERT INTO users(user_name, first_name, balance, reg_date) "
+            "VALUES (?, ?, 0, ?)",
+            (None, "PhoneOnly", "2026-01-01"),
+        )
+        internal_id = cur.lastrowid
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at) "
+            "VALUES (?, 'phone', ?, '2026-01-01')",
+            (internal_id, "+79007776655"),
+        )
+        con.commit()
+    assert auth_telegram.resolve_telegram_id("+79007776655") == internal_id
+
+
+def test_resolve_username_still_works_regression(tmp_db: Path):
+    """Make sure the new phone branch didn't break the @username path."""
+    _seed_user(tmp_db, 5555, user_name="charlie")
+    assert auth_telegram.resolve_telegram_id("@charlie") == 5555
+    assert auth_telegram.resolve_telegram_id("charlie") == 5555

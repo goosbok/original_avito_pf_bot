@@ -49,6 +49,10 @@ from web.routers.admin_orders import router as admin_orders_router  # noqa: E402
 
 app.include_router(admin_orders_router)
 
+from web.routers.admin_support import router as admin_support_router  # noqa: E402
+
+app.include_router(admin_support_router)
+
 from pathlib import Path  # noqa: E402
 
 from fastapi.staticfiles import StaticFiles  # noqa: E402

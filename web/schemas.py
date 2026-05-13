@@ -215,3 +215,22 @@ class AdminOrderStatusChange(BaseModel):
         if v not in _ORDER_STATUSES:
             raise ValueError(f"status must be one of {_ORDER_STATUSES}")
         return v
+
+
+class AdminSupportThread(BaseModel):
+    user_id: int
+    user_name: str | None
+    first_name: str | None
+    last_message_text: str
+    last_message_at: str
+    last_direction: str
+    has_unanswered: bool
+    message_count: int
+
+
+class AdminSupportThreadsResponse(BaseModel):
+    threads: list[AdminSupportThread]
+
+
+class AdminSupportReply(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)

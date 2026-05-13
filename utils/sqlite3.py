@@ -1028,6 +1028,17 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             6,
         ),
+        (
+            "pending_email_registrations",
+            "CREATE TABLE IF NOT EXISTS pending_email_registrations("
+            "email TEXT PRIMARY KEY,"
+            "password_hash TEXT NOT NULL,"
+            "first_name TEXT,"
+            "code TEXT NOT NULL,"
+            "expires_at TIMESTAMP NOT NULL,"
+            "created_at TIMESTAMP NOT NULL)",
+            6,
+        ),
     ]
 
 

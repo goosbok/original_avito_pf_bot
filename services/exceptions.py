@@ -77,3 +77,7 @@ class BotCantReachUser(ServiceError):
     Typical causes: user never started the bot, or has blocked it.
     This is a user-actionable error, not a server failure.
     """
+
+
+class EmailSendError(ServiceError):
+    """SMTP send failed."""

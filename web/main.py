@@ -53,6 +53,10 @@ from web.routers.admin_support import router as admin_support_router  # noqa: E4
 
 app.include_router(admin_support_router)
 
+from web.routers.admin_stats import router as admin_stats_router  # noqa: E402
+
+app.include_router(admin_stats_router)
+
 from pathlib import Path  # noqa: E402
 
 from fastapi.staticfiles import StaticFiles  # noqa: E402

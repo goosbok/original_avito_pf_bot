@@ -234,3 +234,11 @@ class AdminSupportThreadsResponse(BaseModel):
 
 class AdminSupportReply(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+
+
+class AdminStatsResponse(BaseModel):
+    users_total: int
+    users_registered_today: int
+    orders_today: int
+    revenue_today: int
+    open_support_threads: int

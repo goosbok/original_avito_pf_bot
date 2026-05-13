@@ -43,7 +43,7 @@ function scrollToSection(id) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNavigate, onLogout }) {
+function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggleTheme, onToggleAdminMode, onNavigate, onLogout }) {
   const [menuOpen, setMenuOpen] = useHeaderState(false);
   const [userDropOpen, setUserDropOpen] = useHeaderState(false);
   const dropRef = useHeaderRef(null);
@@ -117,6 +117,17 @@ function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNa
 
         {/* Right actions */}
         <div className="header__actions">
+
+          {/* Admin-mode toggle (only for admins) */}
+          {isApp && user && user.is_admin && (
+            <button
+              className={`admin-toggle${adminMode ? ' admin-toggle--on' : ''}`}
+              onClick={onToggleAdminMode}
+              title="Переключить админ-режим"
+            >
+              🛠 Админ
+            </button>
+          )}
 
           {/* Balance badge */}
           {isApp && user && (

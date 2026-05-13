@@ -17,6 +17,31 @@ function App() {
   const [appLoading, setAppLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [botConfig, setBotConfig] = useState(null);
+  const [adminMode, setAdminMode] = useState(
+    () => localStorage.getItem('admin_mode') === '1'
+  );
+
+  // Reflect adminMode on <html> so platform.css applies the neon overrides.
+  useEffect(() => {
+    if (adminMode && user && user.is_admin) {
+      document.documentElement.setAttribute('data-admin-mode', 'on');
+    } else {
+      document.documentElement.removeAttribute('data-admin-mode');
+    }
+  }, [adminMode, user]);
+
+  // Force-off admin mode if the user signs out or isn't admin
+  useEffect(() => {
+    if (!user || !user.is_admin) setAdminMode(false);
+  }, [user]);
+
+  const toggleAdminMode = () => {
+    const next = !adminMode;
+    setAdminMode(next);
+    localStorage.setItem('admin_mode', next ? '1' : '0');
+    // When turning ON, jump to admin dashboard. When OFF, back to cabinet.
+    setRoute(next ? 'admin' : 'cabinet');
+  };
 
   // Load public config (bot deep-link, etc.) once
   useEffect(() => {
@@ -42,7 +67,12 @@ function App() {
       if (data.__unauthorized) {
         localStorage.removeItem('access_token');
       } else {
-        setUser({ first_name: data.first_name, user_name: data.user_name, user_id: data.user_id });
+        setUser({
+          first_name: data.first_name,
+          user_name: data.user_name,
+          user_id: data.user_id,
+          is_admin: !!data.is_admin,
+        });
         setBalance(data.balance);
         setRoute('cabinet');
       }
@@ -64,7 +94,12 @@ function App() {
   const handleLogin = (token) => {
     localStorage.setItem('access_token', token);
     api.get('/api/me').then(data => {
-      setUser({ first_name: data.first_name, user_name: data.user_name, user_id: data.user_id });
+      setUser({
+        first_name: data.first_name,
+        user_name: data.user_name,
+        user_id: data.user_id,
+        is_admin: !!data.is_admin,
+      });
       setBalance(data.balance);
       setRoute('cabinet');
     }).catch(() => {
@@ -110,12 +145,25 @@ function App() {
     route, user, balance,
     brandName: tweaks.brandName,
     theme: tweaks.theme,
+    adminMode,
+    onToggleAdminMode: toggleAdminMode,
     onToggleTheme: () => setTweak('theme', tweaks.theme === 'dark' ? 'light' : 'dark'),
     onNavigate: handleNavigate,
     onLogout: handleLogout,
   };
 
   const renderScreen = () => {
+    if (adminMode && user && user.is_admin) {
+      switch (route) {
+        case 'admin':
+        case 'admin-users':
+        case 'admin-orders':
+        case 'admin-support':
+          return <AdminPanel route={route} onNavigate={handleNavigate} />;
+        default:
+          return <AdminPanel route="admin" onNavigate={handleNavigate} />;
+      }
+    }
     switch (route) {
       case 'landing':  return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
       case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} />;
@@ -130,7 +178,10 @@ function App() {
 
   return (
     <div>
-      <AppHeader {...headerProps} />
+      {adminMode && user && user.is_admin
+        ? <AdminHeader {...headerProps} />
+        : <AppHeader {...headerProps} />
+      }
       {renderScreen()}
       {user && <SupportChat />}
     </div>

@@ -560,3 +560,65 @@ p  { line-height: 1.65; }
 .mt-8 { margin-top: 8px; }
 .mt-16 { margin-top: 16px; }
 .color-primary { color: var(--primary); }
+
+/* ===== ADMIN MODE: neon override ===== */
+[data-admin-mode="on"] {
+  --primary: #00e5ff;
+  --primary-hover: #4dffff;
+  --primary-dim: rgba(0, 229, 255, 0.14);
+  --accent-purple: #ff00d4;
+  --bg: #07080f;
+  --surface: #0f1118;
+  --surface-2: #161a25;
+  --surface-3: #1c2030;
+  --text-1: #e7f6ff;
+  --text-2: #93a4bb;
+  --text-3: #5b6478;
+  --border: rgba(0, 229, 255, 0.18);
+  --border-focus: #00e5ff;
+  --shadow: 0 0 0 1px rgba(0,229,255,0.08), 0 4px 32px rgba(0,229,255,0.10);
+  --shadow-lg: 0 0 0 1px rgba(0,229,255,0.20), 0 12px 40px rgba(255,0,212,0.18);
+  --shadow-focus: 0 0 0 3px rgba(0,229,255,0.30);
+  --status-active-bg: rgba(0,229,255,0.14);   --status-active-text: #00e5ff;
+  --status-done-bg: rgba(0,255,128,0.12);     --status-done-text: #00ff95;
+  --status-cancel-bg: rgba(255,64,128,0.14);  --status-cancel-text: #ff5577;
+  --status-pending-bg: rgba(255,220,0,0.14);  --status-pending-text: #ffd900;
+  --hero-grad: linear-gradient(135deg, rgba(0,229,255,0.10), rgba(255,0,212,0.06));
+}
+
+[data-admin-mode="on"] body {
+  background: radial-gradient(ellipse at top, rgba(0,229,255,0.05), transparent 60%), var(--bg);
+}
+
+[data-admin-mode="on"] .btn--primary {
+  background: linear-gradient(135deg, #00e5ff 0%, #ff00d4 100%);
+  border-color: transparent;
+  color: #0a0a14;
+  box-shadow: 0 0 18px rgba(0,229,255,0.45);
+}
+[data-admin-mode="on"] .btn--primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 26px rgba(0,229,255,0.65);
+}
+
+[data-admin-mode="on"] .header {
+  background: rgba(15, 17, 24, 0.92);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.22);
+  box-shadow: 0 0 24px rgba(0,229,255,0.10);
+}
+
+.admin-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 16px;
+  background: rgba(0, 229, 255, 0.10);
+  border: 1.5px solid rgba(0, 229, 255, 0.32);
+  color: #00e5ff;
+  font-size: 0.78rem; font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.admin-toggle:hover { background: rgba(0,229,255,0.18); }
+.admin-toggle--on {
+  background: linear-gradient(135deg, rgba(0,229,255,0.22), rgba(255,0,212,0.18));
+  box-shadow: 0 0 14px rgba(0,229,255,0.45);
+}

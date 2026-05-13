@@ -40,16 +40,29 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
   };
 
   const handleRequestOtp = async () => {
-    if (!tgId) return setError('Введите username или телефон');
+    if (!tgId) return setError('Введите номер телефона');
     setLoading(true); setError(''); setSuccess('');
     try {
       await api.post('/api/auth/telegram/request-code', { identifier: tgId });
       setOtpSent(true);
       setSuccess('Код отправлен в Telegram');
     } catch (e) {
-      if (e.status === 429) setError('Подождите перед повторной отправкой');
-      else if (e.status === 400) setError(e.message || 'Пользователь не найден в Telegram');
-      else setError(e.message || 'Ошибка отправки кода');
+      // 429 = cooldown; 400 = identifier unresolvable or bot can't reach user;
+      // 502 = bot network error. Show actionable hints, not raw backend text.
+      if (e.status === 429) {
+        setError('Слишком частые запросы. Попробуйте через минуту.');
+      } else if (e.status === 400) {
+        const msg = (e.message || '').toLowerCase();
+        if (msg.includes('блок') || msg.includes('chat') || msg.includes('бот не может')) {
+          setError('Бот не может вам написать. Откройте @AVITOPF_bot в Telegram, нажмите Start и попробуйте снова.');
+        } else {
+          setError('Не нашли этот аккаунт в Telegram. Сначала напишите нашему боту @AVITOPF_bot — он сохранит ваш Telegram, после этого можно войти на сайт.');
+        }
+      } else if (e.status === 502) {
+        setError('Не удалось отправить код через Telegram. Попробуйте позже.');
+      } else {
+        setError('Ошибка отправки кода. Попробуйте позже.');
+      }
     } finally { setLoading(false); }
   };
 

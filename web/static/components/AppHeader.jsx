@@ -224,24 +224,6 @@ function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNa
 
                   <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
 
-                  {/* Referral */}
-                  <button
-                    onClick={() => { setUserDropOpen(false); alert('Реферальная ссылка: https://proboost.app/ref/' + (user.user_name || 'user')); }}
-                    style={{
-                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 16px', background: 'none', border: 'none',
-                      cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.875rem',
-                      color: 'var(--text-2)', textAlign: 'left', transition: 'background 0.12s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                  >
-                    <span style={{ width: 18, textAlign: 'center' }}>🔗</span>
-                    Реферальная ссылка
-                  </button>
-
-                  <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-
                   <button
                     onClick={() => { setUserDropOpen(false); onLogout(); }}
                     style={{

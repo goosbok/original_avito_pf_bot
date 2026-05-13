@@ -26,7 +26,10 @@ class EmailRegisterRequest(BaseModel):
 
 class EmailLoginRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
+    # Login intentionally relaxed: any non-empty password is accepted at the schema
+    # layer so the auth service can return a single "wrong password" 401 instead of
+    # leaking the 8-char minimum (also avoids a confusing Pydantic 422 for end users).
+    password: str = Field(min_length=1, max_length=128)
 
 
 class TokenResponse(BaseModel):

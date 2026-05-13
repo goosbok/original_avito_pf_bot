@@ -183,28 +183,6 @@ function ProfilePage({ user, onNavigate }) {
             )}
           </ProviderCard>
 
-          <div className="card" style={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)' }}>REF</div>
-              <div style={{ fontWeight: 700 }}>Реферальная программа</div>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-2)', marginBottom: 14, lineHeight: 1.6 }}>
-              Приглашайте друзей и получайте бонус при каждом их пополнении баланса.
-            </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                className="input" readOnly
-                value={`https://proboost.app/ref/${user?.user_name || 'user'}`}
-                style={{ flex: 1, fontSize: '0.8125rem', color: 'var(--text-2)' }}
-                onClick={e => e.target.select()}
-              />
-              <button
-                className="btn btn--secondary btn--sm"
-                onClick={() => navigator.clipboard?.writeText(`https://proboost.app/ref/${user?.user_name || 'user'}`)}
-              >Скопировать</button>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>

@@ -3,6 +3,19 @@
 window.api = {
   _token() { return localStorage.getItem('access_token'); },
 
+  // FastAPI returns 422 with detail as an array of {loc, msg, type, ...} objects.
+  // Normalize to the first human-readable message so callers can display a string.
+  _formatDetail(detail) {
+    if (!detail) return 'Request failed';
+    if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0];
+      if (first && typeof first === 'object' && first.msg) return String(first.msg);
+    }
+    if (typeof detail === 'object' && detail.msg) return String(detail.msg);
+    return 'Request failed';
+  },
+
   async get(path) {
     const token = this._token();
     const res = await fetch(path, {
@@ -11,8 +24,9 @@ window.api = {
     if (res.status === 401) return { __unauthorized: true };
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      const e = new Error(err.detail || 'Request failed');
+      const e = new Error(this._formatDetail(err.detail));
       e.status = res.status;
+      e.detail = err.detail;
       throw e;
     }
     return res.json();
@@ -30,8 +44,9 @@ window.api = {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      const e = new Error(err.detail || 'Request failed');
+      const e = new Error(this._formatDetail(err.detail));
       e.status = res.status;
+      e.detail = err.detail;
       throw e;
     }
     if (res.status === 204) return null;

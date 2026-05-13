@@ -16,6 +16,14 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
   const [regStep, setRegStep] = useState('form');
   const [regCode, setRegCode] = useState('');
 
+  // Validate phone: strip non-digits/plus; accept +XXXXXXXXXX..XXXXX or 10–11 plain digits.
+  const isValidPhone = (raw) => {
+    const cleaned = (raw || '').replace(/[^\d+]/g, '');
+    if (/^\+\d{10,15}$/.test(cleaned)) return true;
+    if (/^\d{10,11}$/.test(cleaned)) return true;
+    return false;
+  };
+
   const handleEmailLogin = async () => {
     if (!email || !password) return setError('Заполните все поля');
     setLoading(true); setError('');
@@ -93,27 +101,27 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
 
   const handleRequestOtp = async () => {
     if (!tgId) return setError('Введите номер телефона');
+    if (!isValidPhone(tgId)) return setError('Введите номер телефона, например +79001234567');
     setLoading(true); setError(''); setSuccess('');
     try {
       await api.post('/api/auth/telegram/request-code', { identifier: tgId });
       setOtpSent(true);
       setSuccess('Код отправлен в Telegram');
     } catch (e) {
-      // 429 = cooldown; 400 = identifier unresolvable or bot can't reach user;
-      // 502 = bot network error. Show actionable hints, not raw backend text.
+      // 429 = cooldown; 400 = unknown phone or bot can't reach user; 502 = bot network error.
       if (e.status === 429) {
-        setError('Слишком частые запросы. Попробуйте через минуту.');
+        const sec = e.retry_after;
+        setError(sec
+          ? `Слишком частые запросы. Попробуйте через ${sec} секунд.`
+          : 'Слишком частые запросы. Попробуйте через минуту.');
       } else if (e.status === 400) {
-        const msg = (e.message || '').toLowerCase();
-        if (msg.includes('блок') || msg.includes('chat') || msg.includes('бот не может')) {
-          setError('Бот не может вам написать. Откройте @AVITOPF_bot в Telegram, нажмите Start и попробуйте снова.');
-        } else {
-          setError('Не нашли этот аккаунт в Telegram. Сначала напишите нашему боту @AVITOPF_bot — он сохранит ваш Telegram, после этого можно войти на сайт.');
-        }
+        // Backend message is already user-friendly and mentions /connect.
+        // Bot deep-link is rendered separately under the error alert.
+        setError(e.message || 'Не удалось найти ваш Telegram по этому номеру.');
       } else if (e.status === 502) {
         setError('Не удалось отправить код через Telegram. Попробуйте позже.');
       } else {
-        setError('Ошибка отправки кода. Попробуйте позже.');
+        setError(e.message || 'Ошибка отправки кода. Попробуйте позже.');
       }
     } finally { setLoading(false); }
   };
@@ -148,21 +156,37 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
       <div className="card auth-card">
         <div className="auth-card__logo">{logoMark}</div>
         <h2 className="auth-card__title">Вход через Telegram</h2>
-        <p className="auth-card__sub">Введите username или номер телефона — мы отправим код</p>
+        <p className="auth-card__sub">Введите номер телефона — мы отправим код</p>
         <div className="auth-form">
-          {error && <div className="alert alert--error">{error}</div>}
+          {error && (
+            <div className="alert alert--error">
+              {error}
+              <div style={{ marginTop: 8, fontSize: '0.875rem' }}>
+                <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                  Открыть @AVITOPF_bot
+                </a>
+              </div>
+            </div>
+          )}
           {success && <div className="alert alert--success">{success}</div>}
           {!otpSent ? (
             <>
               <div className="form-field">
-                <label className="form-label">Username или телефон</label>
+                <label className="form-label">Номер телефона</label>
                 <input
                   className="input"
-                  placeholder="@username или +79001234567"
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+7 900 123-45-67"
                   value={tgId}
                   onChange={e => setTgId(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
                 />
+                <div className="form-hint">
+                  Если бот ещё не знает ваш номер, откройте{' '}
+                  <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>@AVITOPF_bot</a>
+                  {' '}и отправьте <code>/connect</code>
+                </div>
               </div>
               <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
                 {loading ? 'Отправка...' : 'Получить код в Telegram'}
@@ -188,7 +212,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate }) => {
                 {loading ? 'Проверка...' : 'Войти →'}
               </button>
               <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
-                ← Изменить username
+                ← Изменить номер
               </button>
             </>
           )}

@@ -36,15 +36,37 @@ function ProfilePage({ user, onNavigate }) {
     }
   };
 
+  const isValidPhone = (raw) => {
+    const cleaned = (raw || '').replace(/[^\d+]/g, '');
+    if (/^\+\d{10,15}$/.test(cleaned)) return true;
+    if (/^\d{10,11}$/.test(cleaned)) return true;
+    return false;
+  };
+
   const handleRequestTgCode = async () => {
     if (!tgInput) return;
+    if (!isValidPhone(tgInput)) {
+      setTgError('Введите номер телефона, например +79001234567');
+      return;
+    }
     setTgError('');
     try {
       await api.post('/api/auth/link/telegram/request-code', { identifier: tgInput });
       setTgStep('sent');
     } catch (e) {
-      if (e.status === 429) setTgError('Подождите перед повторной отправкой');
-      else setTgError(e.message || 'Ошибка отправки кода');
+      if (e.status === 429) {
+        const sec = e.retry_after;
+        setTgError(sec
+          ? `Подождите ${sec} секунд перед повторной отправкой`
+          : 'Подождите перед повторной отправкой');
+      } else if (e.status === 400) {
+        // Backend message already mentions /connect; bot deep-link rendered separately.
+        setTgError(e.message || 'Не удалось найти ваш Telegram по этому номеру.');
+      } else if (e.status === 502) {
+        setTgError('Не удалось отправить код через Telegram. Попробуйте позже.');
+      } else {
+        setTgError(e.message || 'Ошибка отправки кода');
+      }
     }
   };
 
@@ -151,10 +173,30 @@ function ProfilePage({ user, onNavigate }) {
               <div className="alert alert--success">✅ Telegram успешно привязан</div>
             ) : tgStep === 'idle' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {tgError && <div className="alert alert--error">{tgError}</div>}
+                {tgError && (
+                  <div className="alert alert--error">
+                    {tgError}
+                    <div style={{ marginTop: 8, fontSize: '0.875rem' }}>
+                      <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                        Открыть @AVITOPF_bot
+                      </a>
+                    </div>
+                  </div>
+                )}
                 <div className="form-field">
-                  <label className="form-label">Username или номер телефона</label>
-                  <input className="input" placeholder="@username или +79001234567" value={tgInput} onChange={e => setTgInput(e.target.value)} />
+                  <label className="form-label">Номер телефона</label>
+                  <input
+                    className="input"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="+7 900 123-45-67"
+                    value={tgInput}
+                    onChange={e => setTgInput(e.target.value)}
+                  />
+                  <div className="form-hint">
+                    Если бот ещё не знает ваш номер, отправьте <code>/connect</code> боту{' '}
+                    <a href="https://t.me/AVITOPF_bot" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 600 }}>@AVITOPF_bot</a>
+                  </div>
                 </div>
                 <button className="btn btn--secondary" onClick={handleRequestTgCode} disabled={!tgInput}>
                   ✈ Получить код в Telegram

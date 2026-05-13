@@ -17,17 +17,16 @@ function parseLinksStr(s) {
     .filter(l => l.startsWith('http'));
 }
 
-function OrderAccordionCard({ order: o }) {
-  const [open, setOpen] = useOrdersState(false);
-  const links = parseLinksStr(o.links);
+function OrderMobileCard({ order: o, onNavigate }) {
   return (
-    <div style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => setOpen(v => !v)}>
+    <div style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
+         onClick={() => onNavigate('order-detail', o)}>
       <div style={{ padding: '14px 16px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{o.position_name}</div>
+            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{displayServiceName(o)}</div>
             <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>
-              #{o.order_id} · {o.date ? new Date(o.date).toLocaleDateString('ru-RU') : '—'}
+              #{o.order_id} · {o.date || '—'}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -38,32 +37,11 @@ function OrderAccordionCard({ order: o }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>
-            {open ? '▲ Скрыть' : '▼ Подробнее'}
+          <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
+            Подробнее →
           </span>
         </div>
       </div>
-      {open && (
-        <div style={{ padding: '0 16px 16px', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: '0.8125rem', color: 'var(--text-2)' }}>
-            <div><strong>Контакты:</strong> {o.contacts ? 'Да' : 'Нет'}</div>
-            {links.length > 0 && (
-              <div>
-                <strong>Ссылки ({links.length}):</strong>
-                <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  {links.map((l, i) => (
-                    <a key={i} href={l} target="_blank" rel="noopener"
-                       style={{ fontSize: '0.75rem', wordBreak: 'break-all', color: 'var(--primary)' }}
-                       onClick={e => e.stopPropagation()}>
-                      {l.replace('https://www.avito.ru', 'avito.ru')}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -149,13 +127,13 @@ function OrdersPage({ onNavigate }) {
                     {filtered.map(o => {
                       const links = parseLinksStr(o.links);
                       return (
-                        <tr key={o.order_id}>
+                        <tr key={o.order_id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
                           <td style={{ color: 'var(--text-3)', fontWeight: 600 }}>#{o.order_id}</td>
-                          <td style={{ fontWeight: 600 }}>{o.position_name}</td>
+                          <td style={{ fontWeight: 600 }}>{displayServiceName(o)}</td>
                           <td><span style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</span></td>
                           <td><StatusBadge status={o.status} /></td>
                           <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                            {o.date ? new Date(o.date).toLocaleDateString('ru-RU') : '—'}
+                            {o.date || '—'}
                           </td>
                           <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>
                             {links.length > 0 ? `${links.length} ссылк.` : '—'}
@@ -168,7 +146,7 @@ function OrdersPage({ onNavigate }) {
               </div>
 
               <div className="card mobile-only" style={{ overflow: 'hidden' }}>
-                {filtered.map(o => <OrderAccordionCard key={o.order_id} order={o} />)}
+                {filtered.map(o => <OrderMobileCard key={o.order_id} order={o} onNavigate={onNavigate} />)}
               </div>
 
               {totalPages > 1 && (

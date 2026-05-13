@@ -38,6 +38,11 @@ function NavLink({ label, active, onClick, icon }) {
   );
 }
 
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNavigate, onLogout }) {
   const [menuOpen, setMenuOpen] = useHeaderState(false);
   const [userDropOpen, setUserDropOpen] = useHeaderState(false);
@@ -102,9 +107,9 @@ function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNa
         {/* Landing nav links — desktop */}
         {isLanding && (
           <nav className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 20 }}>
-            <NavLink label="Услуги" active={false} onClick={() => {}} />
-            <NavLink label="FAQ" active={false} onClick={() => {}} />
-            <NavLink label="Контакты" active={false} onClick={() => {}} />
+            <NavLink label="Услуги" active={false} onClick={() => scrollToSection('services')} />
+            <NavLink label="FAQ" active={false} onClick={() => scrollToSection('faq')} />
+            <NavLink label="Контакты" active={false} onClick={() => scrollToSection('contacts')} />
           </nav>
         )}
 
@@ -120,13 +125,16 @@ function AppHeader({ route, user, balance, brandName, theme, onToggleTheme, onNa
             </div>
           )}
 
-          {/* Theme toggle */}
+          {/* Theme toggle — sun/moon pill switch */}
           <button
-            className="theme-btn"
+            className={`theme-toggle theme-toggle--${theme}`}
             onClick={onToggleTheme}
             title={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+            aria-label="Переключить тему"
           >
-            {theme === 'dark' ? '○' : '●'}
+            <span className="theme-toggle__opt theme-toggle__opt--sun" aria-hidden="true">☀</span>
+            <span className="theme-toggle__opt theme-toggle__opt--moon" aria-hidden="true">☾</span>
+            <span className="theme-toggle__thumb" />
           </button>
 
           {/* Auth buttons — landing desktop */}

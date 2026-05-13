@@ -15,6 +15,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   // Apply theme + variant to <html>
   useEffect(() => {
@@ -70,8 +71,8 @@ function App() {
     setRoute('landing');
   };
 
-  const handleNavigate = (target) => {
-    if (['cabinet', 'order-pf', 'orders', 'profile'].includes(target) && !user) {
+  const handleNavigate = (target, payload) => {
+    if (['cabinet', 'order-pf', 'orders', 'profile', 'order-detail'].includes(target) && !user) {
       setAuthMode('login');
       setRoute('auth');
       return;
@@ -80,6 +81,9 @@ function App() {
       setAuthMode(target);
       setRoute('auth');
       return;
+    }
+    if (target === 'order-detail') {
+      setSelectedOrder(payload || null);
     }
     setRoute(target);
   };
@@ -110,6 +114,7 @@ function App() {
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
       case 'order-pf': return <OrderFormPage balance={balance} onNavigate={handleNavigate} onOrderPlaced={handleOrderPlaced} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
+      case 'order-detail': return <OrderDetailPage order={selectedOrder} onNavigate={handleNavigate} />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} />;
       default:         return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
     }
@@ -119,6 +124,7 @@ function App() {
     <div>
       <AppHeader {...headerProps} />
       {renderScreen()}
+      {user && <SupportChat />}
     </div>
   );
 }

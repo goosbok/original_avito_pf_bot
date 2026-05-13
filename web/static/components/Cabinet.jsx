@@ -1,5 +1,6 @@
-// Cabinet — dashboard: balance, catalog, orders, refill, support chat
-const { useState: useCabinetState, useEffect: useCabinetEffect, useRef: useCabinetRef } = React;
+// Cabinet — dashboard: balance, catalog, recent orders, refill.
+// SupportChat is mounted at the app root (web/static/components/SupportChat.jsx).
+const { useState: useCabinetState, useEffect: useCabinetEffect } = React;
 
 const SERVICES = [
   { id: 'pf',      abbr: 'ПФ',  name: 'Авито ПФ',    desc: 'Просмотры, лайки, контакты для объявлений', price: 'от 6 ₽/ПФ', available: true,  route: 'order-pf' },
@@ -18,112 +19,18 @@ function StatusBadge({ status }) {
   return <span className={`badge badge--${map[status] || 'muted'}`}>{labels[status] || status}</span>;
 }
 
-function SupportChat({ chatOpen, setChatOpen }) {
-  const [messages, setMessages] = useCabinetState([]);
-  const [input, setInput] = useCabinetState('');
-  const [unread, setUnread] = useCabinetState(0);
-  const [sending, setSending] = useCabinetState(false);
-  const msgEndRef = useCabinetRef(null);
-  const lastIdRef = useCabinetRef(0);
-  const pollRef = useCabinetRef(null);
-
-  const loadMessages = async (since = 0) => {
-    try {
-      const msgs = await api.get('/api/support/messages?since_id=' + since);
-      if (msgs.__unauthorized) return;
-      if (msgs.length > 0) {
-        setMessages(prev => [...prev, ...msgs]);
-        lastIdRef.current = msgs[msgs.length - 1].id;
-        if (!chatOpen) setUnread(u => u + msgs.filter(m => m.direction === 'admin').length);
-      }
-    } catch (_) {}
-  };
-
-  useCabinetEffect(() => {
-    loadMessages(0);
-    pollRef.current = setInterval(() => loadMessages(lastIdRef.current), 3000);
-    return () => clearInterval(pollRef.current);
-  }, []);
-
-  useCabinetEffect(() => {
-    if (chatOpen) setUnread(0);
-  }, [chatOpen]);
-
-  useCabinetEffect(() => {
-    if (msgEndRef.current) {
-      msgEndRef.current.scrollTop = msgEndRef.current.scrollHeight;
-    }
-  }, [messages, chatOpen]);
-
-  const sendMessage = async () => {
-    if (!input.trim() || sending) return;
-    const text = input.trim();
-    setInput('');
-    setSending(true);
-    const optimistic = {
-      id: Date.now(),
-      direction: 'user',
-      text,
-      created_at: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    };
-    setMessages(m => [...m, optimistic]);
-    try {
-      await api.post('/api/support/messages', { text });
-    } catch (_) {}
-    setSending(false);
-  };
-
-  return (
-    <div className="chat-widget">
-      {chatOpen && (
-        <div className="chat-panel">
-          <div className="chat-panel__header">
-            <div className="chat-panel__header-avatar" style={{ fontWeight: 700, fontSize: '0.875rem' }}>ТП</div>
-            <div className="chat-panel__header-info">
-              <div className="chat-panel__header-name">Поддержка</div>
-              <div className="chat-panel__header-status">● Онлайн</div>
-            </div>
-            <button className="chat-panel__close" onClick={() => setChatOpen(false)}>✕</button>
-          </div>
-          <div className="chat-messages" ref={msgEndRef}>
-            {messages.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-3)', fontSize: '0.8125rem', padding: '20px 0' }}>
-                Напишите ваш вопрос — поддержка ответит в Telegram
-              </div>
-            )}
-            {messages.map(m => (
-              <div key={m.id} className={`chat-msg chat-msg--${m.direction}`}>
-                <div className="chat-msg__bubble">{m.text}</div>
-                <div className="chat-msg__time">{typeof m.created_at === 'string' ? m.created_at.slice(11, 16) : m.created_at}</div>
-              </div>
-            ))}
-          </div>
-          <div className="chat-input-row">
-            <input
-              className="chat-input"
-              placeholder="Сообщение..."
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && sendMessage()}
-            />
-            <button className="chat-send-btn" onClick={sendMessage} title="Отправить" disabled={sending}>➤</button>
-          </div>
-        </div>
-      )}
-      <button className="chat-widget__btn" onClick={() => setChatOpen(v => !v)} title="Поддержка">
-        {chatOpen ? '×' : 'Чат'}
-        {!chatOpen && unread > 0 && <span className="chat-widget__badge">{unread}</span>}
-      </button>
-    </div>
-  );
+// Backend stores Авито PF orders with position_name like "7/30" (days/views).
+// Display nicer service name in tables.
+function displayServiceName(o) {
+  if (/^\d+\/\d+$/.test(String(o.position_name || ''))) return 'Авито ПФ';
+  return o.position_name || '—';
 }
 
 function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) {
   const [recentOrders, setRecentOrders] = useCabinetState([]);
   const [refillAmount, setRefillAmount] = useCabinetState(1000);
-  const [refillStatus, setRefillStatus] = useCabinetState(null); // null | 'pending' | 'polling' | 'success' | 'error'
+  const [refillStatus, setRefillStatus] = useCabinetState(null);
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
-  const [chatOpen, setChatOpen] = useCabinetState(false);
 
   useCabinetEffect(() => {
     api.get('/api/orders?page=1&page_size=5').then(data => {
@@ -169,7 +76,6 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
       <div className="cabinet">
         <div className="container">
 
-          {/* Welcome strip + Balance widget */}
           <div className="cabinet-top-row" style={{
             display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
             gap: 16, flexWrap: 'wrap', marginBottom: 28
@@ -183,7 +89,6 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
               </p>
             </div>
 
-            {/* Balance card */}
             <div className="card cabinet-balance-card" style={{ padding: '16px 20px', minWidth: 260, flex: '0 0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Баланс</span>
@@ -203,9 +108,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
-                  className="input"
-                  type="number"
-                  min={100}
+                  className="input" type="number" min={100}
                   value={refillAmount}
                   onChange={e => setRefillAmount(Number(e.target.value))}
                   placeholder="Сумма"
@@ -297,12 +200,12 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                       </thead>
                       <tbody>
                         {recentOrders.map(o => (
-                          <tr key={o.order_id}>
+                          <tr key={o.order_id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
                             <td style={{ color: 'var(--text-3)', fontWeight: 600 }}>#{o.order_id}</td>
-                            <td style={{ fontWeight: 600 }}>{o.position_name}</td>
+                            <td style={{ fontWeight: 600 }}>{displayServiceName(o)}</td>
                             <td style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</td>
                             <td><StatusBadge status={o.status} /></td>
-                            <td style={{ color: 'var(--text-3)' }}>{o.date ? new Date(o.date).toLocaleDateString('ru-RU') : '—'}</td>
+                            <td style={{ color: 'var(--text-3)' }}>{o.date || '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -310,11 +213,11 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                   </div>
                   <div className="mobile-only">
                     {recentOrders.map(o => (
-                      <div key={o.order_id} className="order-card-mobile">
+                      <div key={o.order_id} className="order-card-mobile" style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{o.position_name}</div>
-                            <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>#{o.order_id} · {o.date ? new Date(o.date).toLocaleDateString('ru-RU') : '—'}</div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{displayServiceName(o)}</div>
+                            <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>#{o.order_id} · {o.date || '—'}</div>
                           </div>
                           <StatusBadge status={o.status} />
                         </div>
@@ -329,10 +232,8 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
 
         </div>
       </div>
-
-      <SupportChat chatOpen={chatOpen} setChatOpen={setChatOpen} />
     </div>
   );
 }
 
-Object.assign(window, { CabinetPage, StatusBadge });
+Object.assign(window, { CabinetPage, StatusBadge, displayServiceName });

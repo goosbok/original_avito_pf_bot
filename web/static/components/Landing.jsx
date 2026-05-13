@@ -145,7 +145,7 @@ const LandingPage = ({ onNavigate, brandName }) => {
       </div>
 
       {/* Services */}
-      <section className="landing-services">
+      <section className="landing-services" id="services">
         <div className="container">
           <h2 className="landing-services__title">Каталог услуг</h2>
           <div className="services-grid">
@@ -239,7 +239,7 @@ const LandingPage = ({ onNavigate, brandName }) => {
       </section>
 
       {/* FAQ */}
-      <section style={{ padding: '60px 0' }}>
+      <section id="faq" style={{ padding: '60px 0' }}>
         <div className="container" style={{ maxWidth: 720 }}>
           <h2 style={{ textAlign: 'center', marginBottom: 8 }}>Частые вопросы</h2>
           <p style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '0.9rem', marginBottom: 36 }}>
@@ -267,6 +267,50 @@ const LandingPage = ({ onNavigate, brandName }) => {
                 Email-регистрация
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contacts */}
+      <section id="contacts" style={{ padding: '60px 0', background: 'var(--surface)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+        <div className="container" style={{ maxWidth: 760 }}>
+          <h2 style={{ textAlign: 'center', marginBottom: 8 }}>Контакты</h2>
+          <p style={{ textAlign: 'center', color: 'var(--text-2)', fontSize: '0.9rem', marginBottom: 36 }}>
+            Свяжитесь удобным способом — отвечаем в течение рабочего дня
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+            {[
+              { label: 'Поддержка', desc: '@avito_pf_otzizi', href: 'https://t.me/avito_pf_otzizi', icon: '💬', primary: true },
+              { label: 'Бот для заказа', desc: '@AVITOPF_bot', href: 'https://t.me/AVITOPF_bot', icon: '🤖' },
+              { label: 'Telegram-канал', desc: '@pf_avito_top', href: 'https://t.me/pf_avito_top', icon: '📣' },
+            ].map((c, i) => (
+              <a
+                key={i}
+                href={c.href}
+                target="_blank"
+                rel="noopener"
+                className="card card--hover"
+                style={{
+                  padding: '24px 22px',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  textAlign: 'center',
+                  gap: 8,
+                  borderTop: c.primary ? '3px solid var(--primary)' : undefined,
+                }}
+              >
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12,
+                  background: 'var(--primary-dim)', color: 'var(--primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '1.5rem',
+                }}>{c.icon}</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-1)' }}>{c.label}</div>
+                <div style={{ fontSize: '0.875rem', color: 'var(--primary)', fontWeight: 600 }}>{c.desc}</div>
+              </a>
+            ))}
           </div>
         </div>
       </section>

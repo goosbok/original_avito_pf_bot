@@ -230,6 +230,51 @@ p  { line-height: 1.65; }
 }
 .theme-btn:hover { background: var(--surface-2); border-color: var(--text-3); }
 
+/* Theme toggle — pill switch with sun (left) / moon (right) */
+.theme-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 58px;
+  height: 28px;
+  padding: 2px;
+  border: 1.5px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { border-color: var(--text-3); }
+.theme-toggle__opt {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  z-index: 1;
+  transition: color 0.15s;
+  color: var(--text-3);
+  user-select: none;
+}
+.theme-toggle--light .theme-toggle__opt--sun  { color: #f0a500; }
+.theme-toggle--dark  .theme-toggle__opt--moon { color: #b9c4ff; }
+.theme-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  width: 24px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  transition: left 0.18s cubic-bezier(0.4, 0.0, 0.2, 1);
+  pointer-events: none;
+}
+.theme-toggle--light .theme-toggle__thumb { left: 2px; }
+.theme-toggle--dark  .theme-toggle__thumb { left: 30px; }
+
 /* ===== LANDING ===== */
 .landing-hero {
   background: var(--hero-grad);

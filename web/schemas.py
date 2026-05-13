@@ -56,6 +56,7 @@ class ProfileResponse(BaseModel):
     user_name: str | None
     first_name: str | None
     balance: int
+    is_admin: bool = False
 
 
 class ProviderInfo(BaseModel):

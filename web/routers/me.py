@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from services import identity
 from services.exceptions import UserNotFound
+from web.admin_deps import is_admin
 from web.deps import require_user
 from web.schemas import ProfileResponse, ProviderInfo
 
@@ -19,6 +20,7 @@ async def get_me(user_id: int = Depends(require_user)) -> ProfileResponse:
         user_name=u.user_name,
         first_name=u.first_name,
         balance=u.balance,
+        is_admin=is_admin(u.id),
     )
 
 

@@ -140,3 +140,45 @@ class SupportMessageItem(BaseModel):
     direction: str
     text: str
     created_at: str
+
+
+class AdminUserSummary(BaseModel):
+    user_id: int
+    user_name: str | None
+    first_name: str | None
+    balance: int
+    is_vip: bool
+    reg_date: str | None
+
+
+class AdminUserListResponse(BaseModel):
+    items: list[AdminUserSummary]
+    total: int
+    page: int
+    page_size: int
+
+
+class AdminUserDetail(BaseModel):
+    user_id: int
+    user_name: str | None
+    first_name: str | None
+    balance: int
+    is_vip: bool
+    reg_date: str | None
+    providers: list[ProviderInfo]
+    recent_orders: list[OrderItem]
+
+
+class AdminBalanceAdjust(BaseModel):
+    delta: int = Field(gt=0, le=1_000_000, description="Positive integer; manual credit")
+    reason: str = Field(min_length=1, max_length=200)
+
+
+class AdminBalanceAdjustResponse(BaseModel):
+    user_id: int
+    balance_before: int
+    balance_after: int
+
+
+class AdminVipToggle(BaseModel):
+    is_vip: bool

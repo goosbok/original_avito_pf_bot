@@ -910,10 +910,10 @@ def del_admin_kb(buttons_per_row=2, show_nick=True, show_id=False):
     buttons = []
     for admin in admins:
         user = get_user(id=admin)
-        if user['user_name']:
+        if user and user['user_name']:
             user_name = user['user_name']
         else:
-            user_name = 'Нет имени'
+            user_name = str(admin)
         button = InlineKeyboardButton(
             text=f"❎{user_name}",
             callback_data=f"del_admin:{admin}"

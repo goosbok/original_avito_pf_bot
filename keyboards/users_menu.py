@@ -506,54 +506,29 @@ def show_user_order_by_index(index, orders_cnt):
                 callback_data=f"repeat:{index}"
             )
         )
+        if orders_cnt > 1:
+            nav_buttons = []
+            if index > 0:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="◀️ Пред.",
+                    callback_data=f"ordr:{index-1}"
+                ))
+            nav_buttons.append(InlineKeyboardButton(
+                text=f"{index+1} / {orders_cnt}",
+                callback_data="user_show_all:orders"
+            ))
+            if index < orders_cnt - 1:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="След. ▶️",
+                    callback_data=f"ordr:{index+1}"
+                ))
+            keyboard.row(*nav_buttons)
         keyboard.add(
             InlineKeyboardButton(
-                text="📖Все заказы",
+                text="📖 Все заказы",
                 callback_data="user_show_all:orders"
             )
         )
-        if orders_cnt !=1:
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #1",
-                    callback_data=f"ordr:0"
-                )
-            )
-            if index == 0:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    )
-                )
-            elif index != 0 and index < orders_cnt - 1:
-                keyboard.row(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    ),
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    ),
-                )
-            else:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    )
-                )
-
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #{orders_cnt}",
-                    callback_data=f"ordr:{orders_cnt-1}"
-                )
-            )
-    else:
-        pass
-
     keyboard.row(
         InlineKeyboardButton(
             text=profile,

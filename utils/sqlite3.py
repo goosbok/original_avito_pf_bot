@@ -28,25 +28,10 @@ def query(sql, parameters: dict):
 
 
 # Форматирование запроса с аргументами
-def query_args(sql, parameters: dict):
-    sql = f"{sql} WHERE "
-
-    sql += " AND ".join([
-        f"{item} = ?" for item in parameters
-    ])
-
-    return sql, list(parameters.values())
-
-
 def str2dict(str_value):
     result_dict = ast.literal_eval(str_value)
 
     return result_dict
-
-def dict2str(input_dict):
-    # Преобразуем словарь в строку JSON
-    json_string = json.dumps(input_dict)
-    return json_string
 ################################################################################################
 ##################################         Настройки          ##################################
 ################################################################################################
@@ -468,26 +453,6 @@ def add_report_exclude(user_id):
 ################################################################################################
 
 # Регистрация пользователя в БД
-def register_user(id, user_name, first_name):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        """
-        con.execute("INSERT OR IGNORE INTO users("
-                    "id, user_name, first_name, balance, reg_date, ref_user_name, ref_id, is_vip, magic, referals) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?)", [id, user_name, first_name, 0, get_date(), None, None, None, None, None])
-        """
-        if not user_name:
-            user_name = None
-        first_name = first_name.replace("'", '`').replace("<", '«').replace(">", '»')
-        try:
-            con.execute("INSERT INTO users("
-                    "id, user_name, first_name, balance, reg_date, ref_user_name, ref_id, is_vip, magic, referals) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?)", [id, user_name, first_name, 0, get_date(), None, None, None, None, None])
-            con.commit()
-            print(f"User {Fore.GREEN}@{user_name} ({id}){Fore.RESET} has been successfully registered!")
-        except Exception as e:
-            print(f"{Fore.RED}Error registration user:{Fore.RESET}\n{e}")
-
 # Получение пользователя из БД
 def get_user(**kwargs):
     with sqlite3.connect(path_db) as con:
@@ -596,14 +561,6 @@ def get_orders_batch(limit=1000, offset=0):
         sql = "SELECT * FROM orders LIMIT ? OFFSET ?"
         return con.execute(sql, (limit, offset)).fetchall()
 
-# Получение общего количества заказов
-def get_orders_count():
-    """Возвращает общее количество заказов"""
-    with sqlite3.connect(path_db) as con:
-        sql = "SELECT COUNT(*) as count FROM orders"
-        result = con.execute(sql).fetchone()
-        return result[0] if result else 0
-
 # Получение всех заказов в зависимости от статуса
 def all_orders_by_status(status):
     array = []
@@ -646,13 +603,6 @@ def get_order_reviews(id):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         return con.execute("SELECT * FROM reviews WHERE increment = ?", (id,)).fetchone()
-
-# Удаление заказа
-def delete_order_reviews(id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        con.execute("DELETE FROM reviews WHERE increment = ?", (id,))
-        con.commit()
 
 # Редактирование заказа
 def edit_order_reviews(status, order):
@@ -702,13 +652,6 @@ def get_order_delreviews(id):
         con.row_factory = dict_factory
         return con.execute("SELECT * FROM delreviews WHERE increment = ?", (id,)).fetchone()
 
-# Удаление заказа
-def delete_order_delreviews(id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        con.execute("DELETE FROM delreviews WHERE increment = ?", (id,))
-        con.commit()
-
 # Редактирование заказа
 def edit_order_delreviews(status, order):
     with sqlite3.connect(path_db) as con:
@@ -756,22 +699,6 @@ def get_user_last_order_seo(user_id):
 ###############################################################################################
 
 # Добавление пополнения
-def add_refill(amount, user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        con.execute("INSERT INTO refills("
-                    "amount, date, user_id) "
-                    "VALUES (?,?,?)",
-                    [amount, get_date(), user_id])
-        con.commit()
-
-
-# Получение пополнения
-def get_refill(user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM refills WHERE user_id = ?", (user_id,)).fetchone()
-
 def get_user_all_refills(user_id):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
@@ -783,18 +710,6 @@ def all_refills():
         con.row_factory = dict_factory
         sql = "SELECT * FROM refills"
         return con.execute(sql).fetchall()
-
-# Получение общей суммы пополнений
-def all_refills_sum():
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        sql = "SELECT * FROM refills"
-        refills = con.execute(sql).fetchall()
-        summ = 0
-        for refill in refills:
-            summ += refill['amount']
-        return summ
-
 
 ###############################################################################################
 #############################            Промокоды             ################################

@@ -1409,7 +1409,7 @@ def refill_ref_kb(user_id, kb_page_dict={}, page=0, buttons_per_row=2, back='use
     keyboard = InlineKeyboardMarkup()
     buttons = []
     if int(page) > len(kb_page_dict):
-        page = len(page_dict)
+        page = len(kb_page_dict)
     if kb_page_dict:
         for usr_id in kb_page_dict[str(page)]:
             user_str = get_username(usr_id)

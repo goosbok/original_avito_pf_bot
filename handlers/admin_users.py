@@ -7,7 +7,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from data.loader import dp, bot
 from utils.sqlite3 import (
-    get_user, update_user, delete_user, all_users, get_all_vip,
+    get_user, update_user, delete_user, all_users, get_all_vip, get_tg_id_for_user,
 )
 from utils.other import get_user_string_without_first_name
 from keyboards.inline_keyboards import admin_back_kb
@@ -66,6 +66,10 @@ async def del_user(call: types.CallbackQuery):
 @dp.message_handler(state=Admin.del_user)
 async def del_usr(message: types.Message, state: FSMContext):
     delUser = await find_user(message.text)
+    if not delUser:
+        await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+        return
     usr_str = await get_user_string_without_first_name(delUser)
     try:
         delete_user(delUser['id'])
@@ -112,7 +116,9 @@ async def change_balance(message: types.Message, state: FSMContext, user_id: int
     try:
         await message.answer(f"Пользователю {usr_str} установлен баланс <b>{new_balance}руб.</b>", reply_markup=admin_back_kb('users_man'))
         update_user(id=ch_usr['id'], balance=new_balance)
-        await bot.send_message(chat_id=ch_usr['id'], text=f"<b>🤖 Пользователь @{adm_user['user_name']} установил Ваш 💳 баланс на {new_balance}руб.</b>")
+        tg_id = get_tg_id_for_user(ch_usr['id'])
+        if tg_id:
+            await bot.send_message(chat_id=tg_id, text=f"<b>🤖 Пользователь @{adm_user['user_name']} установил Ваш 💳 баланс на {new_balance}руб.</b>")
         await state.finish()
     except Exception as e:
         logger.exception("handler error")
@@ -139,7 +145,9 @@ async def vip_set(message: types.Message, state: FSMContext, user_id: int):
         if usr['is_vip'] != 1:
             update_user(id=usr['id'], is_vip=1)
             await message.answer(f"🐹 Пользователь {usr_str} получил 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            await bot.send_message(chat_id=usr['id'], text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
+            tg_id = get_tg_id_for_user(usr['id'])
+            if tg_id:
+                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
         else:
             await message.answer(f"🐹 Пользователь {usr_str} уже имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
         await state.finish()
@@ -167,7 +175,9 @@ async def vip_unset(message: types.Message, state: FSMContext, user_id: int):
         if usr['is_vip'] != 0:
             update_user(id=usr['id'], is_vip=0)
             await message.answer(f"🐹 Пользователь {usr_str} потерял 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            await bot.send_message(chat_id=usr['id'], text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
+            tg_id = get_tg_id_for_user(usr['id'])
+            if tg_id:
+                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
         else:
             await message.answer(f"🐹 Пользователь {usr_str} не имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
         await state.finish()

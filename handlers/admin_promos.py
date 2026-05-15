@@ -55,6 +55,9 @@ async def call_show_promik(call: types.CallbackQuery, state: FSMContext):
     except:
         logger.debug("could not delete message")
     all_promo = all_promocodes()
+    if not all_promo:
+        await call.message.answer("⚠️ Промокодов нет.", reply_markup=admin_back_kb(page))
+        return
     prm = '\n'.join(['❎' if promo['isactivated'] == 1 else '✅' + f"<code>{promo['code']}</code> цена: {promo['price']} руб." for promo in all_promo])
     await call.message.answer(prm, reply_markup=admin_back_kb(page))
 
@@ -101,6 +104,9 @@ async def call_del_act_promo(call: types.CallbackQuery, state: FSMContext):
 
     all_promo = all_promocodes()
     await call.message.answer("✅Активированные промокоды удалены!")
+    if not all_promo:
+        await call.message.answer("⚠️ Промокодов нет.", reply_markup=admin_back_kb(page))
+        return
     prm = '\n'.join(['❎' if promo['isactivated'] == 1 else '✅' + f"<code>{promo['code']}</code> цена: {promo['price']} руб." for promo in all_promo])
     await call.message.answer(prm, reply_markup=admin_back_kb(page))
 

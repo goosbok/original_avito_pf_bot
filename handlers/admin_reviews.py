@@ -129,7 +129,15 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
     try:
         rev_arr = []
         user = await find_user(message.text)
+        if not user:
+            await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         orders = user_orders_all_reviews(user['id'])
+        if not orders:
+            await message.answer("⚠️ У пользователя нет заказов на отзывы.", reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         STR = get_string('str_new_review_admin_report')
         usr_str = await get_user_string_without_first_name(user)
         for order in orders:
@@ -140,11 +148,13 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
                 status = 'Выполнен'
             elif order['status'] == 'In progress':
                 status = 'Выполняется'
+            else:
+                status = order['status']
             f_price = format_decimal(order['price'])
             STR = STR.format(order['increment'], f_price, usr_str, service, status, order['date'], order['link'])
             rev_arr.append(STR)
 
-        await message.answer(rev_arr[len(rev_arr)-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))
+        await message.answer(rev_arr[-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))
         await state.update_data(orders=orders, array=rev_arr)
     except Exception as e:
         await message.answer(f"⚠️ Ошибка получения заказов пользователя!\n{e}", reply_markup=admin_back_kb('reviews_man'))
@@ -194,12 +204,15 @@ async def admin_call_review_close(call: types.CallbackQuery, state: FSMContext):
 
 @dp.message_handler(state=reviews.close)
 async def review_close(message: types.Message, state: FSMContext):
+    from utils.sqlite3 import get_tg_id_for_user
     try:
         review = get_order_reviews(message.text)
-        if review['status'] == 'Размещен':
-            edit_order_reviews('Выполнен', message.text)
+        if review['status'] == 'Posted':
+            edit_order_reviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
-            await bot.send_message(chat_id=review['user_id'], text=f"<b>🎉 Ваш заказ номер {review['id']} на сервисе {review['service']} успешно выполнен!</b>")
+            tg_id = get_tg_id_for_user(review['user_id'])
+            if tg_id:
+                await bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ номер {review['increment']} на сервисе {review['service']} успешно выполнен!</b>")
         else:
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
     except Exception as e:
@@ -215,11 +228,12 @@ async def admin_call_reviews_gsheets(call: types.CallbackQuery, state: FSMContex
     orders = all_orders_reviews()
     STICKER = get_setting('wait_sticker')
     msg = await call.message.answer("Идет генерация отчета.")
-    stick = await call.message.answer_sticker(STICKER)
+    stick = await call.message.answer_sticker(STICKER) if STICKER else None
     await call.message.answer(sheet_complete, reply_markup=gsheets_url(create_reviews_report(orders)))
     try:
         await bot.delete_message(chat_id=call.message.chat.id, message_id=msg.message_id)
-        await bot.delete_message(chat_id=call.message.chat.id, message_id=stick.message_id)
+        if stick:
+            await bot.delete_message(chat_id=call.message.chat.id, message_id=stick.message_id)
     except:
         pass
 
@@ -239,9 +253,17 @@ async def call_del_rev_user_search(call: types.CallbackQuery, state: FSMContext)
 async def del_reviews_search(message: types.Message, state: FSMContext):
     try:
         user = await find_user(message.text)
+        if not user:
+            await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         orders = user_orders_all_delreviews(user['id'])
+        if not orders:
+            await message.answer("⚠️ У пользователя нет заказов на удаление отзывов.", reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         rev_arr = del_reviews_array(orders=orders)
-        await message.answer(rev_arr[len(rev_arr)-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))
+        await message.answer(rev_arr[-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))
         await state.update_data(orders=orders, array=rev_arr)
     except Exception as e:
         from design import main_menu
@@ -268,12 +290,15 @@ async def admin_call_del_review_close(call: types.CallbackQuery, state: FSMConte
 
 @dp.message_handler(state=del_reviews.close)
 async def del_review_close(message: types.Message, state: FSMContext):
+    from utils.sqlite3 import get_tg_id_for_user
     try:
         del_review = get_order_delreviews(message.text)
-        if del_review['status'] == 'Размещен':
-            edit_order_delreviews('Выполнен', message.text)
+        if del_review['status'] == 'Posted':
+            edit_order_delreviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
-            await bot.send_message(chat_id=del_review['user_id'], text=f"<b>🎉 Ваш заказ на удаление негативного отзыва номер {del_review['increment']} на сервисе {del_review['service']} успешно выполнен!</b>")
+            tg_id = get_tg_id_for_user(del_review['user_id'])
+            if tg_id:
+                await bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ на удаление негативного отзыва номер {del_review['increment']} на сервисе {del_review['service']} успешно выполнен!</b>")
         else:
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
         await state.finish()

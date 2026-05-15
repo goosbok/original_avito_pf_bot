@@ -611,7 +611,6 @@ async def price_min_amount(message: types.Message, state: FSMContext):
         await state.finish()
     else:
         await message.answer('⚠️ Неверное значение! Цена должна быть числом!')
-    await state.finish()
 
 ###############################################################################################
 #############################        Прогрес-бар (inDevel)     ################################

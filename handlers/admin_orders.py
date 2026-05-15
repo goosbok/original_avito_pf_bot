@@ -146,6 +146,10 @@ async def admin_show_user_all_orders(message: types.Message, state: FSMContext):
     try:
         if usr:
             orders = user_orders_all(usr['id'])
+            if not orders:
+                await message.answer(f"⚠️ У пользователя нет заказов.", reply_markup=admin_back_kb('orders_man'))
+                await state.finish()
+                return
             orders_array = listord_array(orders)
             await state.update_data(orders=orders, array=orders_array)
             if 'report_type' not in state_data:
@@ -269,7 +273,7 @@ async def gsheets(call: types.CallbackQuery, state: FSMContext):
 
     STICKER = get_setting('wait_sticker')
     msg = await bot.send_message(chat_id=chat_id, text="⏳ Идет генерация отчета.")
-    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER)
+    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER) if STICKER else None
 
     try:
         sheet_url = create_sheet()
@@ -280,7 +284,8 @@ async def gsheets(call: types.CallbackQuery, state: FSMContext):
     finally:
         try:
             await bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
-            await bot.delete_message(chat_id=chat_id, message_id=stick.message_id)
+            if stick:
+                await bot.delete_message(chat_id=chat_id, message_id=stick.message_id)
         except:
             pass
 
@@ -291,17 +296,21 @@ async def admin_call_orders_by_status(call: types.CallbackQuery, state: FSMConte
         await call.message.delete()
     except:
         logger.debug("could not delete message")
-    orders = all_orders()
     action = call.data.split('_')[1]
-    orders_cnt = 0
     if action == "completed":
         sort_orders = all_orders_by_status('Completed')
     elif action == "posted":
         sort_orders = all_orders_by_status('Posted')
+    else:
+        await call.message.answer("⚠️ Неизвестное действие.", reply_markup=admin_back_kb('orders_man'))
+        return
+    if not sort_orders:
+        await call.message.answer("⚠️ Заказов с таким статусом нет.", reply_markup=admin_back_kb('orders_man'))
+        return
     orders_array = listord_array(sort_orders)
     cnt = len(orders_array)
     await state.update_data(orders=sort_orders, array=orders_array)
-    await call.message.answer(f"Страница {cnt} из {len(orders_array)}\n{orders_array[cnt-1]}",
+    await call.message.answer(f"Страница {cnt} из {cnt}\n{orders_array[cnt-1]}",
         reply_markup=show_admin_order_by_index(cnt - 1, cnt, page='orders_man', all_orders=False))
 
 
@@ -585,11 +594,12 @@ async def magic_gen(message: types.Message, state: FSMContext):
             if orders or user['referals']:
                 STICKER = get_setting('wait_sticker')
                 msg = await message.answer("Идет генерация отчета.")
-                stick = await message.answer_sticker(STICKER)
+                stick = await message.answer_sticker(STICKER) if STICKER else None
                 await message.answer(sheet_complete, reply_markup=gsheets_url(create_orders_report(user['id'])))
                 try:
                     await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
-                    await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
+                    if stick:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
                 except:
                     pass
             else:
@@ -599,11 +609,12 @@ async def magic_gen(message: types.Message, state: FSMContext):
             if refills_list:
                 STICKER = get_setting('wait_sticker')
                 msg = await message.answer("Идет генерация отчета.")
-                stick = await message.answer_sticker(STICKER)
+                stick = await message.answer_sticker(STICKER) if STICKER else None
                 await message.answer(sheet_complete, reply_markup=gsheets_url(create_refills_report(user['id'])))
                 try:
                     await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
-                    await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
+                    if stick:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
                 except:
                     pass
             else:

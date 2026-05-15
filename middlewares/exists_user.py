@@ -43,10 +43,13 @@ class ExistsUserMiddleware(BaseMiddleware):
 
         if is_new:
             logger.info("new user registered: tg_id=%s username=%s", user_id, user_name)
-            await send_admins(
-                f"<b>💎 Зарегистрирован новый пользователь @{user_name} "
-                f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>"
-            )
+            try:
+                await send_admins(
+                    f"<b>💎 Зарегистрирован новый пользователь @{user_name} "
+                    f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>"
+                )
+            except Exception:
+                logger.warning("send_admins failed for new user tg_id=%s", user_id, exc_info=True)
         else:
             db_user = get_user_by_tg_id(user_id)
             if db_user and db_user['user_name'] != user_name:

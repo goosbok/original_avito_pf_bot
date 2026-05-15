@@ -102,7 +102,17 @@ async def on_contact(message: Message, state: FSMContext, user_id: int) -> None:
         )
         return
 
-    await message.answer(
-        "✅ Готово. Теперь на сайте введите этот номер для входа через Telegram.",
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    from data import config as bot_config
+    site_url = getattr(bot_config, "SITE_URL", "")
+    if site_url:
+        await message.answer(
+            f'✅ Готово. <a href="{site_url}">Вернитесь на сайт</a> '
+            "и войдите по этому номеру телефона.",
+            reply_markup=ReplyKeyboardRemove(),
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(
+            "✅ Готово. Теперь на сайте введите этот номер для входа через Telegram.",
+            reply_markup=ReplyKeyboardRemove(),
+        )

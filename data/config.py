@@ -15,6 +15,7 @@ support_tag: str = os.getenv("SUPPORT_TAG", "avito_pf_otzizi")
 ADMINS: list = [int(x) for x in os.getenv("ADMINS", "").split(",") if x.strip()]
 CODER: int = int(os.getenv("CODER", "0"))
 botlink: str = os.getenv("BOT_LINK", "https://t.me/AVITOPF_bot")
+SITE_URL: str = os.getenv("SITE_URL", "")
 channel_link: str = os.getenv("CHANNEL_LINK", "https://t.me/pf_avito_top")
 
 # --- Static pricing config (rarely changes, not secret) ---

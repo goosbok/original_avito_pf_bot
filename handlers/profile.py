@@ -190,7 +190,8 @@ async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext
 async def call_repeat(call: types.CallbackQuery, state: FSMContext, user_id: int):
     index = call.data.split(":")[1]
     order = user_orders_all(user_id)[int(index)]
-    links = order['links'].split('\n')
+    from handlers.pf_order import extract_avito_links
+    links = extract_avito_links(order['links'])
     async with state.proxy() as data:
         data['links'] = links
     image = f"images/avito_pf.jpg"

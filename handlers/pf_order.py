@@ -181,7 +181,8 @@ def extract_avito_links(text: str) -> list:
 
 @dp.message_handler(content_types=ContentType.TEXT, state='place_order')
 async def place_order(message: Message, state: FSMContext):
-    links = extract_avito_links(message.text)
+    state_data = await state.get_data()
+    links = state_data.get('links') or extract_avito_links(message.text)
     if links:
         async with state.proxy() as data:
             if 'links' not in data:

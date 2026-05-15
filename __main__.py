@@ -65,6 +65,13 @@ async def on_startup(dp: Dispatcher):
     # Without this, a stale webhook config (e.g. allowed_updates=["message"])
     # survives bot restarts and silently drops callback_query updates.
     await dp.bot.delete_webhook(drop_pending_updates=False)
+    # Сбрасываем allowed_updates — стale webhook-фильтр выживает после рестарта
+    # и может блокировать callback_query. Вызов get_updates с явным списком фиксит это.
+    await dp.bot.get_updates(offset=-1, limit=1, allowed_updates=[
+        "message", "callback_query", "inline_query", "chosen_inline_result",
+        "shipping_query", "pre_checkout_query", "poll", "poll_answer",
+        "my_chat_member", "chat_member",
+    ])
     _log.info("Webhook cleared, polling with all update types")
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())

@@ -457,9 +457,8 @@ def add_report_exclude(user_id):
 def get_user(**kwargs):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        queryy = "SELECT * FROM users"
-        queryy, params = query_args(queryy, kwargs)
-        return con.execute(queryy, params).fetchone()
+        where = " AND ".join(f"{k} = ?" for k in kwargs)
+        return con.execute(f"SELECT * FROM users WHERE {where}", list(kwargs.values())).fetchone()
 
 
 def get_user_by_tg_id(tg_id):
@@ -737,9 +736,8 @@ def all_promocodes():
 def get_promocode(**kwargs):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        queryy = "SELECT * FROM promocodes"
-        queryy, params = query_args(queryy, kwargs)
-        return con.execute(queryy, params).fetchone()
+        where = " AND ".join(f"{k} = ?" for k in kwargs)
+        return con.execute(f"SELECT * FROM promocodes WHERE {where}", list(kwargs.values())).fetchone()
 
 def update_promocode(increment, **kwargs):
     with sqlite3.connect(path_db) as con:

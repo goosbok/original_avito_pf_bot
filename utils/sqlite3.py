@@ -1,4 +1,5 @@
 # - *- coding: utf- 8 - *-
+import json
 import sqlite3
 import ast
 from colorama import Fore
@@ -314,7 +315,7 @@ def get_price(param):
 
 def edit_price(param, prices):
     req = "UPDATE settings SET value = ? WHERE parametr = ?"
-    prices_str = dict2str(prices)
+    prices_str = json.dumps(prices)
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         con.execute(req, [value, prices_str])

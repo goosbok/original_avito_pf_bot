@@ -259,17 +259,30 @@ def add_setting_to_base(parametr, description, str_value):
 
 #Редактируем строку из базы
 def edit_string(param, value):
-    req = "UPDATE strings SET value = ? WHERE parametr = ?"
+    # UPSERT — defaults live in _STRING_DEFAULTS (not the DB), so a plain UPDATE
+    # silently no-ops when the row hasn't been materialized yet.
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        con.execute(req, [value, param])
+        con.execute(
+            "INSERT INTO strings (parametr, description, value) "
+            "VALUES (?, '', ?) "
+            "ON CONFLICT(parametr) DO UPDATE SET value = excluded.value",
+            [param, value]
+        )
+        con.commit()
 
 #Редактируем настройку из базы
 def edit_setting(param, value):
-    req = "UPDATE settings SET value = ? WHERE parametr = ?"
+    # UPSERT — same reasoning as edit_string above (defaults in _SETTING_DEFAULTS).
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        con.execute(req, [value, param])
+        con.execute(
+            "INSERT INTO settings (parametr, description, value) "
+            "VALUES (?, '', ?) "
+            "ON CONFLICT(parametr) DO UPDATE SET value = excluded.value",
+            [param, value]
+        )
+        con.commit()
 
 def get_string_from_base(env_string):
     with sqlite3.connect(path_db) as con:

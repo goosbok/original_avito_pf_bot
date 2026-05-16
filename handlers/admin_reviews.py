@@ -313,5 +313,5 @@ async def del_review_close(message: types.Message, state: FSMContext):
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
         await state.finish()
     except Exception as e:
-        await message.answer(f'⚠️ Ощибка получения заказа\n{e}', reply_markup=admin_back_kb('reviews_man'))
+        await message.answer(f'⚠️ Ошибка получения заказа\n{e}', reply_markup=admin_back_kb('reviews_man'))
         await state.finish()

@@ -219,8 +219,10 @@ async def review_close(message: types.Message, state: FSMContext):
                 await bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ номер {review['increment']} на сервисе {review['service']} успешно выполнен!</b>")
         else:
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
+        await state.finish()
     except Exception as e:
-        await message.answer(f'⚠️ Ощибка получения заказа\n{e}', reply_markup=admin_back_kb('reviews_man'))
+        await message.answer(f'⚠️ Ошибка получения заказа\n{e}', reply_markup=admin_back_kb('reviews_man'))
+        await state.finish()
 
 
 @dp.callback_query_handler(text="reviews_sheet", state="*")

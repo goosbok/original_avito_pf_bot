@@ -152,6 +152,14 @@ async def admin_call_interface_setup(call: types.CallbackQuery, state: FSMContex
         logger.debug("could not delete message")
     await call.message.answer(text="⚙️ Вы в пункте \"Интерфейс\". Выбирите вариант:", reply_markup=setup_strings_kb())
 
+def _captions_array():
+    return [s for s in get_all_strings() if 'str_' in s['parametr']]
+
+
+def _btn_array():
+    return [s for s in get_all_strings() if 'btn_' in s['parametr']]
+
+
 #Визуальный редактор строк
 @dp.callback_query_handler(text="str_visual_edit", state="*")
 async def admin_call_str_visual_edit(call: types.CallbackQuery, state: FSMContext):
@@ -159,11 +167,10 @@ async def admin_call_str_visual_edit(call: types.CallbackQuery, state: FSMContex
         await call.message.delete()
     except:
         logger.debug("could not delete message")
-    all_str = get_all_strings()
-    captions_array = []
-    for s in all_str:
-        if 'str_' in s['parametr']:
-            captions_array.append(s)
+    captions_array = _captions_array()
+    if not captions_array:
+        await call.message.answer("⚠️ Нет сохранённых строк для редактирования. Сначала добавьте строку через «Переменные».", reply_markup=admin_back_kb('interface_setup'))
+        return
     await call.message.answer(f"Страница 1 из {len(captions_array)}\n{captions_array[0]['value']}", reply_markup=str_visual_edit_kb(0, len(captions_array), 'interface_setup'))
 
 @dp.callback_query_handler(text_startswith="caption:", state="*")
@@ -173,11 +180,10 @@ async def admin_call_str_visual_edit_by_index(call: types.CallbackQuery, state: 
     except:
         logger.debug("could not delete message")
     index = int(call.data.split(":")[1])
-    all_str = get_all_strings()
-    captions_array = []
-    for s in all_str:
-        if 'str_' in s['parametr']:
-            captions_array.append(s)
+    captions_array = _captions_array()
+    if not captions_array or index >= len(captions_array):
+        await call.message.answer("⚠️ Список строк пуст или индекс вне диапазона.", reply_markup=admin_back_kb('interface_setup'))
+        return
     await call.message.answer(f"Страница {index+1} из {len(captions_array)}\n{captions_array[index]['value']}", reply_markup=str_visual_edit_kb(index, len(captions_array), 'interface_setup'))
 
 @dp.callback_query_handler(text_startswith="edit:", state="*")
@@ -196,10 +202,17 @@ async def admin_call_str_visual_edit_param(call: types.CallbackQuery, state: FSM
 async def str_edit_value(message: types.Message, state: FSMContext):
     state_data = await state.get_data()
     index = state_data['index']
-    all_str = get_all_strings()
-    select_string = all_str[index]
+    # Must use the *filtered* captions array — the keyboard's index references
+    # captions_array, not the full strings table.
+    captions_array = _captions_array()
+    if not captions_array or index >= len(captions_array):
+        await message.answer("⚠️ Не удалось определить редактируемую строку.", reply_markup=admin_back_kb('interface_setup'))
+        await state.finish()
+        return
+    select_string = captions_array[index]
     edit_string(select_string['parametr'], message.text)
     await message.answer("Строка успешно изменена!", reply_markup=admin_back_kb(f'caption:{index}'))
+    await state.finish()
 
 #Визуальный редактор кнопок
 @dp.callback_query_handler(text="btn_visual_edit", state="*")
@@ -208,11 +221,10 @@ async def admin_call_btn_visual_edit(call: types.CallbackQuery, state: FSMContex
         await call.message.delete()
     except:
         logger.debug("could not delete message")
-    all_str = get_all_strings()
-    btn_array = []
-    for btn in all_str:
-        if 'btn_' in btn['parametr']:
-            btn_array.append(btn)
+    btn_array = _btn_array()
+    if not btn_array:
+        await call.message.answer("⚠️ Нет сохранённых кнопок для редактирования. Сначала добавьте кнопку через «Переменные».", reply_markup=admin_back_kb('interface_setup'))
+        return
     await call.message.answer(f"Страница 1 из {len(btn_array)}\n{btn_array[0]['value']}", reply_markup=btn_visual_edit_kb(0, len(btn_array), 'interface_setup'))
 
 @dp.callback_query_handler(text_startswith="btn:", state="*")
@@ -222,11 +234,10 @@ async def admin_call_btn_visual_edit_by_index(call: types.CallbackQuery, state: 
     except:
         logger.debug("could not delete message")
     index = int(call.data.split(":")[1])
-    all_str = get_all_strings()
-    btn_array = []
-    for btn in all_str:
-        if 'btn_' in btn['parametr']:
-            btn_array.append(btn)
+    btn_array = _btn_array()
+    if not btn_array or index >= len(btn_array):
+        await call.message.answer("⚠️ Список кнопок пуст или индекс вне диапазона.", reply_markup=admin_back_kb('interface_setup'))
+        return
     await call.message.answer(f"Страница {index+1} из {len(btn_array)}\n{btn_array[index]['value']}", reply_markup=btn_visual_edit_kb(index, len(btn_array), 'interface_setup'))
 
 @dp.callback_query_handler(text_startswith="btn_edit:", state="*")

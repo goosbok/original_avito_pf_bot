@@ -207,6 +207,10 @@ async def review_close(message: types.Message, state: FSMContext):
     from utils.sqlite3 import get_tg_id_for_user
     try:
         review = get_order_reviews(message.text)
+        if not review:
+            await message.answer(f'⚠️ Заказ {message.text} не найден!', reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         if review['status'] == 'Posted':
             edit_order_reviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
@@ -293,6 +297,10 @@ async def del_review_close(message: types.Message, state: FSMContext):
     from utils.sqlite3 import get_tg_id_for_user
     try:
         del_review = get_order_delreviews(message.text)
+        if not del_review:
+            await message.answer(f'⚠️ Заказ {message.text} не найден!', reply_markup=admin_back_kb('reviews_man'))
+            await state.finish()
+            return
         if del_review['status'] == 'Posted':
             edit_order_delreviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))

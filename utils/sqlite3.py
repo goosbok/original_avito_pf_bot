@@ -318,7 +318,7 @@ def edit_price(param, prices):
     prices_str = json.dumps(prices)
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        con.execute(req, [value, prices_str])
+        con.execute(req, [prices_str, param])
 
 #Админы
 def get_admins():

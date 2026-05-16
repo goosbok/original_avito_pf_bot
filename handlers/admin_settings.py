@@ -164,7 +164,7 @@ async def admin_call_str_visual_edit(call: types.CallbackQuery, state: FSMContex
     for s in all_str:
         if 'str_' in s['parametr']:
             captions_array.append(s)
-    await call.message.answer(f"Страница 1 из {len(captions_array)}\n{captions_array[0]['value']}", reply_markup=str_visual_edit_kb(0, len(all_str), 'interface_setup'))
+    await call.message.answer(f"Страница 1 из {len(captions_array)}\n{captions_array[0]['value']}", reply_markup=str_visual_edit_kb(0, len(captions_array), 'interface_setup'))
 
 @dp.callback_query_handler(text_startswith="caption:", state="*")
 async def admin_call_str_visual_edit_by_index(call: types.CallbackQuery, state: FSMContext):
@@ -525,7 +525,7 @@ async def admin_add_report_exclude(message: types.Message, state: FSMContext):
             await message.answer(f'✅ Пользователь {usr_str} исключен из отчетов!', reply_markup=admin_back_kb("admins_setup"))
         else:
             await message.answer(f'⚠️ Пользователь {user_id_str} не найден в базе. Введите ID нового пользователя!')
-            await setup_class.spam_exclude.set()
+            await setup_class.report_exclude.set()
 
 ###############################################################################################
 #############################              Прайс               ################################

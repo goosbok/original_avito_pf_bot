@@ -11,6 +11,23 @@ def get_date():
 
     return this_date
 
+
+def parse_refill_date(value):
+    """Tolerate both legacy '%d.%m.%Y %H:%M:%S' (Telegram path) and ISO-8601
+    with optional 'Z'/timezone offset (web/payments path). Returns None if
+    neither format matches."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    try:
+        return datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+    except (ValueError, TypeError):
+        pass
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
 def format_decimal(value):
     if value is None or value == "":
         value = 0

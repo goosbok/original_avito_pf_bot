@@ -235,13 +235,19 @@ async def admin_call_reviews_gsheets(call: types.CallbackQuery, state: FSMContex
     STICKER = get_setting('wait_sticker')
     msg = await call.message.answer("Идет генерация отчета.")
     stick = await call.message.answer_sticker(STICKER) if STICKER else None
-    await call.message.answer(sheet_complete, reply_markup=gsheets_url(create_reviews_report(orders)))
     try:
-        await bot.delete_message(chat_id=call.message.chat.id, message_id=msg.message_id)
-        if stick:
-            await bot.delete_message(chat_id=call.message.chat.id, message_id=stick.message_id)
-    except:
-        pass
+        report_url = create_reviews_report(orders)
+        await call.message.answer(sheet_complete, reply_markup=gsheets_url(report_url))
+    except Exception:
+        logger.exception('googlesheets: failed to create reviews report')
+        await call.message.answer("⚠️ Ошибка при генерации отчета!", reply_markup=admin_back_kb('reviews_man'))
+    finally:
+        try:
+            await bot.delete_message(chat_id=call.message.chat.id, message_id=msg.message_id)
+            if stick:
+                await bot.delete_message(chat_id=call.message.chat.id, message_id=stick.message_id)
+        except:
+            pass
 
 
 @dp.callback_query_handler(text="del_rev_user_search", state='*')

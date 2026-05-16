@@ -24,6 +24,7 @@ from utils.sqlite3 import (
 from utils.other import (
     get_user_string_without_first_name, get_user_string_with_first_name,
     get_days_suffix, format_decimal, split_messages, decline_order,
+    parse_refill_date,
 )
 from design import (
     listord_array, order_text,
@@ -255,8 +256,12 @@ async def order_input_id(call: types.CallbackQuery, state: FSMContext):
 @dp.message_handler(state=Order1.order)
 async def order_finish(message: types.Message, state: FSMContext):
     order = message.text
-    edit_order(status="Completed", order=order)
     order1 = get_order(order)
+    if not order1:
+        await bot.send_message(chat_id=message.from_user.id, text=f"⚠️ Заказ {order} не найден!", reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
+    edit_order(status="Completed", order=order)
     internal_id = order1['user_id']
     tg_id = get_tg_id_for_user(internal_id)
     if tg_id:
@@ -598,13 +603,19 @@ async def magic_gen(message: types.Message, state: FSMContext):
                 STICKER = get_setting('wait_sticker')
                 msg = await message.answer("Идет генерация отчета.")
                 stick = await message.answer_sticker(STICKER) if STICKER else None
-                await message.answer(sheet_complete, reply_markup=gsheets_url(create_orders_report(user['id'])))
                 try:
-                    await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
-                    if stick:
-                        await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
-                except:
-                    pass
+                    report_url = create_orders_report(user['id'])
+                    await message.answer(sheet_complete, reply_markup=gsheets_url(report_url))
+                except Exception:
+                    logger.exception('googlesheets: failed to create orders report')
+                    await message.answer("⚠️ Ошибка при генерации отчета!")
+                finally:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
+                        if stick:
+                            await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
+                    except:
+                        pass
             else:
                 await message.answer("⚠️ Пользователь не оставил заказов!")
         elif magic_command == "refills":
@@ -613,13 +624,19 @@ async def magic_gen(message: types.Message, state: FSMContext):
                 STICKER = get_setting('wait_sticker')
                 msg = await message.answer("Идет генерация отчета.")
                 stick = await message.answer_sticker(STICKER) if STICKER else None
-                await message.answer(sheet_complete, reply_markup=gsheets_url(create_refills_report(user['id'])))
                 try:
-                    await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
-                    if stick:
-                        await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
-                except:
-                    pass
+                    report_url = create_refills_report(user['id'])
+                    await message.answer(sheet_complete, reply_markup=gsheets_url(report_url))
+                except Exception:
+                    logger.exception('googlesheets: failed to create refills report')
+                    await message.answer("⚠️ Ошибка при генерации отчета!")
+                finally:
+                    try:
+                        await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id)
+                        if stick:
+                            await bot.delete_message(chat_id=message.chat.id, message_id=stick.message_id)
+                    except:
+                        pass
             else:
                 await message.answer("⚠️ Пользователь не вносил деньги!")
     else:
@@ -748,7 +765,9 @@ async def call_money_by_year(call: types.CallbackQuery, state: FSMContext):
 
     years_array = []
     for refill in refills_list:
-        refill_date = datetime.strptime(refill['date'], "%d.%m.%Y %H:%M:%S")
+        refill_date = parse_refill_date(refill['date'])
+        if refill_date is None:
+            continue
         if refill_date.year not in years_array:
             years_array.append(refill_date.year)
 
@@ -768,7 +787,9 @@ async def call_money_by_month(call: types.CallbackQuery, state: FSMContext):
 
     months_array = []
     for refill in refills_list:
-        refill_date = datetime.strptime(refill['date'], "%d.%m.%Y %H:%M:%S")
+        refill_date = parse_refill_date(refill['date'])
+        if refill_date is None:
+            continue
         if refill_date.year == int(year) and refill_date.month not in months_array:
             months_array.append(refill_date.month)
 
@@ -796,7 +817,9 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
     year = state_data.get('year')
 
     for refill in refills_list:
-        refill_date = datetime.strptime(refill['date'], "%d.%m.%Y %H:%M:%S")
+        refill_date = parse_refill_date(refill['date'])
+        if refill_date is None:
+            continue
         if refill_date.month == int(month) and refill_date.year == int(year):
             if str(refill['user_id']) not in get_report_exclude():
                 total_money += refill['amount']

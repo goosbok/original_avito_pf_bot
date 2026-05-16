@@ -209,6 +209,10 @@ async def admin_call_show_all_orders(call: types.CallbackQuery, state: FSMContex
 @dp.message_handler(state=Order.order)
 async def order_work_start(message: types.Message, state: FSMContext):
     order = get_order(id=message.text)
+    if not order:
+        await message.answer(f"⚠️ Заказ {message.text} не найден!", reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
     STR = get_string('str_order_text')
     inc = order['increment']
     price = format_decimal(order['price'])
@@ -579,8 +583,7 @@ async def magic_gen(message: types.Message, state: FSMContext):
         user = state_data['old_user']
     else:
         user = await find_user(param)
-    if 'page' in state_data:
-        page = state_data['page']
+    page = state_data.get('page', 'magic')
     if user:
         if magic_command == "generate":
             STR = await generate_link(user['id'])

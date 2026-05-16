@@ -150,6 +150,7 @@ async def add_custom_promo_price(message: types.Message, state: FSMContext):
     else:
         await message.answer("❎Некорректная стоимость промокода!")
         await Admin.new_promik.set()
+        return
     promocode_data = await state.get_data()
     code = promocode_data['new_prom']
     if add_promocode(code, int(price)):

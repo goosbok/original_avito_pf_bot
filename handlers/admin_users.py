@@ -94,6 +94,10 @@ async def usr_balance(call: types.CallbackQuery):
 @dp.message_handler(state=balance.select_user)
 async def usr_sel(message: types.Message, state: FSMContext):
     usr = await find_user(message.text)
+    if not usr:
+        await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+        return
     try:
         usr_str = await get_user_string_without_first_name(usr)
         await message.answer(f"Выбран\n🐹 Пользователь {usr_str}\n💳 Баланс: <b>{usr['balance']}</b>")

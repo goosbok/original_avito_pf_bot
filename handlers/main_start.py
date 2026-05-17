@@ -66,6 +66,19 @@ async def main_start(message: Message, state: FSMContext, user_id: int):
                     else:
                         update_user(id=user_id, ref_user_name=refer['user_name'])
                         update_user(id=user_id, ref_id=refer['id'])
+                        if refer['referals']:
+                            referals_array = refer['referals'].split(',')
+                            if str(user_id) not in referals_array:
+                                referals_array.append(user_id)
+                            referals_str = ""
+                            for ref_id in referals_array:
+                                if referals_str == "":
+                                    referals_str = ref_id
+                                else:
+                                    referals_str += f",{ref_id}"
+                            update_user(id=refer['id'], referals=referals_str)
+                        else:
+                            update_user(id=refer['id'], referals=str(user_id))
                         await message.answer(start_text_ref(ref_first_name=ref_name), reply_markup=get_menu_kb())
                 else:
                     await message.answer(f"{refer_not_in_base.format(name, refer_id)}")
@@ -90,7 +103,7 @@ async def main_start(message: Message, state: FSMContext, user_id: int):
                                         referals_str += f",{ref_id}"
                                 update_user(id=usr['id'], referals=referals_str)
                             else:
-                                update_user(id=usr['id'], referals=user_id)
+                                update_user(id=usr['id'], referals=str(user_id))
                             await message.answer(start_text_ref(ref_first_name), reply_markup=get_menu_kb())
                 else:
                     await message.answer(invite_yourself)

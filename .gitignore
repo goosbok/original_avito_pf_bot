@@ -7,5 +7,6 @@ __pycache__/
 .claude/
 data/database.db
 log.txt
+storage/
 .venv-test/
 *.session

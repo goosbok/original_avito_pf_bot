@@ -15,7 +15,7 @@ services:
     environment:
       - START_WEB=0
     volumes:
-      - storage:/app/storage
+      - ./storage:/app/storage
     restart: unless-stopped
 
   api:
@@ -25,7 +25,7 @@ services:
       - path: .env
         required: false   # тесты не требуют .env; для бота/апи он обязателен
     volumes:
-      - storage:/app/storage   # shared SQLite with bot
+      - ./storage:/app/storage   # shared SQLite with bot
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -35,6 +35,3 @@ services:
     command: pytest -v
     profiles:
       - test
-
-volumes:
-  storage:

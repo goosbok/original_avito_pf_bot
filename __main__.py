@@ -98,6 +98,19 @@ async def on_startup(dp: Dispatcher):
         "my_chat_member", "chat_member",
     ])
     _log.info("Webhook cleared, polling with all update types")
+
+    # ── Payment probe scheduler ───────────────────────────────────────────────
+    probe_interval = int(os.getenv("PAYMENT_PROBE_INTERVAL_MIN", "15"))
+    if probe_interval > 0:
+        from apscheduler.schedulers.asyncio import AsyncIOScheduler
+        from services.payment_probe import probe_and_alert
+        _scheduler = AsyncIOScheduler()
+        _scheduler.add_job(probe_and_alert, "interval", minutes=probe_interval)
+        _scheduler.start()
+        _log.info("Payment probe scheduler started (interval=%d min)", probe_interval)
+    else:
+        _log.info("Payment probe disabled (PAYMENT_PROBE_INTERVAL_MIN=0)")
+
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())
     print(Fore.MAGENTA + fig.renderText('launched') + Fore.RESET)

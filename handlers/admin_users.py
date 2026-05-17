@@ -8,6 +8,7 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 from data.loader import dp, bot
 from utils.sqlite3 import (
     get_user, update_user, delete_user, all_users, get_all_vip, get_tg_id_for_user,
+    get_all_telegram_ids,
 )
 from utils.other import get_user_string_without_first_name
 from keyboards.inline_keyboards import admin_back_kb
@@ -33,10 +34,10 @@ async def call_users_ids(call: types.CallbackQuery):
         await call.message.delete()
     except:
         logger.debug("could not delete message")
-    ids = all_users()
+    ids = get_all_telegram_ids()
     with open("ids.txt", "w") as file:
         for id in ids:
-            file.write(str(id['id']) + "\n")
+            file.write(str(id) + "\n")
 
     file_path = "ids.txt"
     with open(file_path, 'rb') as file:

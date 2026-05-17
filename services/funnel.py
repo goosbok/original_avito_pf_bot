@@ -6,7 +6,13 @@ at well-defined progression points. Reads are aggregate-only.
 """
 from __future__ import annotations
 
+import io
 from datetime import datetime, timezone
+
+import matplotlib
+
+matplotlib.use("Agg")  # headless backend — required when no display is available
+import matplotlib.pyplot as plt  # noqa: E402
 
 from services.db import connect
 
@@ -96,3 +102,39 @@ def get_funnel_stats(
         out.append({"step": step, "users": users, "drop_off_pct": drop_off_pct})
         prev = users
     return out
+
+
+def render_chart(
+    service: str,
+    *,
+    from_dt: datetime | None = None,
+    to_dt: datetime | None = None,
+    title: str,
+) -> io.BytesIO:
+    """Render a horizontal bar chart of the funnel as PNG. Returns a BytesIO
+    positioned at offset 0 (ready for aiogram answer_photo)."""
+    stats = get_funnel_stats(service, from_dt=from_dt, to_dt=to_dt)
+    steps = [r["step"] for r in stats]
+    users = [r["users"] for r in stats]
+
+    fig, ax = plt.subplots(figsize=(10, max(3, 0.7 * len(steps) + 1)))
+    y = list(range(len(steps)))
+    ax.barh(y, users, color="#4a90e2")
+    ax.set_yticks(y)
+    ax.set_yticklabels(steps)
+    ax.invert_yaxis()  # first step on top
+    ax.set_xlabel("Уникальных пользователей")
+    ax.set_title(title)
+
+    for i, row in enumerate(stats):
+        label = str(row["users"])
+        if row["drop_off_pct"] is not None:
+            label += f"  (-{row['drop_off_pct']}%)"
+        ax.text(row["users"], i, "  " + label, va="center")
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf

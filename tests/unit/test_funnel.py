@@ -158,3 +158,20 @@ def test_get_funnel_stats_naive_datetime_rejected(tmp_db: Path):
         get_funnel_stats("pf_avito", from_dt=naive)
     with pytest.raises(ValueError):
         get_funnel_stats("pf_avito", to_dt=naive)
+
+
+def test_render_chart_returns_png_bytesio(tmp_db: Path):
+    from services.funnel import render_chart
+
+    now = datetime.now(timezone.utc)
+    _insert_event(tmp_db, 1, "pf_avito", "view_tariff", now)
+    _insert_event(tmp_db, 2, "pf_avito", "view_tariff", now)
+    _insert_event(tmp_db, 1, "pf_avito", "select_period", now)
+
+    buf = render_chart("pf_avito", title="Test funnel")
+    head = buf.read(8)
+    # PNG magic bytes
+    assert head[:4] == b"\x89PNG"
+    buf.seek(0)
+    # File-like object positioned at the start for downstream callers
+    assert buf.tell() == 0

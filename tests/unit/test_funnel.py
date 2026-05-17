@@ -22,6 +22,12 @@ def test_funnel_steps_contains_pf_avito():
     ]
 
 
+def test_every_funnel_service_has_label():
+    from services.funnel import FUNNEL_STEPS, SERVICE_LABELS
+
+    assert set(FUNNEL_STEPS) <= set(SERVICE_LABELS)
+
+
 def test_track_step_inserts_row(tmp_db: Path):
     from services.funnel import track_step
 

@@ -37,7 +37,12 @@ def _validate(service: str, step: str | None = None) -> None:
 
 
 def track_step(user_id: int, service: str, step: str) -> None:
-    """Record one funnel event. Never raises on duplicate user/step pair."""
+    """Record one funnel event.
+
+    Raises ValueError if service or step is not registered in FUNNEL_STEPS.
+    Duplicates (same user_id + step) are allowed by design — the table is
+    an event log; uniqueness is enforced at read time via COUNT(DISTINCT).
+    """
     _validate(service, step)
     ts = datetime.now(timezone.utc).isoformat()
     with connect() as con:

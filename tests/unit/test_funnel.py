@@ -73,6 +73,21 @@ def test_track_step_multiple_events_same_user(tmp_db: Path):
     assert count == 3
 
 
+def test_track_step_swallows_io_errors(tmp_db: Path, monkeypatch):
+    """Analytics must never break the user-facing handler flow.
+
+    Programmer errors (unknown service/step) still raise; I/O failures are logged.
+    """
+    from services import funnel
+
+    def _boom():
+        raise RuntimeError("simulated DB failure")
+
+    monkeypatch.setattr(funnel, "connect", _boom)
+    # Must NOT raise — failure is logged and swallowed.
+    funnel.track_step(user_id=1, service="pf_avito", step="view_tariff")
+
+
 def _insert_event(db_path: Path, user_id: int, service: str, step: str, ts: datetime) -> None:
     with sqlite3.connect(db_path) as con:
         con.execute(

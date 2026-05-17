@@ -7,6 +7,7 @@ at well-defined progression points. Reads are aggregate-only.
 from __future__ import annotations
 
 import io
+import logging
 from datetime import datetime, timezone
 
 import matplotlib
@@ -15,6 +16,8 @@ matplotlib.use("Agg")  # headless backend — required when no display is availa
 import matplotlib.pyplot as plt  # noqa: E402
 
 from services.db import connect
+
+logger = logging.getLogger(__name__)
 
 # Ordered list of steps for each service. Add a new entry to plug a new
 # service into funnel analytics — no schema change required.
@@ -50,14 +53,21 @@ def track_step(user_id: int, service: str, step: str) -> None:
     an event log; uniqueness is enforced at read time via COUNT(DISTINCT).
     """
     _validate(service, step)
-    ts = datetime.now(timezone.utc).isoformat()
-    with connect() as con:
-        con.execute(
-            "INSERT INTO funnel_events (user_id, service, step, ts) "
-            "VALUES (?, ?, ?, ?)",
-            (user_id, service, step, ts),
+    try:
+        ts = datetime.now(timezone.utc).isoformat()
+        with connect() as con:
+            con.execute(
+                "INSERT INTO funnel_events (user_id, service, step, ts) "
+                "VALUES (?, ?, ?, ?)",
+                (user_id, service, step, ts),
+            )
+            con.commit()
+    except Exception:
+        logger.warning(
+            "track_step failed",
+            exc_info=True,
+            extra={"service": service, "step": step, "user_id": user_id},
         )
-        con.commit()
 
 
 def get_funnel_stats(

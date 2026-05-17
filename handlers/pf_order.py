@@ -47,9 +47,8 @@ async def tarif(call: CallbackQuery, state: FSMContext, user_id: int):
             await state.finish()
             data['links'] = links
     tarif_name = call.data.split(":")[1]
-    if tarif_name in {"pf"}:
-        track_step(user_id=user_id, service="pf_avito", step="view_tariff")
     if tarif_name == "pf":
+        track_step(user_id=user_id, service="pf_avito", step="view_tariff")
         STR = get_string('srt_select_variant_pf')
         image = f"images/avito_pf.jpg"
         with open(image, 'rb') as photo:

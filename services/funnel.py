@@ -52,3 +52,43 @@ def track_step(user_id: int, service: str, step: str) -> None:
             (user_id, service, step, ts),
         )
         con.commit()
+
+
+def get_funnel_stats(
+    service: str,
+    *,
+    from_dt: datetime | None = None,
+    to_dt: datetime | None = None,
+) -> list[dict]:
+    """Aggregate distinct-user counts per step, in FUNNEL_STEPS order.
+
+    Returns: [{"step": str, "users": int, "drop_off_pct": float | None}, ...]
+    Steps with no events appear with users=0. drop_off_pct is None for the
+    first step and whenever the previous step had 0 users.
+    """
+    _validate(service)
+    sql = "SELECT step, COUNT(DISTINCT user_id) AS users FROM funnel_events WHERE service = ?"
+    params: list = [service]
+    if from_dt is not None:
+        sql += " AND ts >= ?"
+        params.append(from_dt.isoformat())
+    if to_dt is not None:
+        sql += " AND ts <= ?"
+        params.append(to_dt.isoformat())
+    sql += " GROUP BY step"
+
+    with connect() as con:
+        rows = con.execute(sql, params).fetchall()
+    counts: dict[str, int] = {row["step"]: int(row["users"]) for row in rows}
+
+    out: list[dict] = []
+    prev: int | None = None
+    for step in FUNNEL_STEPS[service]:
+        users = counts.get(step, 0)
+        if prev is None or prev == 0:
+            drop_off_pct: float | None = None
+        else:
+            drop_off_pct = round((prev - users) / prev * 100, 1)
+        out.append({"step": step, "users": users, "drop_off_pct": drop_off_pct})
+        prev = users
+    return out

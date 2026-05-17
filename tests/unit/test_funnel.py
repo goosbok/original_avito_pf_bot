@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -71,3 +71,80 @@ def test_track_step_multiple_events_same_user(tmp_db: Path):
     with sqlite3.connect(tmp_db) as con:
         count = con.execute("SELECT COUNT(*) FROM funnel_events").fetchone()[0]
     assert count == 3
+
+
+def _insert_event(db_path: Path, user_id: int, service: str, step: str, ts: datetime) -> None:
+    with sqlite3.connect(db_path) as con:
+        con.execute(
+            "INSERT INTO funnel_events (user_id, service, step, ts) VALUES (?, ?, ?, ?)",
+            (user_id, service, step, ts.isoformat()),
+        )
+        con.commit()
+
+
+def test_get_funnel_stats_empty(tmp_db: Path):
+    from services.funnel import FUNNEL_STEPS, get_funnel_stats
+
+    result = get_funnel_stats("pf_avito")
+    assert [r["step"] for r in result] == FUNNEL_STEPS["pf_avito"]
+    assert all(r["users"] == 0 for r in result)
+    assert result[0]["drop_off_pct"] is None
+    assert all(r["drop_off_pct"] is None for r in result)  # prev=0 → None
+
+
+def test_get_funnel_stats_distinct_users(tmp_db: Path):
+    from services.funnel import get_funnel_stats
+
+    now = datetime.now(timezone.utc)
+    # user 1 reaches view_tariff twice and select_period once
+    _insert_event(tmp_db, 1, "pf_avito", "view_tariff", now)
+    _insert_event(tmp_db, 1, "pf_avito", "view_tariff", now)
+    _insert_event(tmp_db, 1, "pf_avito", "select_period", now)
+    # user 2 only reaches view_tariff
+    _insert_event(tmp_db, 2, "pf_avito", "view_tariff", now)
+
+    result = {r["step"]: r for r in get_funnel_stats("pf_avito")}
+    assert result["view_tariff"]["users"] == 2
+    assert result["select_period"]["users"] == 1
+    assert result["select_count"]["users"] == 0
+
+
+def test_get_funnel_stats_drop_off_percentages(tmp_db: Path):
+    from services.funnel import get_funnel_stats
+
+    now = datetime.now(timezone.utc)
+    # 10 users at view_tariff, 8 at select_period, 4 at select_count
+    for uid in range(1, 11):
+        _insert_event(tmp_db, uid, "pf_avito", "view_tariff", now)
+    for uid in range(1, 9):
+        _insert_event(tmp_db, uid, "pf_avito", "select_period", now)
+    for uid in range(1, 5):
+        _insert_event(tmp_db, uid, "pf_avito", "select_count", now)
+
+    result = {r["step"]: r for r in get_funnel_stats("pf_avito")}
+    assert result["view_tariff"]["drop_off_pct"] is None
+    assert result["select_period"]["drop_off_pct"] == 20.0  # (10-8)/10
+    assert result["select_count"]["drop_off_pct"] == 50.0   # (8-4)/8
+
+
+def test_get_funnel_stats_date_filter(tmp_db: Path):
+    from services.funnel import get_funnel_stats
+
+    now = datetime.now(timezone.utc)
+    old = now - timedelta(days=30)
+    _insert_event(tmp_db, 1, "pf_avito", "view_tariff", old)
+    _insert_event(tmp_db, 2, "pf_avito", "view_tariff", now)
+
+    # Filter: only events in the last 7 days
+    result = {
+        r["step"]: r
+        for r in get_funnel_stats("pf_avito", from_dt=now - timedelta(days=7), to_dt=now + timedelta(seconds=1))
+    }
+    assert result["view_tariff"]["users"] == 1
+
+
+def test_get_funnel_stats_invalid_service(tmp_db: Path):
+    from services.funnel import get_funnel_stats
+
+    with pytest.raises(ValueError):
+        get_funnel_stats("nonexistent")

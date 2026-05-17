@@ -979,6 +979,27 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "created_at TIMESTAMP NOT NULL)",
             6,
         ),
+        (
+            "funnel_events",
+            "CREATE TABLE IF NOT EXISTS funnel_events("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "service TEXT NOT NULL,"
+            "step TEXT NOT NULL,"
+            "ts TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            5,
+        ),
+    ]
+
+
+def get_index_statements() -> list[str]:
+    """Index DDL applied after tables. Idempotent."""
+    return [
+        "CREATE INDEX IF NOT EXISTS idx_funnel_service_ts "
+        "ON funnel_events(service, ts)",
+        "CREATE INDEX IF NOT EXISTS idx_funnel_service_step_user "
+        "ON funnel_events(service, step, user_id)",
     ]
 
 
@@ -1017,6 +1038,8 @@ def create_db():
                 print(f"database was not found ({table} | {idx}/{len(get_schema_statements())}), creating...")
             else:
                 print(f"database was found ({table} | {idx}/{len(get_schema_statements())})")
+        for ddl in get_index_statements():
+            con.execute(ddl)
         con.commit()
     apply_phase2_migrations()
 

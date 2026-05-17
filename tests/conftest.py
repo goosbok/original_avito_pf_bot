@@ -82,9 +82,12 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Создаёт пустую БД с продакшен-схемой и подменяет path_database во всех модулях."""
     db_path = tmp_path / "test.db"
 
+    from utils.sqlite3 import get_index_statements
     with sqlite3.connect(db_path) as con:
         for _table, ddl, _cols in get_schema_statements():
             con.execute(ddl)
+        for idx_ddl in get_index_statements():
+            con.execute(idx_ddl)
         con.commit()
 
     monkeypatch.setattr("data.config.path_database", str(db_path), raising=False)

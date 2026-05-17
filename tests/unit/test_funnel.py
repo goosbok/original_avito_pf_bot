@@ -148,3 +148,13 @@ def test_get_funnel_stats_invalid_service(tmp_db: Path):
 
     with pytest.raises(ValueError):
         get_funnel_stats("nonexistent")
+
+
+def test_get_funnel_stats_naive_datetime_rejected(tmp_db: Path):
+    from services.funnel import get_funnel_stats
+
+    naive = datetime(2026, 5, 18, 12, 0, 0)  # no tzinfo
+    with pytest.raises(ValueError):
+        get_funnel_stats("pf_avito", from_dt=naive)
+    with pytest.raises(ValueError):
+        get_funnel_stats("pf_avito", to_dt=naive)

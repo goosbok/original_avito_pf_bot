@@ -67,6 +67,10 @@ def get_funnel_stats(
     first step and whenever the previous step had 0 users.
     """
     _validate(service)
+    if from_dt is not None and from_dt.tzinfo is None:
+        raise ValueError("from_dt must be timezone-aware")
+    if to_dt is not None and to_dt.tzinfo is None:
+        raise ValueError("to_dt must be timezone-aware")
     sql = "SELECT step, COUNT(DISTINCT user_id) AS users FROM funnel_events WHERE service = ?"
     params: list = [service]
     if from_dt is not None:

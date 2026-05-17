@@ -157,8 +157,9 @@ async def select_payment_method(call: CallbackQuery, state: FSMContext, user_id:
     state_data = await state.get_data()
     amount = state_data.get('price')
     if amount is None:
+        from utils.error_handler import error_kb
         await state.finish()
-        await call.message.answer(get_string('str_error'), reply_markup=get_menu_kb())
+        await call.message.answer(get_string('str_error'), reply_markup=error_kb())
         return
 
     if method == "manual":

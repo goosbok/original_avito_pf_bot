@@ -35,7 +35,8 @@ async def user_profile(call: CallbackQuery, state: FSMContext, user_id: int):
     await state.finish()
     user = get_user(id=user_id)
     if user is None:
-        await call.message.answer(get_string('str_error') or '⚠️ Ошибка', reply_markup=get_menu_kb())
+        from utils.error_handler import error_kb
+        await call.message.answer(get_string('str_error'), reply_markup=error_kb())
         try:
             await call.message.delete()
         except Exception:

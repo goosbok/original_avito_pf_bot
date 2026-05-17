@@ -213,8 +213,9 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
         await call.message.answer(STR.format(f_price), reply_markup=yes_no_order_kb())
         await call.message.delete()
     else:
+        from utils.error_handler import error_kb
         STR = get_string('str_error')
-        await call.message.answer(STR, reply_markup=get_menu_kb())
+        await call.message.answer(STR, reply_markup=error_kb())
 
 
 @dp.callback_query_handler(text="order_confirm", state='*')
@@ -222,8 +223,9 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
     user = get_user(id=user_id)
     async with state.proxy() as data:
         if 'total_price' not in data:
-            STR = get_string('str_error') or '⚠️ Заказ устарел. Начните оформление заново.'
-            await call.message.answer(STR, reply_markup=get_menu_kb())
+            from utils.error_handler import error_kb
+            STR = get_string('str_error')
+            await call.message.answer(STR, reply_markup=error_kb())
             try:
                 await call.message.delete()
             except Exception:

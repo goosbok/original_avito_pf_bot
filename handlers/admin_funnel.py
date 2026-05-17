@@ -109,11 +109,15 @@ async def funnel_router(call: CallbackQuery, state: FSMContext):
         await _funnel_service(call, parts[1])
     elif len(parts) == 3:
         await _funnel_period(call, parts[1], parts[2])
-    # other forms ignored
+    else:
+        logger.warning("funnel_router: unexpected callback shape %r", call.data)
+        await call.answer()
 
 
 async def _funnel_service(call: CallbackQuery, service: str) -> None:
     if service not in FUNNEL_STEPS:
+        logger.warning("funnel_router: unknown service %r", service)
+        await call.answer()
         return
     await call.answer()
     label = SERVICE_LABELS.get(service, service)
@@ -126,10 +130,14 @@ async def _funnel_service(call: CallbackQuery, service: str) -> None:
 
 async def _funnel_period(call: CallbackQuery, service: str, period_suffix: str) -> None:
     if service not in FUNNEL_STEPS:
+        logger.warning("funnel_router: unknown service %r", service)
+        await call.answer()
         return
     try:
         from_dt, to_dt = _resolve_period(period_suffix)
     except ValueError:
+        logger.warning("funnel_router: unknown period %r", period_suffix)
+        await call.answer()
         return
     await call.answer()
 

@@ -62,18 +62,6 @@ async def adminka(message: Message, state: FSMContext):
         await bot.send_message(chat_id=message.from_user.id, text="👋 Добро пожаловать в админ панель!", reply_markup=admin())
 
 
-@dp.callback_query_handler(text="admin_back", state='*')
-async def admin_back(call: types.CallbackQuery, state: FSMContext):
-    await state.finish()
-    if str(call.from_user.id) in get_admins():
-        from keyboards.inline_keyboards import admin
-        await call.message.answer("👋 Админ-меню", reply_markup=admin())
-        try:
-            await call.message.delete()
-        except Exception:
-            pass
-
-
 @dp.message_handler(commands="delete")
 async def cmd_del_order(message: types.Message):
     order_id = message.text[8:]

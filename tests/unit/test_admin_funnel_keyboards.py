@@ -9,7 +9,7 @@ def test_funnel_service_kb_has_button_per_service():
     flat = [btn for row in kb.inline_keyboard for btn in row]
     callbacks = {b.callback_data for b in flat}
     assert "funnel:pf_avito" in callbacks
-    assert any(b.callback_data == "admin_back" for b in flat)
+    assert any(b.callback_data == "to_admin_menu" for b in flat)
 
 
 def test_funnel_period_kb_has_four_presets_and_back():

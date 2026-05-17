@@ -1756,13 +1756,14 @@ def show_admin_review_by_index(index, orders_cnt, page='reviews_man'):
 
 def funnel_service_kb() -> InlineKeyboardMarkup:
     """Service picker for the funnel admin menu."""
+    # Lazy import — services.funnel pulls matplotlib at module load.
     from services.funnel import FUNNEL_STEPS, SERVICE_LABELS
 
     kb = InlineKeyboardMarkup()
     for service in FUNNEL_STEPS.keys():
         label = SERVICE_LABELS.get(service, service)
         kb.add(InlineKeyboardButton(text=label, callback_data=f"funnel:{service}"))
-    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back"))
+    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="to_admin_menu"))
     return kb
 
 

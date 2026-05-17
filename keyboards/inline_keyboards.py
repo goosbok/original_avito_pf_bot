@@ -504,6 +504,12 @@ def admin():
                 callback_data='money_by_year'
             )
         )
+        keyboard.add(
+            InlineKeyboardButton(
+                text="📊 Воронка",
+                callback_data='funnel_menu'
+            )
+        )
         return keyboard
 def setup_kb():
     keyboard = InlineKeyboardMarkup()
@@ -1746,3 +1752,30 @@ def show_admin_review_by_index(index, orders_cnt, page='reviews_man'):
         )
     )
     return keyboard
+
+
+def funnel_service_kb() -> InlineKeyboardMarkup:
+    """Service picker for the funnel admin menu."""
+    from services.funnel import FUNNEL_STEPS, SERVICE_LABELS
+
+    kb = InlineKeyboardMarkup()
+    for service in FUNNEL_STEPS.keys():
+        label = SERVICE_LABELS.get(service, service)
+        kb.add(InlineKeyboardButton(text=label, callback_data=f"funnel:{service}"))
+    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="admin_back"))
+    return kb
+
+
+def funnel_period_kb(service: str) -> InlineKeyboardMarkup:
+    """Period picker for a specific service."""
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(text="Сегодня", callback_data=f"funnel:{service}:today"),
+        InlineKeyboardButton(text="7 дней", callback_data=f"funnel:{service}:7d"),
+    )
+    kb.row(
+        InlineKeyboardButton(text="30 дней", callback_data=f"funnel:{service}:30d"),
+        InlineKeyboardButton(text="Всё время", callback_data=f"funnel:{service}:all"),
+    )
+    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="funnel_menu"))
+    return kb

@@ -34,6 +34,7 @@ logging.basicConfig(
 )
 # Use a private name so star-imports below cannot overwrite it.
 _log = logging.getLogger("bot_runner")
+_scheduler = None
 
 # DB must exist before handler modules are imported — users_menu.py queries
 # the settings table at module level (get_price calls on lines 10-15).
@@ -100,6 +101,7 @@ async def on_startup(dp: Dispatcher):
     _log.info("Webhook cleared, polling with all update types")
 
     # ── Payment probe scheduler ───────────────────────────────────────────────
+    global _scheduler
     probe_interval = int(os.getenv("PAYMENT_PROBE_INTERVAL_MIN", "15"))
     if probe_interval > 0:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -119,6 +121,8 @@ async def on_startup(dp: Dispatcher):
 # Выполнение функции после выключения бота
 async def on_shutdown(dp: Dispatcher):
     _log.info("Bot shutdown")
+    if _scheduler is not None:
+        _scheduler.shutdown(wait=False)
     await dp.storage.close()
     await dp.storage.wait_closed()
     await (await dp.bot.get_session()).close()

@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram import types
 from aiogram.utils.exceptions import RetryAfter
 
+from utils.error_handler import report_handler_error
 from data import config
 from data.loader import dp, bot
 from keyboards.users_menu import (
@@ -85,10 +86,18 @@ async def profile(call: CallbackQuery, state: FSMContext, user_id: int):
                     f"Страница 1 из {len(orders)}\n{orders_array[0]}",
                     reply_markup=show_user_order_by_index(len(orders) - 1, len(orders)),
                 )
-        except Exception:
-            logger.exception("profile listord: failed for tg_id=%s", call.from_user.id)
-            STR = get_string('str_error')
-            await call.message.answer(STR, reply_markup=user_back_kb('user:profile'))
+        except Exception as exc:
+            await report_handler_error(
+                exc,
+                logger=logger,
+                context={
+                    "handler": "profile_listord",
+                    "tg_id": call.from_user.id,
+                    "user_id": user_id,
+                    "cb_data": call.data,
+                },
+                reply_target=call,
+            )
     elif action == 'ordstatus':
         await state.set_state("check_order")
         STR = get_string('str_input_order_number')

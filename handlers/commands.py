@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram import types
 from aiogram.dispatcher.filters import Text
 
+from utils.error_handler import report_handler_error
 from data.loader import dp, bot
 from keyboards.users_menu import (
     get_menu_kb,
@@ -37,8 +38,13 @@ async def cmd_delme(message: types.Message, user_id: int):
         delete_user(id=user_id)
         STR = get_string('str_delete_user')
         await message.answer(STR.format(user_id))
-    except Exception:
-        logger.exception("cmd_delme: failed to delete user %s", user_id)
+    except Exception as exc:
+        await report_handler_error(
+            exc,
+            logger=logger,
+            context={"handler": "cmd_delme", "user_id": user_id},
+            reply_target=message,
+        )
 
 
 @dp.message_handler(commands="cancel", state="*")

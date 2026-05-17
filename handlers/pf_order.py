@@ -25,6 +25,7 @@ from utils.sqlite3 import (
     update_user,
     get_string, get_price,
 )
+from services.funnel import track_step
 
 logger = logging.getLogger(__name__)
 logger.info("pf_order.py loaded — registering handlers")
@@ -36,7 +37,7 @@ class EnterData(StatesGroup):
 
 
 @dp.callback_query_handler(text_startswith="tarifs:", state='*')
-async def tarif(call: CallbackQuery, state: FSMContext):
+async def tarif(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("tarif callback: tg_id=%s data=%s", call.from_user.id, call.data)
     async with state.proxy() as data:
         if 'links' not in data:
@@ -46,6 +47,8 @@ async def tarif(call: CallbackQuery, state: FSMContext):
             await state.finish()
             data['links'] = links
     tarif_name = call.data.split(":")[1]
+    if tarif_name in {"pf"}:
+        track_step(user_id=user_id, service="pf_avito", step="view_tariff")
     if tarif_name == "pf":
         STR = get_string('srt_select_variant_pf')
         image = f"images/avito_pf.jpg"
@@ -69,10 +72,11 @@ async def call_review_bonus(call: CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query_handler(text_startswith="pf:", state='*')
-async def pf(call: CallbackQuery, state: FSMContext):
+async def pf(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("pf callback: tg_id=%s data=%s", call.from_user.id, call.data)
     call_data = call.data.split(":")
     if call_data[1].isdigit():
+        track_step(user_id=user_id, service="pf_avito", step="select_period")
         days = call_data[1]
         days_str = get_days_suffix(days)
         await state.update_data(days=days)
@@ -99,11 +103,12 @@ async def pf(call: CallbackQuery, state: FSMContext):
             count = int(data['count'])
             fix = float(data['fix'])
             data['total_price'] = int(count * fix * int(days))
+        track_step(user_id=user_id, service="pf_avito", step="select_count")
         if 'links' not in data:
             STR = get_string('str_pf_links')
             await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'), disable_web_page_preview=True)
         else:
-            await place_order(call.message, state)
+            await place_order(call.message, state, user_id)
         await state.set_state("place_order")
 
     try:
@@ -113,7 +118,7 @@ async def pf(call: CallbackQuery, state: FSMContext):
 
 
 @dp.message_handler(state=EnterData.period)
-async def enter_period_func(message: types.Message, state: FSMContext):
+async def enter_period_func(message: types.Message, state: FSMContext, user_id: int):
     if message.text.isdigit() and int(message.text) >= 1:
         days = message.text
         days_str = get_days_suffix(days)
@@ -122,13 +127,14 @@ async def enter_period_func(message: types.Message, state: FSMContext):
         f_price = format_decimal(price)
         await message.answer(STR.format(days, days_str, f_price), reply_markup=pf_period_kb(days))
         await state.update_data(days=days)
+        track_step(user_id=user_id, service="pf_avito", step="select_period")
     else:
         STR = get_string('str_bad_number')
         await message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
 
 
 @dp.message_handler(state=EnterData.pf)
-async def enter_pf_func(message: types.Message, state: FSMContext):
+async def enter_pf_func(message: types.Message, state: FSMContext, user_id: int):
     state_data = await state.get_data()
     days = state_data['days']
     if message.text.isdigit() and int(message.text) >= 5:
@@ -141,6 +147,7 @@ async def enter_pf_func(message: types.Message, state: FSMContext):
             count = int(data['count'])
             fix = float(data['fix'])
             data['total_price'] = int(count * fix * int(days))
+        track_step(user_id=user_id, service="pf_avito", step="select_count")
         await state.set_state("place_order")
         STR = get_string('str_pf_links')
         await message.answer(STR, reply_markup=user_back_kb('user:tarif'))
@@ -181,7 +188,7 @@ def extract_avito_links(text: str) -> list:
 
 
 @dp.message_handler(content_types=ContentType.TEXT, state='place_order')
-async def place_order(message: Message, state: FSMContext):
+async def place_order(message: Message, state: FSMContext, user_id: int):
     state_data = await state.get_data()
     links = state_data.get('links') or extract_avito_links(message.text)
     if links:
@@ -189,6 +196,7 @@ async def place_order(message: Message, state: FSMContext):
             if 'links' not in data:
                 data['links'] = links
             data['total_price'] *= len(data['links'])
+        track_step(user_id=user_id, service="pf_avito", step="links_valid")
         await state.set_state("order_checkout")
         STR = get_string('str_pf_contacts')
         msg = await message.answer(STR, reply_markup=yes_no_contact_kb())
@@ -203,11 +211,12 @@ async def place_order(message: Message, state: FSMContext):
 
 
 @dp.callback_query_handler(text_startswith="contact:", state='*')
-async def order_contact_set(call: CallbackQuery, state: FSMContext):
+async def order_contact_set(call: CallbackQuery, state: FSMContext, user_id: int):
     answer = str2bool(call.data.split(":")[1])
 
     async with state.proxy() as data:
         data['contact'] = answer
+    track_step(user_id=user_id, service="pf_avito", step="contact_chosen")
     if 'total_price' in data:
         STR = get_string('str_debet_pf')
         f_price = format_decimal(int(data['total_price']))
@@ -221,6 +230,7 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text="order_confirm", state='*')
 async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
+    track_step(user_id=user_id, service="pf_avito", step="order_confirmed")
     user = get_user(id=user_id)
     async with state.proxy() as data:
         if 'total_price' not in data:

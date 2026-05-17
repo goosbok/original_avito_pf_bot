@@ -74,7 +74,7 @@ if "data.loader" not in sys.modules:
     import data as _data_pkg2
     _data_pkg2.loader = _loader_stub  # type: ignore[attr-defined]
 
-from utils.sqlite3 import get_schema_statements  # noqa: E402
+from utils.sqlite3 import get_schema_statements, get_index_statements  # noqa: E402
 
 
 @pytest.fixture
@@ -82,7 +82,6 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Создаёт пустую БД с продакшен-схемой и подменяет path_database во всех модулях."""
     db_path = tmp_path / "test.db"
 
-    from utils.sqlite3 import get_index_statements
     with sqlite3.connect(db_path) as con:
         for _table, ddl, _cols in get_schema_statements():
             con.execute(ddl)

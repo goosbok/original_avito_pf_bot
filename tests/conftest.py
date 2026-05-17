@@ -56,6 +56,24 @@ if "data.config" not in sys.modules:
     import data as _data_pkg
     _data_pkg.config = _stub  # type: ignore[attr-defined]
 
+
+def _make_loader_stub() -> types.ModuleType:
+    """Stub for data.loader — prevents Bot(token=...) validation at import time."""
+    from unittest.mock import MagicMock, AsyncMock
+    stub = types.ModuleType("data.loader")
+    stub.bot = MagicMock()
+    stub.bot.send_message = AsyncMock()
+    stub.storage = MagicMock()
+    stub.dp = MagicMock()
+    return stub
+
+
+if "data.loader" not in sys.modules:
+    _loader_stub = _make_loader_stub()
+    sys.modules["data.loader"] = _loader_stub
+    import data as _data_pkg2
+    _data_pkg2.loader = _loader_stub  # type: ignore[attr-defined]
+
 from utils.sqlite3 import get_schema_statements  # noqa: E402
 
 

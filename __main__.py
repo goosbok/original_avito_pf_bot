@@ -13,12 +13,22 @@ print(f"{Fore.RED}{fig.renderText('ABUTO by OEvg85')}{Fore.RESET}")
 
 # Logging must be configured before any module imports so that import-time
 # errors (missing DB rows, bad env vars, etc.) appear in the log file.
-LOG_PATH = Path(__file__).resolve().parent / "log.txt"
+from logging.handlers import RotatingFileHandler
+
+_STORAGE = Path(__file__).resolve().parent / "storage"
+_STORAGE.mkdir(exist_ok=True)
+LOG_PATH = _STORAGE / "log.txt"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     handlers=[
-        logging.FileHandler(LOG_PATH, encoding="utf-8"),
+        RotatingFileHandler(
+            LOG_PATH,
+            maxBytes=10 * 1024 * 1024,  # 10 MB
+            backupCount=5,
+            encoding="utf-8",
+        ),
         logging.StreamHandler(),
     ],
 )
@@ -37,7 +47,22 @@ _log.info("Handlers imported successfully")
 
 @dp.errors_handler()
 async def _global_error_handler(update, exception):
-    _log.exception("Unhandled exception for update %s", update, exc_info=exception)
+    from utils.error_handler import report_handler_error
+
+    source = update.message or update.callback_query
+    context = {
+        "handler": "global_error_handler",
+        "update_id": update.update_id,
+        "tg_user_id": source.from_user.id if source and source.from_user else None,
+        "msg_text": (update.message.text or "")[:120] if update.message else None,
+        "cb_data": update.callback_query.data if update.callback_query else None,
+    }
+    await report_handler_error(
+        exception,
+        logger=_log,
+        context=context,
+        reply_target=source,
+    )
     return True
 
 

@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from utils.error_handler import report_handler_error
 from data.loader import dp
 from keyboards.users_menu import (
     get_menu_kb, menu_btn_kb,
@@ -132,17 +133,25 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: i
     service = state_data['service']
     link = state_data['link']
     if user['balance'] >= int(amount):
-        update_user(id=user['id'], balance=user['balance']-int(amount))
-        add_order_reviews(user_id=user['id'], price=amount, service=service, link=link, status='Posted')
-        order = get_users_last_order_reviews(user_id)
-        manager = get_nick('nick_manager_reviews')
-        STR = get_string('str_review_confirm').format(order['increment'], manager)
-        MSG = get_string('str_new_review_admin_report')
-        famount = format_decimal(amount)
-        user_str = await get_user_string_without_first_name(user)
-        MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
-        await call.message.answer(STR, reply_markup=get_menu_kb())
-        await send_admins(MSG)
+        try:
+            update_user(id=user['id'], balance=user['balance']-int(amount))
+            add_order_reviews(user_id=user['id'], price=amount, service=service, link=link, status='Posted')
+            order = get_users_last_order_reviews(user_id)
+            manager = get_nick('nick_manager_reviews')
+            STR = get_string('str_review_confirm').format(order['increment'], manager)
+            MSG = get_string('str_new_review_admin_report')
+            famount = format_decimal(amount)
+            user_str = await get_user_string_without_first_name(user)
+            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
+            await call.message.answer(STR, reply_markup=get_menu_kb())
+            await send_admins(MSG)
+        except Exception as exc:
+            await report_handler_error(
+                exc,
+                logger=logger,
+                context={"handler": "call_confirm_review", "user_id": user_id},
+                reply_target=call,
+            )
     else:
         await state.reset_data()
         STR = get_string('str_not_enough_money')
@@ -185,17 +194,25 @@ async def avito_del_review(message: types.Message, state: FSMContext, user_id: i
     amount = int(get_price('price_avito_del_review'))
     service = 'avito'
     if user['balance'] >= amount:
-        update_user(id=user['id'], balance=user['balance']-int(amount))
-        add_order_delreview(user['id'], amount, service, link, 'Размещен')
-        order = get_users_last_order_delreviews(user_id)
-        manager = get_nick('manager_nick')
-        STR = get_string('str_review_confirm').format(order['increment'], manager)
-        MSG = get_string('str_new_review_admin_report')
-        famount = format_decimal(amount)
-        user_str = await get_user_string_without_first_name(user)
-        MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
-        await message.answer(STR, reply_markup=get_menu_kb())
-        await send_admins(MSG)
+        try:
+            update_user(id=user['id'], balance=user['balance']-int(amount))
+            add_order_delreview(user['id'], amount, service, link, 'Размещен')
+            order = get_users_last_order_delreviews(user_id)
+            manager = get_nick('manager_nick')
+            STR = get_string('str_review_confirm').format(order['increment'], manager)
+            MSG = get_string('str_new_review_admin_report')
+            famount = format_decimal(amount)
+            user_str = await get_user_string_without_first_name(user)
+            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
+            await message.answer(STR, reply_markup=get_menu_kb())
+            await send_admins(MSG)
+        except Exception as exc:
+            await report_handler_error(
+                exc,
+                logger=logger,
+                context={"handler": "avito_del_review", "user_id": user_id},
+                reply_target=message,
+            )
     else:
         await state.reset_data()
         STR = get_string('str_not_enough_money')

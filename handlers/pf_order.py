@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardBut
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from utils.error_handler import report_handler_error
 from data.loader import dp, bot
 from keyboards.users_menu import (
     get_menu_kb, user_back_kb, menu_btn_kb,
@@ -213,8 +214,9 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext):
         await call.message.answer(STR.format(f_price), reply_markup=yes_no_order_kb())
         await call.message.delete()
     else:
+        from utils.error_handler import error_kb
         STR = get_string('str_error')
-        await call.message.answer(STR, reply_markup=get_menu_kb())
+        await call.message.answer(STR, reply_markup=error_kb())
 
 
 @dp.callback_query_handler(text="order_confirm", state='*')
@@ -222,49 +224,71 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
     user = get_user(id=user_id)
     async with state.proxy() as data:
         if 'total_price' not in data:
-            STR = get_string('str_error') or '⚠️ Заказ устарел. Начните оформление заново.'
-            await call.message.answer(STR, reply_markup=get_menu_kb())
+            from utils.error_handler import error_kb
+            STR = get_string('str_error')
+            await call.message.answer(STR, reply_markup=error_kb())
             try:
                 await call.message.delete()
             except Exception:
                 pass
             return
         if user['balance'] >= data['total_price']:
-            update_user(id=user['id'], balance=user['balance']-data['total_price'])
-            add_order(user_id=user['id'],
-                      price=data['total_price'],
-                      position_name=f"{data['days']}/{data['fix']}",
-                      status="Posted",
-                      links=str(data['links']),
-                      contacts=data['contact'],
-                      user_name=user['user_name'])
-            ADM_MSG = get_string('str_new_order_text')
-            order = get_users_last_order(user['id'])
-            ord_id = order['increment']
-            f_price = format_decimal(order['price'])
-            user_str = await get_user_string_without_first_name(user)
-            pos_name = order['position_name']
-            status = order['status']
-            if order['contacts']:
-                con_str = 'Да'
-            else:
-                con_str = 'Нет'
-            ord_date = order['date']
-            links_cnt = len(order['links'])
-            links_str = ""
-            for link in order['links'].split(','):
-                link = link.replace("'", "")
-                links_str += f"\n<code>{link}</code>"
-            ADM_MSG = ADM_MSG.format(ord_id, f_price, user_str, pos_name, status, con_str, ord_date, links_cnt, links_str)
-            if len(ADM_MSG) < 4096:
-                await send_admins(ADM_MSG)
-            else:
-                msg_arr = ADM_MSG.split('\n')
-                for msg in split_messages(msg_arr, '\n'):
-                    await send_admins(msg)
-
-            USR_MSG = get_string('str_order_confirm').format(ord_id)
-            await call.message.answer(USR_MSG, reply_markup=get_menu_kb())
+            try:
+                update_user(id=user['id'], balance=user['balance'] - data['total_price'])
+                add_order(
+                    user_id=user['id'],
+                    price=data['total_price'],
+                    position_name=f"{data['days']}/{data['fix']}",
+                    status="Posted",
+                    links=str(data['links']),
+                    contacts=data['contact'],
+                    user_name=user['user_name'],
+                )
+                ADM_MSG = get_string('str_new_order_text')
+                order = get_users_last_order(user['id'])
+                ord_id = order['increment']
+                f_price = format_decimal(order['price'])
+                user_str = await get_user_string_without_first_name(user)
+                pos_name = order['position_name']
+                status = order['status']
+                con_str = 'Да' if order['contacts'] else 'Нет'
+                ord_date = order['date']
+                links_cnt = len(order['links'])
+                links_str = ""
+                for link in order['links'].split(','):
+                    link = link.replace("'", "")
+                    links_str += f"\n<code>{link}</code>"
+                ADM_MSG = ADM_MSG.format(
+                    ord_id, f_price, user_str, pos_name, status,
+                    con_str, ord_date, links_cnt, links_str,
+                )
+                if len(ADM_MSG) < 4096:
+                    await send_admins(ADM_MSG)
+                else:
+                    for msg in split_messages(ADM_MSG.split('\n'), '\n'):
+                        await send_admins(msg)
+                USR_MSG = get_string('str_order_confirm').format(ord_id)
+                await call.message.answer(USR_MSG, reply_markup=get_menu_kb())
+                logger.info(
+                    "order placed: user_id=%s price=%s days=%s fix=%s",
+                    user_id, data['total_price'], data.get('days'), data.get('fix'),
+                )
+            except Exception as exc:
+                await report_handler_error(
+                    exc,
+                    logger=logger,
+                    context={
+                        "handler": "confirm_order",
+                        "user_id": user_id,
+                        "balance": user['balance'],
+                        "total_price": data.get('total_price'),
+                        "days": data.get('days'),
+                        "links_count": len(str(data.get('links', '')).split(',')),
+                    },
+                    reply_target=call,
+                )
+                await state.finish()
+                return
         else:
             await state.reset_data()
             STR = get_string('str_not_enough_money')

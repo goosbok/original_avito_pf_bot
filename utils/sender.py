@@ -16,10 +16,13 @@ from utils.sqlite3 import get_admins, get_spam_exclude, get_tg_id_for_user
 
 #Отправка отчета админам
 async def send_admins(msg: str):
+    sent_to: set[int] = set()
     for admin in get_admins():
         if admin not in get_spam_exclude():
             tg_id = get_tg_id_for_user(int(admin)) or int(admin)
-            await bot.send_message(chat_id=tg_id, text=msg, disable_web_page_preview=True)
+            if tg_id not in sent_to:
+                sent_to.add(tg_id)
+                await bot.send_message(chat_id=tg_id, text=msg, disable_web_page_preview=True)
 
 #Отправка отчета админам
 async def send_admin(msg: str):

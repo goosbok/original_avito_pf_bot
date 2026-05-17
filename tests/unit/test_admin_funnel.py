@@ -20,6 +20,7 @@ def admin_call(_patch_admins):
     call = MagicMock()
     call.from_user.id = 100500
     call.data = "funnel_menu"
+    call.answer = AsyncMock()
     call.message = MagicMock()
     call.message.answer = AsyncMock()
     call.message.answer_photo = AsyncMock()
@@ -32,6 +33,7 @@ def non_admin_call(_patch_admins):
     call = MagicMock()
     call.from_user.id = 999
     call.data = "funnel_menu"
+    call.answer = AsyncMock()
     call.message = MagicMock()
     call.message.answer = AsyncMock()
     call.message.answer_photo = AsyncMock()
@@ -58,16 +60,16 @@ async def test_funnel_menu_ignores_non_admin(non_admin_call, tmp_db: Path):
 
 @pytest.mark.asyncio
 async def test_funnel_service_callback_shows_period_picker(admin_call, tmp_db: Path):
-    from handlers.admin_funnel import funnel_service
+    from handlers.admin_funnel import funnel_router
 
     admin_call.data = "funnel:pf_avito"
-    await funnel_service(admin_call, state=MagicMock())
+    await funnel_router(admin_call, state=MagicMock())
     admin_call.message.answer.assert_awaited_once()
 
 
 @pytest.mark.asyncio
 async def test_funnel_period_callback_sends_photo(admin_call, tmp_db: Path):
-    from handlers.admin_funnel import funnel_period
+    from handlers.admin_funnel import funnel_router
     from services.funnel import track_step
 
     # Seed two distinct users, one of them progressing further
@@ -76,10 +78,20 @@ async def test_funnel_period_callback_sends_photo(admin_call, tmp_db: Path):
     track_step(user_id=1, service="pf_avito", step="select_period")
 
     admin_call.data = "funnel:pf_avito:all"
-    await funnel_period(admin_call, state=MagicMock())
+    await funnel_router(admin_call, state=MagicMock())
     admin_call.message.answer_photo.assert_awaited_once()
     _args, kwargs = admin_call.message.answer_photo.call_args
     caption = kwargs.get("caption", "")
     assert "view_tariff" in caption
     assert "2" in caption  # users at view_tariff
     assert "select_period" in caption
+
+
+@pytest.mark.asyncio
+async def test_funnel_router_ignores_non_admin(non_admin_call, tmp_db: Path):
+    from handlers.admin_funnel import funnel_router
+
+    non_admin_call.data = "funnel:pf_avito:all"
+    await funnel_router(non_admin_call, state=MagicMock())
+    non_admin_call.message.answer.assert_not_awaited()
+    non_admin_call.message.answer_photo.assert_not_awaited()

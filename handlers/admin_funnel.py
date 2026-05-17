@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
 
-from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.types import CallbackQuery
 
@@ -42,6 +41,8 @@ def _resolve_period(suffix: str) -> tuple[datetime | None, datetime | None]:
     raise ValueError(f"Unknown period suffix: {suffix!r}")
 
 
+# Step strings come from FUNNEL_STEPS (developer-controlled, ASCII identifiers).
+# If that contract ever changes, escape them via html.escape() before embedding.
 def _format_caption(
     service: str,
     period_suffix: str,
@@ -75,55 +76,62 @@ def _format_caption(
     return f"{header}\n\n<pre>{chr(10).join(body_lines)}</pre>{conv_line}"
 
 
+async def _try_delete(call: CallbackQuery) -> None:
+    try:
+        await call.message.delete()
+    except Exception as exc:
+        logger.debug("could not delete message: %r", exc)
+
+
 @dp.callback_query_handler(text="funnel_menu", state='*')
 async def funnel_menu(call: CallbackQuery, state: FSMContext):
     if str(call.from_user.id) not in get_admins():
         return
+    await call.answer()
     await call.message.answer(
         "📊 Воронка — выбери сервис:",
         reply_markup=funnel_service_kb(),
     )
-    try:
-        await call.message.delete()
-    except Exception:
-        logger.debug("could not delete message")
+    await _try_delete(call)
 
 
-@dp.callback_query_handler(
-    lambda c: c.data is not None and c.data.startswith("funnel:") and c.data.count(":") == 1,
-    state='*',
-)
-async def funnel_service(call: CallbackQuery, state: FSMContext):
+@dp.callback_query_handler(text_startswith="funnel:", state='*')
+async def funnel_router(call: CallbackQuery, state: FSMContext):
+    """Branch on number of colon-separated parts.
+
+    funnel:<service>             → period picker
+    funnel:<service>:<period>    → chart
+    """
     if str(call.from_user.id) not in get_admins():
         return
-    service = call.data.split(":", 1)[1]
+    parts = call.data.split(":")
+    if len(parts) == 2:
+        await _funnel_service(call, parts[1])
+    elif len(parts) == 3:
+        await _funnel_period(call, parts[1], parts[2])
+    # other forms ignored
+
+
+async def _funnel_service(call: CallbackQuery, service: str) -> None:
     if service not in FUNNEL_STEPS:
         return
+    await call.answer()
     label = SERVICE_LABELS.get(service, service)
     await call.message.answer(
         f"📊 {label} — выбери период:",
         reply_markup=funnel_period_kb(service),
     )
-    try:
-        await call.message.delete()
-    except Exception:
-        logger.debug("could not delete message")
+    await _try_delete(call)
 
 
-@dp.callback_query_handler(
-    lambda c: c.data is not None and c.data.startswith("funnel:") and c.data.count(":") == 2,
-    state='*',
-)
-async def funnel_period(call: CallbackQuery, state: FSMContext):
-    if str(call.from_user.id) not in get_admins():
-        return
-    _, service, period_suffix = call.data.split(":")
+async def _funnel_period(call: CallbackQuery, service: str, period_suffix: str) -> None:
     if service not in FUNNEL_STEPS:
         return
     try:
         from_dt, to_dt = _resolve_period(period_suffix)
     except ValueError:
         return
+    await call.answer()
 
     stats = get_funnel_stats(service, from_dt=from_dt, to_dt=to_dt)
     period_label = _PERIOD_LABELS.get(period_suffix, period_suffix)
@@ -131,14 +139,13 @@ async def funnel_period(call: CallbackQuery, state: FSMContext):
     buf = render_chart(service, from_dt=from_dt, to_dt=to_dt, title=chart_title)
     caption = _format_caption(service, period_suffix, from_dt, to_dt, stats)
 
-    await call.message.answer_photo(
-        buf,
-        caption=caption,
-        parse_mode="HTML",
-        reply_markup=funnel_period_kb(service),
-    )
-    buf.close()
     try:
-        await call.message.delete()
-    except Exception:
-        logger.debug("could not delete message")
+        await call.message.answer_photo(
+            buf,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=funnel_period_kb(service),
+        )
+    finally:
+        buf.close()
+    await _try_delete(call)

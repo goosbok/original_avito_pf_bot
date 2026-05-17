@@ -3,6 +3,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.types import CallbackQuery
 from aiogram import types
 
+from utils.error_handler import report_handler_error, error_kb, ERROR_MSG
 from data.loader import dp, bot
 from keyboards.users_menu import (
     get_menu_kb, user_back_kb,
@@ -113,12 +114,21 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
             user_id, int(amount),
             source_type="telegram",
         )
-    except UserNotFound:
-        await bot.send_message(chat_id=tg_id, text=get_string('str_error'))
+    except UserNotFound as exc:
+        await report_handler_error(
+            exc,
+            logger=logger,
+            context={"handler": "_handle_yookassa_payment", "user_id": user_id, "amount": amount, "tg_id": tg_id},
+        )
+        await bot.send_message(chat_id=tg_id, text=ERROR_MSG, reply_markup=error_kb())
         return
-    except Exception:
-        logger.exception("yookassa payment: finalize_with_referral_bonus failed for user_id=%s", user_id)
-        await bot.send_message(chat_id=tg_id, text=get_string('str_error'))
+    except Exception as exc:
+        await report_handler_error(
+            exc,
+            logger=logger,
+            context={"handler": "_handle_yookassa_payment", "user_id": user_id, "amount": amount, "tg_id": tg_id},
+        )
+        await bot.send_message(chat_id=tg_id, text=ERROR_MSG, reply_markup=error_kb())
         return
 
     usr = get_user(id=user_id)

@@ -393,7 +393,8 @@ def get_tg_id_for_user(internal_user_id: int) -> "int | None":
         ).fetchone()
     return int(row["identifier"]) if row else None
 
-def get_all_telegram_ids() -> list:
+def get_all_telegram_ids() -> "list[int]":
+    """Return all Telegram IDs registered in auth_providers."""
     with sqlite3.connect(path_db) as con:
         rows = con.execute(
             "SELECT identifier FROM auth_providers WHERE provider = 'telegram'"

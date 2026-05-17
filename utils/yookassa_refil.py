@@ -6,6 +6,11 @@ import uuid
 from data.config import SHOP_ID, SECRET_KEY, botlink
 from yookassa import Configuration, Payment
 
+_PROXY = os.getenv("YOOKASSA_PROXY")
+if _PROXY:
+    os.environ["HTTPS_PROXY"] = _PROXY
+    os.environ["HTTP_PROXY"] = _PROXY
+
 """
 SHOP_ID = os.getenv("SHOP_ID")
 SECRET_KEY = os.getenv("SECRET_KEY")

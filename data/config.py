@@ -13,6 +13,7 @@ SECRET_KEY: str = os.getenv("YOOKASSA_SECRET_KEY", "")
 # Bot operation
 support_tag: str = os.getenv("SUPPORT_TAG", "avito_pf_otzizi")
 ADMINS: list = [int(x) for x in os.getenv("ADMINS", "").split(",") if x.strip()]
+SUPPORT_CHAT_ID: int = int(os.getenv("SUPPORT_CHAT_ID", "0"))
 CODER: int = int(os.getenv("CODER", "0"))
 botlink: str = os.getenv("BOT_LINK", "https://t.me/AVITOPF_bot")
 SITE_URL: str = os.getenv("SITE_URL", "")

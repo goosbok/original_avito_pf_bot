@@ -26,6 +26,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.SECRET_KEY = "test_secret"
     stub.support_tag = "test"
     stub.ADMINS = []
+    stub.SUPPORT_CHAT_ID = 0
     stub.CODER = 0
     stub.botlink = "https://t.me/test"
     stub.channel_link = "https://t.me/test"

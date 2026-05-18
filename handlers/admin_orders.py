@@ -827,15 +827,18 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
                 days.append(refill_date.day)
                 amounts.append(refill['amount'])
 
-    plt.figure(figsize=(10, 6))
-    plt.bar(days, amounts, color='skyblue')
-    plt.title(f'Гистограмма платежей за месяц {months_names[str(month)]} {year}')
-    plt.xlabel('День')
-    plt.ylabel('Сумма')
-    plt.xticks(days)
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.bar(days, amounts, color='skyblue')
+    ax.set_title(f'Гистограмма платежей за месяц {months_names[str(month)]} {year}')
+    ax.set_xlabel('День')
+    ax.set_ylabel('Сумма')
+    ax.set_xticks(days)
 
     buf = io.BytesIO()
-    plt.savefig(buf, format='png')
+    try:
+        fig.savefig(buf, format='png')
+    finally:
+        plt.close(fig)
     buf.seek(0)
 
     await call.message.answer_photo(

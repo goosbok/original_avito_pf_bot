@@ -164,7 +164,7 @@ def extract_avito_links(text: str) -> list:
     seen = set()
     unique_links = []
     for url in raw_urls:
-        url = link_cleaner(url)
+        url = link_cleaner(url).split('?')[0]
         if url not in seen:
             seen.add(url)
             unique_links.append(url)

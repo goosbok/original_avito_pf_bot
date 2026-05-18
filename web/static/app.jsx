@@ -124,7 +124,7 @@ function App() {
       setRoute('auth');
       return;
     }
-    if (['login', 'register', 'login-tg'].includes(target)) {
+    if (['login', 'register', 'login-tg', 'forgot'].includes(target)) {
       setAuthMode(target);
       setRoute('auth');
       return;

@@ -43,18 +43,6 @@ async def send_admins(msg: str):
         else:
             pass
 
-#Отправка отчета админам
-async def send_admin(msg: str):
-    await bot.send_message(chat_id=257838190, text=msg, disable_web_page_preview=True)
-
-#Отправка отчета манагерам
-async def send_managers(msg: str):
-    for admin in get_admins():
-        if admin != 6988175544 and admin != 257838190:
-            await bot.send_message(chat_id=admin, text=msg, disable_web_page_preview=True)
-        else:
-            pass
-
 def str2bool(value):
     if value is None:
         return False

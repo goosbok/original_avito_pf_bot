@@ -31,6 +31,7 @@ def test_link_email_to_telegram_user(client, tmp_db: Path):
     r = client.post("/api/auth/link/email", json={
         "email": "newlink@example.com",
         "password": "password123",
+        "password_confirm": "password123",
     }, headers=headers)
     assert r.status_code == 204
     # Verify email was linked to this user
@@ -48,6 +49,7 @@ def test_link_email_already_used_409(client, tmp_db: Path):
     r = client.post("/api/auth/link/email", json={
         "email": "taken@example.com",
         "password": "password123",
+        "password_confirm": "password123",
     }, headers=_make_headers(uid_b))
     assert r.status_code == 409
 

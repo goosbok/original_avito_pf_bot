@@ -157,24 +157,9 @@ async def enter_pf_func(message: types.Message, state: FSMContext, user_id: int)
 
 def extract_avito_links(text: str) -> list:
     """Извлекает уникальные ссылки avito.ru из произвольного текста."""
-    lines = text.split('\n')
-    merged = []
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if line.startswith('http'):
-            while i + 1 < len(lines):
-                nxt = lines[i + 1].strip()
-                if nxt and ' ' not in nxt and not nxt.startswith('http'):
-                    line += nxt
-                    i += 1
-                else:
-                    break
-        merged.append(line)
-        i += 1
-
-    full_text = ' '.join(merged)
-    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/\S+', full_text)
+    # Убираем переносы строк между не-пробельными символами — склеиваем URL разбитые переносом
+    normalized = re.sub(r'(?<=\S)[\r\n]+(?=\S)', '', text)
+    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/\S+', normalized)
 
     seen = set()
     unique_links = []

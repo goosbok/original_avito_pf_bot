@@ -128,3 +128,18 @@ def test_reset_password_short_new_password_raises(tmp_db: Path, fake_send_email)
     raw_token = _extract_token(fake_send_email[0]["body"])
     with pytest.raises(ValueError):
         auth_reset.reset_password(raw_token, "short")
+
+
+def test_reset_password_email_provider_unlinked_raises(tmp_db: Path, fake_send_email):
+    uid = _register("unlinked@example.com")
+    auth_reset.forgot_password("unlinked@example.com")
+    raw_token = _extract_token(fake_send_email[0]["body"])
+    # Simulate email provider being unlinked after token was issued
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "DELETE FROM auth_providers WHERE provider = 'email' AND identifier = ?",
+            ("unlinked@example.com",),
+        )
+        con.commit()
+    with pytest.raises(ValueError, match="invalid or expired"):
+        auth_reset.reset_password(raw_token, "newpassword123")

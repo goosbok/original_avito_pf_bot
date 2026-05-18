@@ -94,11 +94,13 @@ def reset_password(raw_token: str, new_password: str) -> None:
 
         email = row["email"]
 
-        con.execute(
+        cur = con.execute(
             "UPDATE auth_providers SET credential_hash = ? "
             "WHERE provider = 'email' AND identifier = ?",
             (new_hash, email),
         )
+        if cur.rowcount == 0:
+            raise ValueError("invalid or expired token")
         con.execute(
             "UPDATE password_reset_tokens SET used_at = ? WHERE token_hash = ?",
             (now.isoformat(), token_hash),

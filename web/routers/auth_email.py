@@ -1,7 +1,11 @@
 """Email registration and login endpoints."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Response
+
+logger = logging.getLogger(__name__)
 
 from services import auth_email, auth_reset as _auth_reset
 from services.exceptions import (
@@ -93,7 +97,7 @@ async def forgot_password(body: ForgotPasswordRequest) -> Response:
     try:
         _auth_reset.forgot_password(body.email)
     except Exception:
-        pass
+        logger.exception("forgot_password error (returning 200 regardless)")
     return Response(status_code=200)
 
 

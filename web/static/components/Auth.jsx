@@ -171,7 +171,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     if (!forgotEmail) return setError('Введите email');
     setLoading(true); setError('');
     try {
-      await api.post('/api/auth/forgot-password', { email: forgotEmail });
+      await api.post('/api/auth/email/forgot-password', { email: forgotEmail });
     } catch (_) {
       // Always show success to prevent email enumeration
     } finally {
@@ -185,7 +185,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     if (resetNew !== resetConfirm) return setError('Пароли не совпадают');
     setLoading(true); setError('');
     try {
-      await api.post('/api/auth/reset-password', {
+      await api.post('/api/auth/email/reset-password', {
         token: resetToken,
         new_password: resetNew,
         new_password_confirm: resetConfirm,

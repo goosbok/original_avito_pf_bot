@@ -13,6 +13,7 @@ from services.funnel import (
     FUNNEL_STEPS,
     SERVICE_LABELS,
     get_funnel_stats,
+    get_step_label,
     render_chart,
 )
 from utils.sqlite3 import get_admins
@@ -57,11 +58,12 @@ def _format_caption(
         range_str = "всё время"
     header = f"{SERVICE_LABELS.get(service, service)} · {period_label} ({range_str})"
 
+    labels = [get_step_label(service, r["step"]) for r in stats]
     body_lines = []
-    width = max(len(r["step"]) for r in stats) + 2
-    for r in stats:
+    width = max(len(lbl) for lbl in labels) + 2
+    for label, r in zip(labels, stats):
         users_str = str(r["users"]).rjust(6)
-        line = f"{r['step']:<{width}}{users_str}"
+        line = f"{label:<{width}}{users_str}"
         if r["drop_off_pct"] is not None:
             line += f"  (-{r['drop_off_pct']}%)"
         body_lines.append(line)

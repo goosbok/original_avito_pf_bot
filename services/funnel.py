@@ -37,6 +37,24 @@ SERVICE_LABELS: dict[str, str] = {
     "pf_avito": "🚀 Накрутка ПФ Авито",
 }
 
+# Russian labels for each step, shown in the admin chart and caption.
+# Keys must cover every (service, step) in FUNNEL_STEPS — enforced by test.
+STEP_LABELS: dict[str, dict[str, str]] = {
+    "pf_avito": {
+        "view_tariff": "Открыл карточку ПФ",
+        "select_period": "Выбрал срок",
+        "select_count": "Выбрал кол-во ПФ",
+        "links_valid": "Прислал ссылки",
+        "contact_chosen": "Ответил про контакты",
+        "order_confirmed": "Подтвердил заказ",
+    },
+}
+
+
+def get_step_label(service: str, step: str) -> str:
+    """Human-readable Russian label for a step. Falls back to the raw step id."""
+    return STEP_LABELS.get(service, {}).get(step, step)
+
 
 def _validate(service: str, step: str | None = None) -> None:
     if service not in FUNNEL_STEPS:
@@ -125,13 +143,14 @@ def render_chart(
     positioned at offset 0 (ready for aiogram answer_photo)."""
     stats = get_funnel_stats(service, from_dt=from_dt, to_dt=to_dt)
     steps = [r["step"] for r in stats]
+    labels = [get_step_label(service, s) for s in steps]
     users = [r["users"] for r in stats]
 
     fig, ax = plt.subplots(figsize=(10, max(3, 0.7 * len(steps) + 1)))
     y = list(range(len(steps)))
     ax.barh(y, users, color="#4a90e2")
     ax.set_yticks(y)
-    ax.set_yticklabels(steps)
+    ax.set_yticklabels(labels)
     ax.invert_yaxis()  # first step on top
     ax.set_xlabel("Уникальных пользователей")
     ax.set_title(title)

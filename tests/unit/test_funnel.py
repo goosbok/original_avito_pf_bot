@@ -28,6 +28,23 @@ def test_every_funnel_service_has_label():
     assert set(FUNNEL_STEPS) <= set(SERVICE_LABELS)
 
 
+def test_every_step_has_russian_label():
+    from services.funnel import FUNNEL_STEPS, STEP_LABELS
+
+    for service, steps in FUNNEL_STEPS.items():
+        labels = STEP_LABELS.get(service, {})
+        missing = set(steps) - set(labels)
+        assert not missing, f"{service}: missing labels for {missing}"
+
+
+def test_get_step_label_falls_back_to_step_id():
+    from services.funnel import get_step_label
+
+    assert get_step_label("pf_avito", "view_tariff") == "Открыл карточку ПФ"
+    assert get_step_label("pf_avito", "unknown_step") == "unknown_step"
+    assert get_step_label("unknown_service", "anything") == "anything"
+
+
 def test_track_step_inserts_row(tmp_db: Path):
     from services.funnel import track_step
 

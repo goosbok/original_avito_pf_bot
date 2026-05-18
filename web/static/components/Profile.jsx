@@ -34,11 +34,14 @@ function ProfilePage({ user, onNavigate, botConfig }) {
   const [providers, setProviders] = useProfileState([]);
   const [emailInput, setEmailInput] = useProfileState('');
   const [emailPass, setEmailPass] = useProfileState('');
+  const [emailConfirm, setEmailConfirm] = useProfileState('');
+  const [emailCode, setEmailCode] = useProfileState('');
+  const [emailStep, setEmailStep] = useProfileState('idle'); // idle | sent | done
+  const [emailLoading, setEmailLoading] = useProfileState(false);
+  const [emailError, setEmailError] = useProfileState('');
   const [tgInput, setTgInput] = useProfileState('');
   const [tgCode, setTgCode] = useProfileState('');
   const [tgStep, setTgStep] = useProfileState('idle'); // idle | sent | done
-  const [emailStatus, setEmailStatus] = useProfileState(''); // '' | 'loading' | 'success' | 'error'
-  const [emailError, setEmailError] = useProfileState('');
   const [tgError, setTgError] = useProfileState('');
 
   useProfileEffect(() => {
@@ -50,18 +53,37 @@ function ProfilePage({ user, onNavigate, botConfig }) {
   const emailProvider = providers.find(p => p.provider === 'email');
   const tgProvider = providers.find(p => p.provider === 'telegram');
 
-  const handleLinkEmail = async () => {
+  const handleLinkEmailRequest = async () => {
     if (!emailInput || !emailPass) return setEmailError('Заполните email и пароль');
     if (emailPass.length < 8) return setEmailError('Пароль — минимум 8 символов');
-    setEmailStatus('loading'); setEmailError('');
+    if (emailPass !== emailConfirm) return setEmailError('Пароли не совпадают');
+    setEmailLoading(true); setEmailError('');
     try {
-      await api.post('/api/auth/link/email', { email: emailInput, password: emailPass, first_name: null });
-      setEmailStatus('success');
+      await api.post('/api/auth/link/email/request', { email: emailInput, password: emailPass, password_confirm: emailConfirm });
+      setEmailStep('sent');
+    } catch (e) {
+      if (e.status === 409) setEmailError('Email уже привязан к другому аккаунту');
+      else if (e.status === 429) setEmailError('Подождите перед повторной отправкой');
+      else setEmailError(e.message || 'Ошибка отправки кода');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleLinkEmailVerify = async () => {
+    if (!emailCode || emailCode.length < 6) return;
+    setEmailLoading(true); setEmailError('');
+    try {
+      await api.post('/api/auth/link/email/verify', { email: emailInput, code: emailCode });
+      setEmailStep('done');
       setProviders(prev => [...prev, { provider: 'email', identifier: emailInput, created_at: new Date().toISOString(), last_used_at: null }]);
     } catch (e) {
-      setEmailStatus('error');
-      if (e.status === 409) setEmailError('Email уже привязан к другому аккаунту');
-      else setEmailError(e.message || 'Ошибка привязки');
+      if (e.status === 410) setEmailError('Код истёк — запросите новый');
+      else if (e.status === 401) setEmailError('Неверный код');
+      else if (e.status === 409) setEmailError('Email уже привязан к другому аккаунту');
+      else setEmailError(e.message || 'Ошибка проверки кода');
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -154,9 +176,9 @@ function ProfilePage({ user, onNavigate, botConfig }) {
             linked={!!emailProvider}
             linkedLabel={emailProvider?.identifier || ''}
           >
-            {emailStatus === 'success' ? (
+            {emailStep === 'done' ? (
               <div className="alert alert--success">✅ Email успешно привязан</div>
-            ) : (
+            ) : emailStep === 'idle' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {emailError && <div className="alert alert--error">{emailError}</div>}
                 <div className="form-field">
@@ -166,11 +188,35 @@ function ProfilePage({ user, onNavigate, botConfig }) {
                 <div className="form-field">
                   <label className="form-label">Пароль</label>
                   <input className="input" type="password" placeholder="Минимум 8 символов" value={emailPass} onChange={e => setEmailPass(e.target.value)} />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">Повторите пароль</label>
+                  <input className="input" type="password" placeholder="Повторите пароль" value={emailConfirm} onChange={e => setEmailConfirm(e.target.value)} />
                   <div className="form-hint">Придумайте пароль для входа через email</div>
                 </div>
-                <button className="btn btn--primary" onClick={handleLinkEmail} disabled={emailStatus === 'loading'}>
-                  {emailStatus === 'loading' ? 'Привязываем...' : 'Привязать email'}
+                <button className="btn btn--primary" onClick={handleLinkEmailRequest} disabled={emailLoading}>
+                  {emailLoading ? 'Отправляем код...' : 'Привязать email'}
                 </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {emailError && <div className="alert alert--error">{emailError}</div>}
+                <div className="alert alert--info">Код подтверждения отправлен на {emailInput}</div>
+                <div className="form-field">
+                  <label className="form-label">6-значный код</label>
+                  <input
+                    className="input" placeholder="123456" value={emailCode} maxLength={6}
+                    onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                    style={{ textAlign: 'center', fontSize: '1.25rem', letterSpacing: '0.15em', fontWeight: 700 }}
+                    autoFocus
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn--ghost btn--sm" onClick={() => { setEmailStep('idle'); setEmailError(''); }}>← Назад</button>
+                  <button className="btn btn--primary" style={{ flex: 1 }} onClick={handleLinkEmailVerify} disabled={emailCode.length < 6 || emailLoading}>
+                    {emailLoading ? 'Проверяем...' : 'Подтвердить'}
+                  </button>
+                </div>
               </div>
             )}
           </ProviderCard>

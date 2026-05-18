@@ -1,7 +1,7 @@
 """Provider linking/unlinking endpoints.
 
 Allows authenticated users to:
-- Link email with password to their account
+- Link email with password to their account (2-step OTP)
 - Link telegram via OTP code
 - Unlink a provider (with guard against unlinking last provider)
 """
@@ -11,6 +11,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from services import auth_email, auth_telegram, identity
 from services.exceptions import (
+    EmailSendError,
+    InvalidCredentials,
     OTPCooldown,
     OTPExpired,
     OTPInvalid,
@@ -18,7 +20,8 @@ from services.exceptions import (
 )
 from web.deps import require_user
 from web.schemas import (
-    EmailRegisterRequest,
+    LinkEmailRequestStep1,
+    LinkEmailVerifyRequest,
     OTPRequestBody,
     OTPVerifyBody,
 )
@@ -26,17 +29,42 @@ from web.schemas import (
 router = APIRouter(prefix="/api/auth/link", tags=["auth-link"])
 
 
-@router.post("/email", status_code=204, response_model=None)
-async def link_email(
-    body: EmailRegisterRequest,
+@router.post("/email/request", status_code=204, response_model=None)
+async def link_email_request(
+    body: LinkEmailRequestStep1,
     user_id: int = Depends(require_user),
 ) -> None:
-    """Link email with password to current user."""
-    email_norm = auth_email.normalize_email(body.email)
-    from services.auth_password import hash_password
-    cred = hash_password(body.password)
+    """Step 1: validate email/password, send OTP to the email address."""
     try:
-        identity.link_provider(user_id, "email", email_norm, credential_hash=cred)
+        auth_email.link_email_request(user_id, body.email, body.password)
+    except ProviderAlreadyLinked as exc:
+        if exc.existing_user_id == user_id:
+            raise HTTPException(status_code=400, detail="email already linked to your account") from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except OTPCooldown as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except EmailSendError as exc:
+        raise HTTPException(status_code=502, detail=f"email send failed: {exc}") from exc
+    except (InvalidCredentials, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/email/verify", status_code=204, response_model=None)
+async def link_email_verify(
+    body: LinkEmailVerifyRequest,
+    user_id: int = Depends(require_user),
+) -> None:
+    """Step 2: verify OTP, link email to the authenticated account."""
+    try:
+        auth_email.link_email_verify(user_id, body.email, body.code)
+    except OTPExpired as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    except OTPInvalid as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except ProviderAlreadyLinked as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

@@ -74,6 +74,17 @@ def test_link_email_request_email_taken_by_other_409(client, tmp_db, no_email):
     assert r.status_code == 409
 
 
+def test_link_email_request_already_linked_to_same_user_400(client, tmp_db, no_email):
+    from services import auth_email
+    uid = auth_email.register("myemail@example.com", "password123")
+    r = client.post("/api/auth/link/email/request", json={
+        "email": "myemail@example.com",
+        "password": "newpass123",
+        "password_confirm": "newpass123",
+    }, headers=_make_headers(uid))
+    assert r.status_code == 400
+
+
 def test_link_email_request_requires_auth(client, tmp_db):
     r = client.post("/api/auth/link/email/request", json={
         "email": "a@b.com",

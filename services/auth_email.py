@@ -286,3 +286,33 @@ def link_email_verify(user_id: int, email: str, code: str) -> None:
         con.commit()
 
     identity.link_provider(user_id, "email", email_norm, credential_hash=password_hash)
+
+
+def change_password(user_id: int, current_password: str, new_password: str) -> None:
+    """Change password for an authenticated user who already has email linked.
+
+    Raises:
+      - InvalidCredentials: no email provider or current_password is wrong
+      - ValueError: new password is the same as current
+    """
+    from services.db import connect
+    with connect() as con:
+        row = con.execute(
+            "SELECT identifier, credential_hash FROM auth_providers "
+            "WHERE user_id = ? AND provider = 'email'",
+            (user_id,),
+        ).fetchone()
+
+        if row is None or not verify_password(current_password, row["credential_hash"] or ""):
+            raise InvalidCredentials("wrong current password or no email provider")
+
+        if verify_password(new_password, row["credential_hash"] or ""):
+            raise ValueError("new password must differ from current")
+
+        new_hash = hash_password(new_password)
+        con.execute(
+            "UPDATE auth_providers SET credential_hash = ? "
+            "WHERE user_id = ? AND provider = 'email'",
+            (new_hash, user_id),
+        )
+        con.commit()

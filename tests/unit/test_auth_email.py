@@ -270,3 +270,44 @@ def test_link_email_verify_wrong_user(tmp_db: Path, fake_send_email):
     code = _extract_link_code(tmp_db, "wronguser@example.com")
     with pytest.raises(OTPInvalid):
         auth_email.link_email_verify(uid2, "wronguser@example.com", code)
+
+
+# ── change_password tests ──────────────────────────────────────────────────
+
+def test_change_password_success(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(9001)
+    auth_email.link_email_request(uid, "changepw@example.com", "oldpass1")
+    code = _extract_link_code(tmp_db, "changepw@example.com")
+    auth_email.link_email_verify(uid, "changepw@example.com", code)
+
+    auth_email.change_password(uid, "oldpass1", "newpass99")
+
+    with pytest.raises(InvalidCredentials):
+        auth_email.login("changepw@example.com", "oldpass1")
+    assert auth_email.login("changepw@example.com", "newpass99") == uid
+
+
+def test_change_password_wrong_current(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(9002)
+    auth_email.link_email_request(uid, "wrongcur@example.com", "rightpass1")
+    code = _extract_link_code(tmp_db, "wrongcur@example.com")
+    auth_email.link_email_verify(uid, "wrongcur@example.com", code)
+
+    with pytest.raises(InvalidCredentials):
+        auth_email.change_password(uid, "wrongpass1", "newpass99")
+
+
+def test_change_password_same_as_current(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(9003)
+    auth_email.link_email_request(uid, "samepw@example.com", "samepass1")
+    code = _extract_link_code(tmp_db, "samepw@example.com")
+    auth_email.link_email_verify(uid, "samepw@example.com", code)
+
+    with pytest.raises(ValueError, match="must differ"):
+        auth_email.change_password(uid, "samepass1", "samepass1")
+
+
+def test_change_password_no_email_provider(tmp_db: Path):
+    uid = _identity.get_or_create_user_by_telegram(9004)
+    with pytest.raises(InvalidCredentials):
+        auth_email.change_password(uid, "any", "newpass99")

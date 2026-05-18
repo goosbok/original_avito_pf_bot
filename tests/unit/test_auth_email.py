@@ -161,3 +161,112 @@ def test_register_verify_email_normalization(tmp_db: Path, fake_send_email):
     code = _extract_code(tmp_db, "mixed@example.com")
     user_id = auth_email.register_verify("MIXED@example.com", code)
     assert user_id > 0
+
+
+# ── link_email_request / link_email_verify tests ─────────────────────────────
+
+from services import identity as _identity
+from services.exceptions import ProviderAlreadyLinked
+
+
+def _get_pending_link(tmp_db: Path, email: str):
+    with sqlite3.connect(tmp_db) as con:
+        con.row_factory = sqlite3.Row
+        return con.execute(
+            "SELECT * FROM pending_email_links WHERE email = ?", (email,)
+        ).fetchone()
+
+
+def _extract_link_code(tmp_db: Path, email: str) -> str:
+    row = _get_pending_link(tmp_db, email)
+    assert row is not None, f"no pending link row for {email}"
+    return row["code"]
+
+
+def test_link_email_request_creates_pending(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1001)
+    auth_email.link_email_request(uid, "link@example.com", "password123")
+    row = _get_pending_link(tmp_db, "link@example.com")
+    assert row is not None
+    assert int(row["user_id"]) == uid
+    assert len(row["code"]) == 6
+    assert row["code"].isdigit()
+
+
+def test_link_email_request_sends_email(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1002)
+    auth_email.link_email_request(uid, "sendlink@example.com", "password123")
+    assert len(fake_send_email) == 1
+    sent = fake_send_email[0]
+    assert sent["to"] == "sendlink@example.com"
+    assert _extract_link_code(tmp_db, "sendlink@example.com") in sent["body"]
+
+
+def test_link_email_request_already_linked_raises(tmp_db: Path, fake_send_email):
+    uid_a = auth_email.register("takenlink@example.com", "password123")
+    uid_b = _identity.get_or_create_user_by_telegram(1003)
+    with pytest.raises(ProviderAlreadyLinked):
+        auth_email.link_email_request(uid_b, "takenlink@example.com", "password123")
+    assert fake_send_email == []
+
+
+def test_link_email_request_cooldown(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1004)
+    auth_email.link_email_request(uid, "coollink@example.com", "password123")
+    with pytest.raises(OTPCooldown) as exc_info:
+        auth_email.link_email_request(uid, "coollink@example.com", "password123")
+    assert exc_info.value.retry_after_seconds > 0
+
+
+def test_link_email_verify_success(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1005)
+    auth_email.link_email_request(uid, "verify@example.com", "password123")
+    code = _extract_link_code(tmp_db, "verify@example.com")
+    auth_email.link_email_verify(uid, "verify@example.com", code)
+    assert _identity.find_user_id_by_provider("email", "verify@example.com") == uid
+    assert _get_pending_link(tmp_db, "verify@example.com") is None
+
+
+def test_link_email_verify_can_login_after(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1006)
+    auth_email.link_email_request(uid, "loginafter@example.com", "password123")
+    code = _extract_link_code(tmp_db, "loginafter@example.com")
+    auth_email.link_email_verify(uid, "loginafter@example.com", code)
+    assert auth_email.login("loginafter@example.com", "password123") == uid
+
+
+def test_link_email_verify_wrong_code(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1007)
+    auth_email.link_email_request(uid, "wrongcode@example.com", "password123")
+    with pytest.raises(OTPInvalid):
+        auth_email.link_email_verify(uid, "wrongcode@example.com", "000000")
+    assert _get_pending_link(tmp_db, "wrongcode@example.com") is not None
+
+
+def test_link_email_verify_no_pending(tmp_db: Path):
+    uid = _identity.get_or_create_user_by_telegram(1008)
+    with pytest.raises(OTPInvalid):
+        auth_email.link_email_verify(uid, "nopending@example.com", "123456")
+
+
+def test_link_email_verify_expired(tmp_db: Path, fake_send_email):
+    uid = _identity.get_or_create_user_by_telegram(1009)
+    auth_email.link_email_request(uid, "explink@example.com", "password123")
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "UPDATE pending_email_links SET expires_at = ? WHERE email = ?",
+            ("2000-01-01T00:00:00+00:00", "explink@example.com"),
+        )
+        con.commit()
+    code = _extract_link_code(tmp_db, "explink@example.com")
+    with pytest.raises(OTPExpired):
+        auth_email.link_email_verify(uid, "explink@example.com", code)
+
+
+def test_link_email_verify_wrong_user(tmp_db: Path, fake_send_email):
+    uid1 = _identity.get_or_create_user_by_telegram(1010)
+    uid2 = _identity.get_or_create_user_by_telegram(1011)
+    auth_email.link_email_request(uid1, "wronguser@example.com", "password123")
+    code = _extract_link_code(tmp_db, "wronguser@example.com")
+    with pytest.raises(OTPInvalid):
+        auth_email.link_email_verify(uid2, "wronguser@example.com", code)

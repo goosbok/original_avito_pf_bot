@@ -14,6 +14,7 @@ from services.exceptions import (
     OTPCooldown,
     OTPExpired,
     OTPInvalid,
+    ProviderAlreadyLinked,
 )
 
 CODE_TTL_MINUTES = 10
@@ -181,3 +182,107 @@ def login(email: str, password: str) -> int:
 
     identity.touch_provider("email", email_norm)
     return user_id
+
+
+def link_email_request(user_id: int, email: str, password: str) -> None:
+    """Step 1 of email-link flow: validate, store pending row, send OTP.
+
+    Raises:
+      - InvalidCredentials: invalid email format
+      - ProviderAlreadyLinked: email already linked to any account
+      - OTPCooldown: last request < CODE_RESEND_COOLDOWN_SECONDS ago
+      - EmailSendError: SMTP failure
+      - ValueError: password too short
+    """
+    email_norm = normalize_email(email)
+
+    existing = identity.find_user_id_by_provider("email", email_norm)
+    if existing is not None:
+        raise ProviderAlreadyLinked("email", email_norm, existing)
+
+    cred = hash_password(password)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        row = con.execute(
+            "SELECT created_at FROM pending_email_links WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is not None:
+            try:
+                created = datetime.fromisoformat(row["created_at"])
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                elapsed = (now - created).total_seconds()
+                if elapsed < CODE_RESEND_COOLDOWN_SECONDS:
+                    raise OTPCooldown(int(CODE_RESEND_COOLDOWN_SECONDS - elapsed))
+            except (ValueError, KeyError):
+                pass
+
+        code = _generate_code()
+        expires_at = now + timedelta(minutes=CODE_TTL_MINUTES)
+
+        con.execute(
+            "INSERT INTO pending_email_links"
+            "(email, user_id, password_hash, code, expires_at, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET "
+            "user_id = excluded.user_id, "
+            "password_hash = excluded.password_hash, "
+            "code = excluded.code, "
+            "expires_at = excluded.expires_at, "
+            "created_at = excluded.created_at",
+            (email_norm, user_id, cred, code, expires_at.isoformat(), now.isoformat()),
+        )
+        con.commit()
+
+    from services.email_sender import send_email
+
+    subject = "ProBoost — код подтверждения привязки почты"
+    body = (
+        f"Ваш код подтверждения: {code}\n\n"
+        f"Код действителен {CODE_TTL_MINUTES} минут.\n\n"
+        f"Если вы не запрашивали это, просто проигнорируйте письмо."
+    )
+    send_email(email_norm, subject, body)
+
+
+def link_email_verify(user_id: int, email: str, code: str) -> None:
+    """Step 2: verify OTP, link email to user account.
+
+    Raises:
+      - OTPInvalid: wrong code, no pending row, or wrong user_id
+      - OTPExpired: code TTL passed
+      - ProviderAlreadyLinked: race condition (email linked between request and verify)
+    """
+    email_norm = normalize_email(email)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        row = con.execute(
+            "SELECT user_id, password_hash, code, expires_at "
+            "FROM pending_email_links WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is None:
+            raise OTPInvalid("Запросите код заново")
+        if int(row["user_id"]) != user_id:
+            raise OTPInvalid("Запросите код заново")
+
+        expires = datetime.fromisoformat(row["expires_at"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now > expires:
+            raise OTPExpired("Код истёк, запросите новый")
+        if str(row["code"]) != str(code).strip():
+            raise OTPInvalid("Неверный код")
+
+        password_hash = row["password_hash"]
+        con.execute("DELETE FROM pending_email_links WHERE email = ?", (email_norm,))
+        con.commit()
+
+    identity.link_provider(user_id, "email", email_norm, credential_hash=password_hash)

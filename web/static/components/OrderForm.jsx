@@ -1,9 +1,14 @@
 // PF Order Form — two-column layout with real API
 const { useState: useOrderState, useEffect: useOrderEffect } = React;
 
-function parseUrls(text) {
+function parseAvitoUrls(text) {
   if (!text) return [];
-  return text.split(/(?=https:\/\/)/g).map(u => u.trim()).filter(u => u.startsWith('https://'));
+  const normalized = text.replace(/(?<=\S)[\r\n]+(?=\S)/g, '');
+  const raw = normalized.match(/https?:\/\/(?:www\.)?avito\.ru\/\S+/g) || [];
+  const seen = new Set();
+  return raw
+    .map(u => u.replace(/["')\].,;]+$/, '').split('?')[0])
+    .filter(u => { if (seen.has(u)) return false; seen.add(u); return true; });
 }
 
 function SliderField({ label, min, max, step, value, onChange, suffix = '', hint }) {
@@ -27,7 +32,8 @@ function SliderField({ label, min, max, step, value, onChange, suffix = '', hint
 }
 
 function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
-  const [urls, setUrls] = useOrderState('');
+  const [inputText, setInputText] = useOrderState('');
+  const [links, setLinks] = useOrderState([]);
   const [views, setViews] = useOrderState(30);  // maps to fix_count in API
   const [days, setDays] = useOrderState(7);
   const [contacts, setContacts] = useOrderState(false);
@@ -46,9 +52,18 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
     }).catch(() => {});
   }, []);
 
-  const urlList = parseUrls(urls);
-  const urlCount = urlList.length;
+  const urlCount = links.length;
   const totalPrice = urlCount > 0 ? views * days * urlCount * pricePerUnit : 0;
+
+  const handleInputChange = e => {
+    const val = e.target.value;
+    const parsed = parseAvitoUrls(val);
+    const toAdd = parsed.filter(u => !links.includes(u));
+    if (toAdd.length) setLinks(prev => [...prev, ...toAdd]);
+    setInputText(val);
+  };
+
+  const removeLink = url => setLinks(prev => prev.filter(u => u !== url));
 
   const handleSubmit = async () => {
     if (urlCount === 0) return setError('Вставьте хотя бы одну ссылку на объявление');
@@ -56,7 +71,7 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
     setError(''); setLoading(true);
     try {
       await api.post('/api/orders/pf', {
-        links: urlList,
+        links,
         days,
         fix_count: views,
         contacts
@@ -81,6 +96,8 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
       </div>
     </div>
   );
+
+  const noUrlsWarning = inputText.length > 5 && parseAvitoUrls(inputText).length === 0 && urlCount === 0;
 
   return (
     <div className="page-wrap">
@@ -121,22 +138,47 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
                       <span className="badge badge--new">✓ {urlCount} {urlCount === 1 ? 'объявление' : urlCount < 5 ? 'объявления' : 'объявлений'}</span>
                     )}
                   </div>
+
                   <textarea
                     className="textarea input-mono"
-                    rows={8}
-                    placeholder={"https://www.avito.ru/moskva/uslugi/...\nhttps://www.avito.ru/spb/uslugi/...\n\nВставьте ссылки построчно или через пробел —\nкаждый https:// распознаётся как отдельное объявление"}
-                    value={urls}
-                    onChange={e => setUrls(e.target.value)}
-                    style={{ minHeight: 180 }}
+                    rows={4}
+                    placeholder={"Вставьте ссылки или любой текст со ссылками Авито"}
+                    value={inputText}
+                    onChange={handleInputChange}
                   />
-                  {urlCount === 0 && urls.length > 5 && (
+
+                  {noUrlsWarning && (
                     <div style={{ fontSize: '0.8rem', color: 'var(--status-cancel-text)', marginTop: 6 }}>
-                      ⚠ Ссылки должны начинаться с https://
+                      ⚠ Авито-ссылки не найдены
                     </div>
                   )}
-                  <div className="form-hint" style={{ marginTop: 6 }}>
-                    Каждый https:// — отдельное объявление. Цена умножается на количество.
-                  </div>
+
+                  {urlCount > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
+                        Добавленные объявления
+                      </div>
+                      {links.map((url, i) => (
+                        <div key={url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: i < links.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                          <span style={{ flex: 1, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {url}
+                          </span>
+                          <button
+                            onClick={() => removeLink(url)}
+                            style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-cancel-text)', fontWeight: 700, fontSize: '1.1rem', padding: '0 4px', lineHeight: 1 }}
+                          >
+                            −
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {urlCount === 0 && (
+                    <div className="form-hint" style={{ marginTop: 6 }}>
+                      Каждое уникальное объявление — отдельная строка в счёте
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

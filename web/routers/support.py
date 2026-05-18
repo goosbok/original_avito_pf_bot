@@ -50,9 +50,9 @@ async def send_message(
 async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
     try:
         from data.loader import bot
+        import data.config as _cfg
         from services import identity
         from services.db import connect as db_connect
-        from utils.sqlite3 import get_admins, get_spam_exclude, get_tg_id_for_user
 
         try:
             u = identity.get_user(user_id)
@@ -65,24 +65,17 @@ async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
             f"От: {user_str}\n\n{text}"
         )
 
-        first_tg_msg_id = None
-        for admin in get_admins():
-            if admin in get_spam_exclude():
-                continue
-            tg_id = get_tg_id_for_user(int(admin)) or int(admin)
-            try:
-                sent = await bot.send_message(chat_id=tg_id, text=fwd_text, parse_mode="HTML")
-                if first_tg_msg_id is None:
-                    first_tg_msg_id = sent.message_id
-            except Exception:
-                pass
+        sent = await bot.send_message(
+            chat_id=_cfg.SUPPORT_CHAT_ID,
+            text=fwd_text,
+            parse_mode="HTML",
+        )
 
-        if first_tg_msg_id is not None:
-            with db_connect() as con:
-                con.execute(
-                    "UPDATE support_messages SET tg_message_id = ? WHERE id = ?",
-                    (first_tg_msg_id, msg_id),
-                )
-                con.commit()
+        with db_connect() as con:
+            con.execute(
+                "UPDATE support_messages SET tg_message_id = ? WHERE id = ?",
+                (sent.message_id, msg_id),
+            )
+            con.commit()
     except Exception:
         logger.exception("_forward_to_admins failed for user_id=%s", user_id)

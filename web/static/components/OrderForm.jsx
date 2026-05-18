@@ -145,6 +145,7 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
                     placeholder={"Вставьте ссылки или любой текст со ссылками Авито"}
                     value={inputText}
                     onChange={handleInputChange}
+                    style={{ resize: 'none' }}
                   />
 
                   {noUrlsWarning && (
@@ -160,9 +161,13 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
                       </div>
                       {links.map((url, i) => (
                         <div key={url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: i < links.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                          <span style={{ flex: 1, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {url}
-                          </span>
+                          <a
+                            href={url} target="_blank" rel="noopener noreferrer"
+                            title={url}
+                            style={{ flex: 1, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 380, textDecoration: 'none' }}
+                          >
+                            {url.length > 60 ? url.slice(0, 60) + '…' : url}
+                          </a>
                           <button
                             onClick={() => removeLink(url)}
                             style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-cancel-text)', fontWeight: 700, fontSize: '1.1rem', padding: '0 4px', lineHeight: 1 }}

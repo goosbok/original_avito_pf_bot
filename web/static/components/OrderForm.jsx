@@ -48,7 +48,7 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
 
   const urlList = parseUrls(urls);
   const urlCount = urlList.length;
-  const totalPrice = views * days * Math.max(urlCount, 1) * pricePerUnit;
+  const totalPrice = urlCount > 0 ? views * days * urlCount * pricePerUnit : 0;
 
   const handleSubmit = async () => {
     if (urlCount === 0) return setError('Вставьте хотя бы одну ссылку на объявление');

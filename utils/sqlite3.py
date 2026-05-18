@@ -989,7 +989,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "expires_at TIMESTAMP NOT NULL,"
             "created_at TIMESTAMP NOT NULL,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            7,
+            6,
         ),
         (
             "password_reset_tokens",

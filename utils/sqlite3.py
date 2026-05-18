@@ -980,6 +980,28 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             6,
         ),
         (
+            "pending_email_links",
+            "CREATE TABLE IF NOT EXISTS pending_email_links("
+            "email TEXT PRIMARY KEY,"
+            "user_id INTEGER NOT NULL,"
+            "password_hash TEXT NOT NULL,"
+            "code TEXT NOT NULL,"
+            "expires_at TIMESTAMP NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            7,
+        ),
+        (
+            "password_reset_tokens",
+            "CREATE TABLE IF NOT EXISTS password_reset_tokens("
+            "token_hash TEXT PRIMARY KEY,"
+            "email TEXT NOT NULL,"
+            "expires_at TIMESTAMP NOT NULL,"
+            "used_at TIMESTAMP,"
+            "created_at TIMESTAMP NOT NULL)",
+            5,
+        ),
+        (
             "funnel_events",
             "CREATE TABLE IF NOT EXISTS funnel_events("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"

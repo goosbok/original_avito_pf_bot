@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,9 @@ from services.exceptions import (
     OTPInvalid,
 )
 from web.auth import create_jwt
+from web.deps import require_user
 from web.schemas import (
+    ChangePasswordRequest,
     EmailLoginRequest,
     EmailRegisterRequest,
     EmailRegisterVerifyRequest,
@@ -27,6 +29,7 @@ from web.schemas import (
 )
 
 router = APIRouter(prefix="/api/auth/email", tags=["auth"])
+router_auth = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
@@ -106,5 +109,19 @@ async def reset_password(body: ResetPasswordRequest) -> None:
     """Consume reset token and set a new password."""
     try:
         _auth_reset.reset_password(body.token, body.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router_auth.post("/change-password", status_code=204, response_model=None)
+async def change_password(
+    body: ChangePasswordRequest,
+    user_id: int = Depends(require_user),
+) -> None:
+    """Change password for authenticated user who has email linked."""
+    try:
+        auth_email.change_password(user_id, body.current_password, body.new_password)
+    except InvalidCredentials as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

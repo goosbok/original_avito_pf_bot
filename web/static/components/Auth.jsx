@@ -1,7 +1,7 @@
 // Auth screens: Email login, Telegram OTP login, Email register
 const { useState, useEffect } = React;
 
-const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
+const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToken }) => {
   const [mode, setMode] = useState(initialMode || 'login');
 
   // Keep internal mode in sync when parent navigates between auth sub-modes
@@ -16,6 +16,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     setRegStep('form'); setRegCode('');
     setOtpSent(false); setOtpCode('');
     setNeedsConnect(false);
+    setForgotEmail(''); setForgotSent(false);
+    setResetNew(''); setResetConfirm(''); setResetDone(false);
   }, [mode]);
 
   const [email, setEmail] = useState('');
@@ -31,6 +33,11 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
   const [regStep, setRegStep] = useState('form');
   const [regCode, setRegCode] = useState('');
   const [needsConnect, setNeedsConnect] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
+  const [resetNew, setResetNew] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetDone, setResetDone] = useState(false);
 
   useEffect(() => {
     if (tgId) sessionStorage.setItem('auth_tg_phone', tgId);
@@ -160,6 +167,39 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     } finally { setLoading(false); }
   };
 
+  const handleForgotPassword = async () => {
+    if (!forgotEmail) return setError('Введите email');
+    setLoading(true); setError('');
+    try {
+      await api.post('/api/auth/forgot-password', { email: forgotEmail });
+    } catch (_) {
+      // Always show success to prevent email enumeration
+    } finally {
+      setLoading(false);
+    }
+    setForgotSent(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetNew || resetNew.length < 8) return setError('Пароль — минимум 8 символов');
+    if (resetNew !== resetConfirm) return setError('Пароли не совпадают');
+    setLoading(true); setError('');
+    try {
+      await api.post('/api/auth/reset-password', {
+        token: resetToken,
+        new_password: resetNew,
+        new_password_confirm: resetConfirm,
+      });
+      setResetDone(true);
+      window.history.replaceState({}, '', '/');
+    } catch (e) {
+      if (e.status === 410) setError('Ссылка истекла — запросите новую');
+      else setError(e.message || 'Ошибка сброса пароля');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logoMark = (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <div style={{
@@ -167,6 +207,41 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1rem', fontWeight: 900, color: '#fff'
       }}>PB</div>
+    </div>
+  );
+
+  if (mode === 'reset') return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2 style={{ marginBottom: 6 }}>Новый пароль</h2>
+        {resetDone ? (
+          <>
+            <div className="alert alert--success" style={{ marginBottom: 16 }}>
+              Пароль изменён — войдите с новым паролем
+            </div>
+            <button className="btn btn--primary" onClick={() => onNavigate('login')}>
+              Войти
+            </button>
+          </>
+        ) : (
+          <>
+            {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-label">Новый пароль</label>
+              <input className="input" type="password" placeholder="Минимум 8 символов"
+                value={resetNew} onChange={e => setResetNew(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ marginBottom: 16 }}>
+              <label className="form-label">Повторите пароль</label>
+              <input className="input" type="password" placeholder="Повторите пароль"
+                value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} />
+            </div>
+            <button className="btn btn--primary" onClick={handleResetPassword} disabled={loading}>
+              {loading ? 'Сохраняем...' : 'Сохранить'}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -339,6 +414,42 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     </div>
   );
 
+  if (mode === 'forgot') return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2 style={{ marginBottom: 6 }}>Восстановление пароля</h2>
+        {forgotSent ? (
+          <>
+            <div className="alert alert--success" style={{ marginBottom: 16 }}>
+              Если аккаунт существует, письмо с инструкцией отправлено
+            </div>
+            <button className="btn btn--ghost" onClick={() => onNavigate('login')}>
+              ← Назад ко входу
+            </button>
+          </>
+        ) : (
+          <>
+            {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-label">Email</label>
+              <input className="input" type="email" placeholder="you@example.com"
+                value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} />
+            </div>
+            <button className="btn btn--primary" onClick={handleForgotPassword} disabled={loading}>
+              {loading ? 'Отправляем...' : 'Отправить ссылку'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <button className="btn btn--ghost btn--sm" onClick={() => onNavigate('login')}
+                style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                ← Назад ко входу
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   // Default: Email login
   return (
     <div className="auth-wrap">
@@ -367,6 +478,13 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
           <button className="btn btn--primary btn--lg btn--full" onClick={handleEmailLogin} disabled={loading}>
             {loading ? 'Вход...' : 'Войти →'}
           </button>
+              <div style={{ textAlign: 'center', marginTop: 4 }}>
+                <button className="btn btn--ghost btn--sm"
+                  onClick={() => onNavigate('forgot')}
+                  style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                  Забыл пароль?
+                </button>
+              </div>
         </div>
         <div className="auth-links">
           Нет аккаунта?{' '}

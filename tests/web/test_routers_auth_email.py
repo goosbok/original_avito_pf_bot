@@ -13,6 +13,18 @@ def client(tmp_db: Path, monkeypatch):
     return TestClient(app)
 
 
+def _make_headers(uid: int) -> dict:
+    from web.auth import create_jwt
+    return {"Authorization": f"Bearer {create_jwt(uid)}"}
+
+
+@pytest.fixture
+def no_email(monkeypatch):
+    """Suppress actual email sends."""
+    import services.email_sender as es
+    monkeypatch.setattr(es, "send_email", lambda *a, **kw: None)
+
+
 def test_register_returns_jwt(client):
     r = client.post("/api/auth/email/register", json={
         "email": "alice@example.com",
@@ -177,3 +189,66 @@ def test_reset_password_invalid_token_400(client, tmp_db):
         "new_password_confirm": "password123",
     })
     assert r.status_code == 400
+
+
+# ── /change-password ──────────────────────────────────────────────────────
+
+def _link_email_for_user(uid: int, email: str, password: str, tmp_db) -> None:
+    """Helper: fully link email to uid (request + verify)."""
+    import sqlite3
+    from services import auth_email as _ae
+    _ae.link_email_request(uid, email, password)
+    with sqlite3.connect(tmp_db) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT code FROM pending_email_links WHERE email = ?", (email,)
+        ).fetchone()
+    _ae.link_email_verify(uid, email, row["code"])
+
+
+def test_change_password_204(client, tmp_db, no_email):
+    from services import identity
+    uid = identity.get_or_create_user_by_telegram(8001)
+    _link_email_for_user(uid, "chpw@example.com", "oldpass1", tmp_db)
+
+    r = client.post("/api/auth/change-password", json={
+        "current_password": "oldpass1",
+        "new_password": "newpass99",
+        "new_password_confirm": "newpass99",
+    }, headers=_make_headers(uid))
+    assert r.status_code == 204
+
+
+def test_change_password_wrong_current_401(client, tmp_db, no_email):
+    from services import identity
+    uid = identity.get_or_create_user_by_telegram(8002)
+    _link_email_for_user(uid, "chpw2@example.com", "rightpass1", tmp_db)
+
+    r = client.post("/api/auth/change-password", json={
+        "current_password": "wrongpass1",
+        "new_password": "newpass99",
+        "new_password_confirm": "newpass99",
+    }, headers=_make_headers(uid))
+    assert r.status_code == 401
+
+
+def test_change_password_mismatch_422(client, tmp_db, no_email):
+    from services import identity
+    uid = identity.get_or_create_user_by_telegram(8003)
+    _link_email_for_user(uid, "chpw3@example.com", "oldpass1", tmp_db)
+
+    r = client.post("/api/auth/change-password", json={
+        "current_password": "oldpass1",
+        "new_password": "newpass99",
+        "new_password_confirm": "different99",
+    }, headers=_make_headers(uid))
+    assert r.status_code == 422
+
+
+def test_change_password_requires_auth_401(client, tmp_db):
+    r = client.post("/api/auth/change-password", json={
+        "current_password": "any",
+        "new_password": "newpass99",
+        "new_password_confirm": "newpass99",
+    })
+    assert r.status_code == 401

@@ -19,10 +19,13 @@ _SUPPORT_PATTERN = re.compile(r"Вопрос из веб #(\d+)")
     state="*",
 )
 async def admin_reply_to_support(message: Message) -> None:
-    from utils.sqlite3 import get_admins
+    import data.config as _cfg
+    if message.chat.id != _cfg.SUPPORT_CHAT_ID:
+        return
 
-    admins = [str(a) for a in get_admins()]
-    if str(message.from_user.id) not in admins:
+    from utils.sqlite3 import get_admins, get_tg_id_for_user
+    admin_tg_ids = {get_tg_id_for_user(int(a)) or int(a) for a in get_admins()}
+    if message.from_user.id not in admin_tg_ids:
         return
 
     replied_text = message.reply_to_message.text or ""
@@ -48,7 +51,6 @@ async def admin_reply_to_support(message: Message) -> None:
     from services.support import create_admin_reply
     create_admin_reply(user_id, message.text, message.message_id)
 
-    from utils.sqlite3 import get_tg_id_for_user
     tg_id = get_tg_id_for_user(user_id)
     if tg_id:
         try:

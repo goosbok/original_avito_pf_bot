@@ -35,14 +35,6 @@ def link_cleaner(link):
     cleaned_link = cleaned_link.replace(";", "")
     return cleaned_link
 
-#Отправка отчета админам
-async def send_admins(msg: str):
-    for admin in get_admins():
-        if admin not in get_spam_exclude():
-            await bot.send_message(chat_id=admin, text=msg, disable_web_page_preview=True)
-        else:
-            pass
-
 def str2bool(value):
     if value is None:
         return False

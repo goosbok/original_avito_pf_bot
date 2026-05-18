@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
 
-from services import auth_email
+from services import auth_email, auth_reset as _auth_reset
 from services.exceptions import (
     EmailAlreadyRegistered,
     EmailSendError,
@@ -17,6 +17,8 @@ from web.schemas import (
     EmailLoginRequest,
     EmailRegisterRequest,
     EmailRegisterVerifyRequest,
+    ForgotPasswordRequest,
+    ResetPasswordRequest,
     TokenResponse,
 )
 
@@ -83,3 +85,22 @@ async def login(body: EmailLoginRequest) -> TokenResponse:
     except InvalidCredentials as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     return TokenResponse(access_token=create_jwt(user_id))
+
+
+@router.post("/forgot-password", response_model=None)
+async def forgot_password(body: ForgotPasswordRequest) -> Response:
+    """Send password reset link to email. Always returns 200 — never reveals registration status."""
+    try:
+        _auth_reset.forgot_password(body.email)
+    except Exception:
+        pass
+    return Response(status_code=200)
+
+
+@router.post("/reset-password", status_code=204, response_model=None)
+async def reset_password(body: ResetPasswordRequest) -> None:
+    """Consume reset token and set a new password."""
+    try:
+        _auth_reset.reset_password(body.token, body.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

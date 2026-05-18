@@ -1,7 +1,7 @@
 // Auth screens: Email login, Telegram OTP login, Email register
 const { useState, useEffect } = React;
 
-const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
+const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToken }) => {
   const [mode, setMode] = useState(initialMode || 'login');
 
   // Keep internal mode in sync when parent navigates between auth sub-modes
@@ -17,6 +17,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     setOtpSent(false); setOtpCode('');
     setNeedsConnect(false);
     setForgotEmail(''); setForgotSent(false);
+    setResetNew(''); setResetConfirm(''); setResetDone(false);
   }, [mode]);
 
   const [email, setEmail] = useState('');
@@ -34,6 +35,9 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
   const [needsConnect, setNeedsConnect] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
+  const [resetNew, setResetNew] = useState('');
+  const [resetConfirm, setResetConfirm] = useState('');
+  const [resetDone, setResetDone] = useState(false);
 
   useEffect(() => {
     if (tgId) sessionStorage.setItem('auth_tg_phone', tgId);
@@ -176,6 +180,26 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     setForgotSent(true);
   };
 
+  const handleResetPassword = async () => {
+    if (!resetNew || resetNew.length < 8) return setError('Пароль — минимум 8 символов');
+    if (resetNew !== resetConfirm) return setError('Пароли не совпадают');
+    setLoading(true); setError('');
+    try {
+      await api.post('/api/auth/reset-password', {
+        token: resetToken,
+        new_password: resetNew,
+        new_password_confirm: resetConfirm,
+      });
+      setResetDone(true);
+      window.history.replaceState({}, '', '/');
+    } catch (e) {
+      if (e.status === 410) setError('Ссылка истекла — запросите новую');
+      else setError(e.message || 'Ошибка сброса пароля');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logoMark = (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <div style={{
@@ -183,6 +207,41 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: '1rem', fontWeight: 900, color: '#fff'
       }}>PB</div>
+    </div>
+  );
+
+  if (mode === 'reset') return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h2 style={{ marginBottom: 6 }}>Новый пароль</h2>
+        {resetDone ? (
+          <>
+            <div className="alert alert--success" style={{ marginBottom: 16 }}>
+              Пароль изменён — войдите с новым паролем
+            </div>
+            <button className="btn btn--primary" onClick={() => onNavigate('login')}>
+              Войти
+            </button>
+          </>
+        ) : (
+          <>
+            {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-label">Новый пароль</label>
+              <input className="input" type="password" placeholder="Минимум 8 символов"
+                value={resetNew} onChange={e => setResetNew(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ marginBottom: 16 }}>
+              <label className="form-label">Повторите пароль</label>
+              <input className="input" type="password" placeholder="Повторите пароль"
+                value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} />
+            </div>
+            <button className="btn btn--primary" onClick={handleResetPassword} disabled={loading}>
+              {loading ? 'Сохраняем...' : 'Сохранить'}
+            </button>
+          </>
+        )}
+      </div>
     </div>
   );
 

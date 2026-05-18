@@ -5,7 +5,7 @@ const { useState: useProfileState, useEffect: useProfileEffect } = React;
 // inside the parent created a NEW component type on every parent render,
 // which made React unmount/remount the inputs underneath — focus dropped
 // after each keystroke (https://react.dev/learn/preserving-and-resetting-state).
-function ProviderCard({ title, icon, linked, linkedLabel, children }) {
+function ProviderCard({ title, icon, linked, linkedLabel, children, linkedChildren }) {
   return (
     <div className="card" style={{ padding: '20px 24px', marginBottom: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: linked ? 0 : 18 }}>
@@ -26,6 +26,7 @@ function ProviderCard({ title, icon, linked, linkedLabel, children }) {
         }
       </div>
       {!linked && <div style={{ marginTop: 16 }}>{children}</div>}
+      {linked && linkedChildren && <div style={{ marginTop: 16 }}>{linkedChildren}</div>}
     </div>
   );
 }
@@ -39,6 +40,13 @@ function ProfilePage({ user, onNavigate, botConfig }) {
   const [emailStep, setEmailStep] = useProfileState('idle'); // idle | sent | done
   const [emailLoading, setEmailLoading] = useProfileState(false);
   const [emailError, setEmailError] = useProfileState('');
+  const [changePwOpen, setChangePwOpen] = useProfileState(false);
+  const [changePwCurrent, setChangePwCurrent] = useProfileState('');
+  const [changePwNew, setChangePwNew] = useProfileState('');
+  const [changePwConfirm, setChangePwConfirm] = useProfileState('');
+  const [changePwLoading, setChangePwLoading] = useProfileState(false);
+  const [changePwError, setChangePwError] = useProfileState('');
+  const [changePwSuccess, setChangePwSuccess] = useProfileState(false);
   const [tgInput, setTgInput] = useProfileState('');
   const [tgCode, setTgCode] = useProfileState('');
   const [tgStep, setTgStep] = useProfileState('idle'); // idle | sent | done
@@ -84,6 +92,28 @@ function ProfilePage({ user, onNavigate, botConfig }) {
       else setEmailError(e.message || 'Ошибка проверки кода');
     } finally {
       setEmailLoading(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!changePwCurrent || !changePwNew) return setChangePwError('Заполните все поля');
+    if (changePwNew.length < 8) return setChangePwError('Новый пароль — минимум 8 символов');
+    if (changePwNew !== changePwConfirm) return setChangePwError('Пароли не совпадают');
+    setChangePwLoading(true); setChangePwError('');
+    try {
+      await api.post('/api/auth/change-password', {
+        current_password: changePwCurrent,
+        new_password: changePwNew,
+        new_password_confirm: changePwConfirm,
+      });
+      setChangePwSuccess(true);
+      setChangePwOpen(false);
+      setChangePwCurrent(''); setChangePwNew(''); setChangePwConfirm('');
+    } catch (e) {
+      if (e.status === 401) setChangePwError('Неверный текущий пароль');
+      else setChangePwError(e.message || 'Ошибка смены пароля');
+    } finally {
+      setChangePwLoading(false);
     }
   };
 
@@ -175,6 +205,48 @@ function ProfilePage({ user, onNavigate, botConfig }) {
             title="Email и пароль" icon="Em"
             linked={!!emailProvider}
             linkedLabel={emailProvider?.identifier || ''}
+            linkedChildren={emailProvider && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {changePwSuccess && !changePwOpen && (
+                  <div className="alert alert--success">Пароль изменён</div>
+                )}
+                {!changePwOpen ? (
+                  <button className="btn btn--ghost btn--sm" style={{ alignSelf: 'flex-start' }}
+                    onClick={() => { setChangePwOpen(true); setChangePwSuccess(false); setChangePwError(''); }}>
+                    Сменить пароль
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {changePwError && <div className="alert alert--error">{changePwError}</div>}
+                    <div className="form-field">
+                      <label className="form-label">Текущий пароль</label>
+                      <input className="input" type="password" placeholder="Текущий пароль"
+                        value={changePwCurrent} onChange={e => setChangePwCurrent(e.target.value)} />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Новый пароль</label>
+                      <input className="input" type="password" placeholder="Минимум 8 символов"
+                        value={changePwNew} onChange={e => setChangePwNew(e.target.value)} />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Повторите новый пароль</label>
+                      <input className="input" type="password" placeholder="Повторите пароль"
+                        value={changePwConfirm} onChange={e => setChangePwConfirm(e.target.value)} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn--ghost btn--sm"
+                        onClick={() => { setChangePwOpen(false); setChangePwError(''); }}>
+                        Отмена
+                      </button>
+                      <button className="btn btn--primary" style={{ flex: 1 }}
+                        onClick={handleChangePassword} disabled={changePwLoading}>
+                        {changePwLoading ? 'Сохраняем...' : 'Сохранить'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           >
             {emailStep === 'done' ? (
               <div className="alert alert--success">✅ Email успешно привязан</div>

@@ -100,7 +100,7 @@ async def get_guest_order_status(guest_order_id: int) -> GuestOrderStatusRespons
         asyncio.create_task(_notify_guest_order_paid(order))
         return GuestOrderStatusResponse(status="paid", order_id=guest_order_id)
 
-    if payment.status in {"canceled", "expired", "rejected"}:
+    if payment.status == "canceled":
         svc.update_status(guest_order_id, "failed")
         return GuestOrderStatusResponse(status="failed")
 

@@ -1,5 +1,5 @@
 // Landing page — with trust/fear-closing sections
-const { useState: useLandingState } = React;
+const { useState: useLandingState, useEffect: useLandingEffect } = React;
 
 const SERVICES_PREVIEW = [
 { abbr: 'ПФ',  name: 'Авито ПФ',     desc: 'Просмотры, лайки, запросы контактов — поведенческие факторы', price: 'от 6 ₽/ПФ', available: true },
@@ -73,6 +73,14 @@ function FaqItem({ q, a }) {
 }
 
 const LandingPage = ({ onNavigate, brandName }) => {
+  const [paymentAvailable, setPaymentAvailable] = useLandingState(true);
+
+  useLandingEffect(() => {
+    api.get('/api/guest-orders/payment-available')
+      .then(d => { if (!d.__unauthorized) setPaymentAvailable(d.available !== false); })
+      .catch(() => {});
+  }, []);
+
   return (
     <div className="page-wrap">
 
@@ -92,6 +100,17 @@ const LandingPage = ({ onNavigate, brandName }) => {
           </button>
           <button className="btn btn--ghost btn--lg" onClick={() => onNavigate('login')}>
             Войти через Email
+          </button>
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <button
+            className="btn btn--ghost btn--lg"
+            onClick={() => paymentAvailable && onNavigate('guest-order-pf')}
+            disabled={!paymentAvailable}
+            title={!paymentAvailable ? 'Онлайн-оплата временно недоступна' : undefined}
+            style={!paymentAvailable ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+          >
+            ⚡ Заказать без регистрации
           </button>
         </div>
         <p style={{ marginTop: 16, fontSize: '0.8125rem', color: 'var(--text-3)' }}>

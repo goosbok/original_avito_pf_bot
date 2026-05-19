@@ -11,11 +11,14 @@ const TWEAK_DEFAULTS = {
 function App() {
   const _resetToken = new URLSearchParams(window.location.search).get('token');
   const _isResetRoute = window.location.pathname === '/reset-password' && !!_resetToken;
+  const _guestOrderId = new URLSearchParams(window.location.search).get('guest_order_id');
+  const _isGuestReturn = !!_guestOrderId;
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
-  const [route, setRoute] = useState(_isResetRoute ? 'auth' : 'landing');
+  const [route, setRoute] = useState(_isGuestReturn ? 'guest-order-success' : (_isResetRoute ? 'auth' : 'landing'));
   const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
+  const [guestOrderId] = useState(_guestOrderId);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
@@ -173,6 +176,8 @@ function App() {
       case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} resetToken={resetToken} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
       case 'order-pf': return <OrderFormPage balance={balance} onNavigate={handleNavigate} onOrderPlaced={handleOrderPlaced} />;
+      case 'guest-order-pf':      return <GuestOrderForm onNavigate={handleNavigate} />;
+      case 'guest-order-success': return <GuestOrderSuccess guestOrderId={guestOrderId} onNavigate={handleNavigate} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
       case 'order-detail': return <OrderDetailPage order={selectedOrder} onNavigate={handleNavigate} />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;

@@ -29,6 +29,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.SUPPORT_CHAT_ID = 0
     stub.CODER = 0
     stub.botlink = "https://t.me/test"
+    stub.SITE_URL = ""
     stub.channel_link = "https://t.me/test"
     stub.host = ""
     stub.user = ""

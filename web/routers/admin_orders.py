@@ -28,10 +28,27 @@ def _row_to_item(row) -> AdminOrderItem:
     )
 
 
+def _guest_row_to_item(row) -> AdminOrderItem:
+    return AdminOrderItem(
+        order_id=int(row["id"]),
+        user_id=None,
+        user_name=None,
+        price=int(row["price"] or 0),
+        position_name="Авито ПФ (гостевой)",
+        status=str(row["status"] or ""),
+        links=str(row["links"] or ""),
+        date=str(row["created_at"] or ""),
+        contacts=bool(row["contacts"]),
+        is_guest=True,
+        guest_phone=str(row["phone"] or ""),
+    )
+
+
 @router.get("", response_model=AdminOrderListResponse)
 async def list_orders(
     status: str | None = None,
     user_id: int | None = None,
+    is_guest: bool | None = None,
     page: int = 1,
     page_size: int = 20,
     _: int = Depends(require_admin),
@@ -40,6 +57,25 @@ async def list_orders(
     page_size = max(1, min(100, page_size))
     offset = (page - 1) * page_size
 
+    if is_guest is True:
+        # Query guest_orders table only
+        with connect() as con:
+            total = con.execute(
+                "SELECT COUNT(*) AS c FROM guest_orders"
+            ).fetchone()["c"]
+            rows = con.execute(
+                "SELECT id, phone, price, status, links, created_at, contacts "
+                "FROM guest_orders ORDER BY id DESC LIMIT ? OFFSET ?",
+                (page_size, offset),
+            ).fetchall()
+        return AdminOrderListResponse(
+            items=[_guest_row_to_item(r) for r in rows],
+            total=int(total),
+            page=page,
+            page_size=page_size,
+        )
+
+    # Default: regular orders only (existing behaviour, backward-compatible)
     where = []
     params: list = []
     if status:

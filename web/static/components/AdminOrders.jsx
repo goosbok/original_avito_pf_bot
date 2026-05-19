@@ -10,11 +10,16 @@ function AdminOrders({ onNavigate }) {
   const [total, setTotal] = useAdmOState(0);
   const [loading, setLoading] = useAdmOState(true);
   const [busyId, setBusyId] = useAdmOState(null);
+  const [guestFilter, setGuestFilter] = useAdmOState(false); // false = regular, true = guest
 
-  const load = async (p, sf) => {
+  const load = async (p, sf, gf) => {
     setLoading(true);
     let url = `/api/admin/orders?page=${p}&page_size=20`;
-    if (sf && sf !== 'all') url += `&status=${sf}`;
+    if (gf) {
+      url += '&is_guest=true';
+    } else {
+      if (sf && sf !== 'all') url += `&status=${sf}`;
+    }
     try {
       const data = await api.get(url);
       if (!data.__unauthorized) {
@@ -24,7 +29,7 @@ function AdminOrders({ onNavigate }) {
     } catch (_) {} finally { setLoading(false); }
   };
 
-  useAdmOEffect(() => { load(page, statusFilter); }, [page, statusFilter]);
+  useAdmOEffect(() => { load(page, statusFilter, guestFilter); }, [page, statusFilter, guestFilter]);
 
   const setStatus = async (orderId, nextStatus) => {
     setBusyId(orderId);
@@ -42,15 +47,28 @@ function AdminOrders({ onNavigate }) {
       <div className="container" style={{ padding: '28px 20px 80px' }}>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: 16 }}>Заказы</h1>
 
-        <div className="orders-filters" style={{ marginBottom: 16 }}>
-          {['all', ...ADMIN_STATUSES].map(s => (
-            <button
-              key={s}
-              className={`filter-tab${statusFilter === s ? ' active' : ''}`}
-              onClick={() => { setStatusFilter(s); setPage(1); }}
-            >{s === 'all' ? 'Все' : s}</button>
-          ))}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <button
+            className={`filter-tab${!guestFilter ? ' active' : ''}`}
+            onClick={() => { setGuestFilter(false); setPage(1); }}
+          >Обычные</button>
+          <button
+            className={`filter-tab${guestFilter ? ' active' : ''}`}
+            onClick={() => { setGuestFilter(true); setPage(1); }}
+          >📞 Гостевые</button>
         </div>
+
+        {!guestFilter && (
+          <div className="orders-filters" style={{ marginBottom: 16 }}>
+            {['all', ...ADMIN_STATUSES].map(s => (
+              <button
+                key={s}
+                className={`filter-tab${statusFilter === s ? ' active' : ''}`}
+                onClick={() => { setStatusFilter(s); setPage(1); }}
+              >{s === 'all' ? 'Все' : s}</button>
+            ))}
+          </div>
+        )}
 
         {loading
           ? <div style={{ color: 'var(--text-3)' }}>Загрузка...</div>
@@ -64,21 +82,30 @@ function AdminOrders({ onNavigate }) {
                   {items.map(o => (
                     <tr key={o.order_id}>
                       <td style={{ color: 'var(--text-3)', fontWeight: 600 }}>#{o.order_id}</td>
-                      <td>{o.user_name ? '@' + o.user_name : '#' + o.user_id}</td>
+                      <td>
+                        {o.is_guest
+                          ? <span style={{ color: 'var(--text-2)', fontSize: '0.85rem' }}>📞 {o.guest_phone}</span>
+                          : (o.user_name ? '@' + o.user_name : '#' + o.user_id)
+                        }
+                      </td>
                       <td>{o.position_name}</td>
                       <td style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</td>
                       <td><StatusBadge status={o.status} /></td>
                       <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{o.date || '—'}</td>
                       <td>
-                        <select
-                          className="input"
-                          value={o.status}
-                          onChange={e => setStatus(o.order_id, e.target.value)}
-                          disabled={busyId === o.order_id}
-                          style={{ padding: '4px 8px', fontSize: '0.8rem', minWidth: 130 }}
-                        >
-                          {ADMIN_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
+                        {o.is_guest ? (
+                          <StatusBadge status={o.status} />
+                        ) : (
+                          <select
+                            className="input"
+                            value={o.status}
+                            onChange={e => setStatus(o.order_id, e.target.value)}
+                            disabled={busyId === o.order_id}
+                            style={{ padding: '4px 8px', fontSize: '0.8rem', minWidth: 130 }}
+                          >
+                            {ADMIN_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        )}
                       </td>
                     </tr>
                   ))}

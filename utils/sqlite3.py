@@ -1012,6 +1012,22 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             5,
         ),
+        (
+            "guest_orders",
+            "CREATE TABLE IF NOT EXISTS guest_orders("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "phone TEXT NOT NULL,"
+            "links TEXT NOT NULL,"
+            "days INTEGER NOT NULL,"
+            "fix_count INTEGER NOT NULL,"
+            "contacts INTEGER NOT NULL DEFAULT 0,"
+            "price INTEGER NOT NULL,"
+            "price_per_unit INTEGER NOT NULL,"
+            "payment_id TEXT,"
+            "status TEXT NOT NULL DEFAULT 'pending_payment',"
+            "created_at TEXT NOT NULL)",
+            11,
+        ),
     ]
 
 

@@ -33,6 +33,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
   const [refillAgreedPrivacy, setRefillAgreedPrivacy] = useCabinetState(false);
   const [refillAgreedOffer, setRefillAgreedOffer] = useCabinetState(false);
+  const [refillErrorMessage, setRefillErrorMessage] = useCabinetState(null);
   const refillConsentOk = refillAgreedPrivacy && refillAgreedOffer;
 
   const openSupportForRefill = () => {
@@ -49,6 +50,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const handleRefill = async () => {
     if (!refillAmount || refillAmount < 100) return;
     if (!refillConsentOk) return;
+    setRefillErrorMessage(null);
     setRefillStatus('pending');
     try {
       const data = await api.post('/api/refill', {
@@ -60,7 +62,10 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
       window.open(data.payment_url, '_blank');
       setRefillStatus('polling');
     } catch (e) {
-      // Backend logs error + alerts admins. Client sees generic message only.
+      // 4xx errors surface backend's specific message; 5xx falls back to generic.
+      if (e.status >= 400 && e.status < 500 && e.message) {
+        setRefillErrorMessage(e.message);
+      }
       setRefillStatus('error');
     }
   };
@@ -145,6 +150,11 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                   {refillStatus === 'pending' ? '...' : 'Пополнить'}
                 </button>
               </div>
+              {!refillConsentOk && refillAmount >= 100 && !refillStatus && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 6 }}>
+                  Для оплаты примите оба условия выше
+                </div>
+              )}
               {refillStatus === 'polling' && (
                 <div className="balance-status balance-status--pending" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>⏳ Ожидаем оплаты</span>
@@ -169,15 +179,17 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                   }}
                 >
-                  <span>❌ Произошла ошибка</span>
-                  <button
-                    className="btn btn--sm"
-                    onClick={openSupportForRefill}
-                    style={{
-                      fontSize: '0.7rem', padding: '3px 10px', whiteSpace: 'nowrap',
-                      background: 'var(--status-cancel-text)', color: '#fff', borderColor: 'transparent',
-                    }}
-                  >Пополнить через поддержку</button>
+                  <span>❌ {refillErrorMessage || 'Произошла ошибка'}</span>
+                  {!refillErrorMessage && (
+                    <button
+                      className="btn btn--sm"
+                      onClick={openSupportForRefill}
+                      style={{
+                        fontSize: '0.7rem', padding: '3px 10px', whiteSpace: 'nowrap',
+                        background: 'var(--status-cancel-text)', color: '#fff', borderColor: 'transparent',
+                      }}
+                    >Пополнить через поддержку</button>
+                  )}
                 </div>
               )}
             </div>

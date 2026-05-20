@@ -148,7 +148,7 @@ function SupportChat() {
         </div>
       )}
       <button className="chat-widget__btn" onClick={() => setChatOpen(v => !v)} title="Поддержка">
-        {chatOpen ? '×' : 'Чат'}
+        {chatOpen ? '×' : 'Тех Поддержка'}
         {!chatOpen && unread > 0 && <span className="chat-widget__badge">{unread}</span>}
       </button>
     </div>

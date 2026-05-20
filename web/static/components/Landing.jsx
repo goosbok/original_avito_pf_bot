@@ -242,7 +242,7 @@ const LandingPage = ({ onNavigate, brandName }) => {
             },
             {
               title: 'Поддержка в Telegram',
-              desc: 'Команда отвечает быстро. Если возник вопрос по заказу — решим без бюрократии напрямую в чате.'
+              desc: 'Команда отвечает быстро. Если возник вопрос по заказу — решим без бюрократии напрямую в техподдержке.'
             }].
             map((item, i) =>
             <div key={i} className="card" style={{ padding: '20px 22px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>

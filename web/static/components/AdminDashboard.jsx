@@ -16,7 +16,7 @@ function AdminDashboard({ onNavigate }) {
     { label: 'Регистраций сегодня', value: stats.users_registered_today, cta: 'admin-users',   ctaLabel: 'Юзеры' },
     { label: 'Заказов сегодня',     value: stats.orders_today,           cta: 'admin-orders',  ctaLabel: 'Заказы' },
     { label: 'Выручка сегодня',     value: `${stats.revenue_today.toLocaleString('ru-RU')} ₽`, cta: 'admin-orders', ctaLabel: 'Заказы' },
-    { label: 'Открытых чатов',      value: stats.open_support_threads,   cta: 'admin-support', ctaLabel: 'Ответить' },
+    { label: 'Открытых обращений',  value: stats.open_support_threads,   cta: 'admin-support', ctaLabel: 'Ответить' },
   ] : [];
 
   return (

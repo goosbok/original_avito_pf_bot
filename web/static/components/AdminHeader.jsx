@@ -6,7 +6,7 @@ function AdminHeader({ route, user, balance, brandName, onToggleAdminMode, onNav
     { key: 'admin',         label: 'Дашборд',  icon: '📊' },
     { key: 'admin-users',   label: 'Юзеры',    icon: '👥' },
     { key: 'admin-orders',  label: 'Заказы',   icon: '📋' },
-    { key: 'admin-support', label: 'Чаты',     icon: '💬' },
+    { key: 'admin-support', label: 'Тех Поддержка', icon: '💬' },
   ];
 
   return (

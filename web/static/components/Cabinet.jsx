@@ -121,7 +121,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                     style={{ flex: 1, fontSize: '0.75rem', padding: '5px 4px' }}
                     onClick={() => setRefillAmount(p)}
                   >
-                    {p.toLocaleString('ru-RU')} ₽
+                    {p.toLocaleString('ru-RU')}
                   </button>
                 ))}
               </div>

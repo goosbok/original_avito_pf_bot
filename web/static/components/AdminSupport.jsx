@@ -53,7 +53,7 @@ function AdminSupport({ onNavigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'start' }}>
           {/* Threads list */}
           <div className="card" style={{ overflow: 'hidden', maxHeight: '70vh', overflowY: 'auto' }}>
-            {threads.length === 0 && <div style={{ padding: 24, color: 'var(--text-3)' }}>Чатов нет</div>}
+            {threads.length === 0 && <div style={{ padding: 24, color: 'var(--text-3)' }}>Обращений нет</div>}
             {threads.map(t => (
               <div
                 key={t.user_id}
@@ -82,7 +82,7 @@ function AdminSupport({ onNavigate }) {
           {/* Thread view */}
           <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '70vh' }}>
             {!selected ? (
-              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)' }}>Выберите чат слева</div>
+              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)' }}>Выберите обращение слева</div>
             ) : (
               <>
                 <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>

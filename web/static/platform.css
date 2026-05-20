@@ -520,8 +520,8 @@ p  { line-height: 1.65; }
 @media (max-width: 768px) {
   :root { --header-h: 56px; }
   .container { padding: 0 16px; }
-  /* Push support widget above sticky footer (~70px tall) */
-  .chat-widget { bottom: 84px; right: 16px; }
+  /* Space at page bottom so support pill doesn't overlap content */
+  .page-wrap { padding-bottom: 80px; }
   .catalog-grid { grid-template-columns: 1fr !important; }
   .how-steps { grid-template-columns: 1fr; gap: 20px; }
   .landing-hero { padding: 60px 16px 44px; }
@@ -532,6 +532,7 @@ p  { line-height: 1.65; }
   .chat-panel { width: calc(100vw - 32px); right: 0; }
   .order-form-card { padding: 20px 16px; }
   .order-sticky-footer { padding: 10px 16px; }
+  .order-page { padding-bottom: 150px; }
   .order-two-col { grid-template-columns: 1fr !important; }
   /* Cabinet balance widget stacks */
   .cabinet-top-row { flex-direction: column !important; }

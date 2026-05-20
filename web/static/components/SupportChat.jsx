@@ -17,6 +17,7 @@ function SupportChat() {
   const [sending, setSending] = useSCState(false);
   const msgEndRef = useSCRef(null);
   const lastIdRef = useSCRef(0);
+  const lastReadIdRef = useSCRef(parseInt(localStorage.getItem('support_last_read_id') || '0', 10));
   const pollRef = useSCRef(null);
   const chatOpenRef = useSCRef(false);
   chatOpenRef.current = chatOpen;
@@ -43,7 +44,7 @@ function SupportChat() {
         mergeIncoming(msgs);
         lastIdRef.current = msgs[msgs.length - 1].id;
         if (!chatOpenRef.current) {
-          const adminCount = msgs.filter(m => m.direction === 'admin').length;
+          const adminCount = msgs.filter(m => m.direction === 'admin' && m.id > lastReadIdRef.current).length;
           if (adminCount > 0) setUnread(u => u + adminCount);
         }
       }
@@ -57,7 +58,11 @@ function SupportChat() {
   }, []);
 
   useSCEffect(() => {
-    if (chatOpen) setUnread(0);
+    if (chatOpen) {
+      setUnread(0);
+      lastReadIdRef.current = lastIdRef.current;
+      localStorage.setItem('support_last_read_id', String(lastIdRef.current));
+    }
   }, [chatOpen]);
 
   useSCEffect(() => {

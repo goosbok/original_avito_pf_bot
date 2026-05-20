@@ -38,7 +38,9 @@ def test_create_refill_returns_payment_url(authed) -> None:
         return_value=("https://pay/aaa", "pay-1"),
     ):
         response = authed.client.post(
-            "/api/refill", json={"amount": 500}, headers=authed.headers,
+            "/api/refill",
+            json={"amount": 500, "agreed_privacy": True, "agreed_offer": True},
+            headers=authed.headers,
         )
     assert response.status_code == 200
     assert response.json() == {"payment_id": "pay-1", "payment_url": "https://pay/aaa"}
@@ -113,7 +115,7 @@ def test_refill_endpoint_accepts_api_key_auth(tmp_db: Path, monkeypatch) -> None
     ):
         r = client.post(
             "/api/refill",
-            json={"amount": 500},
+            json={"amount": 500, "agreed_privacy": True, "agreed_offer": True},
             headers={
                 "X-API-Key": created.api_key,
                 "X-End-User-Id": "external-42",
@@ -124,3 +126,29 @@ def test_refill_endpoint_accepts_api_key_auth(tmp_db: Path, monkeypatch) -> None
     body = r.json()
     assert body.get("payment_id") == "pid-test"
     assert body.get("payment_url") == "https://pay/test"
+
+
+def test_create_refill_requires_agreed_privacy(authed) -> None:
+    response = authed.client.post(
+        "/api/refill",
+        json={"amount": 500, "agreed_privacy": False, "agreed_offer": True},
+        headers=authed.headers,
+    )
+    assert response.status_code == 400
+    assert "политику" in response.json()["detail"].lower() or "согласи" in response.json()["detail"].lower()
+
+
+def test_create_refill_requires_agreed_offer(authed) -> None:
+    response = authed.client.post(
+        "/api/refill",
+        json={"amount": 500, "agreed_privacy": True, "agreed_offer": False},
+        headers=authed.headers,
+    )
+    assert response.status_code == 400
+
+
+def test_create_refill_missing_agreed_fields_returns_422(authed) -> None:
+    response = authed.client.post(
+        "/api/refill", json={"amount": 500}, headers=authed.headers,
+    )
+    assert response.status_code == 422

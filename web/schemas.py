@@ -6,6 +6,8 @@ from pydantic import BaseModel, EmailStr, Field, field_validator, model_validato
 
 class RefillRequest(BaseModel):
     amount: int = Field(gt=0)
+    agreed_privacy: bool
+    agreed_offer: bool
 
 
 class RefillResponse(BaseModel):

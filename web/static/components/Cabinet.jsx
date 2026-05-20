@@ -31,6 +31,9 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const [refillAmount, setRefillAmount] = useCabinetState(1000);
   const [refillStatus, setRefillStatus] = useCabinetState(null);
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
+  const [refillAgreedPrivacy, setRefillAgreedPrivacy] = useCabinetState(false);
+  const [refillAgreedOffer, setRefillAgreedOffer] = useCabinetState(false);
+  const refillConsentOk = refillAgreedPrivacy && refillAgreedOffer;
 
   const openSupportForRefill = () => {
     const text = `Хочу пополнить баланс на ${Number(refillAmount).toLocaleString('ru-RU')} ₽, но через сайт не получается. Помогите, пожалуйста.`;
@@ -45,9 +48,14 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
 
   const handleRefill = async () => {
     if (!refillAmount || refillAmount < 100) return;
+    if (!refillConsentOk) return;
     setRefillStatus('pending');
     try {
-      const data = await api.post('/api/refill', { amount: Number(refillAmount) });
+      const data = await api.post('/api/refill', {
+        amount: Number(refillAmount),
+        agreed_privacy: refillAgreedPrivacy,
+        agreed_offer: refillAgreedOffer,
+      });
       setRefillPaymentId(data.payment_id);
       window.open(data.payment_url, '_blank');
       setRefillStatus('polling');
@@ -112,6 +120,14 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                   </button>
                 ))}
               </div>
+              <LegalConsent
+                privacyChecked={refillAgreedPrivacy}
+                offerChecked={refillAgreedOffer}
+                onPrivacyChange={setRefillAgreedPrivacy}
+                onOfferChange={setRefillAgreedOffer}
+                disabled={refillStatus === 'pending' || refillStatus === 'polling'}
+                style={{ marginBottom: 10, fontSize: '0.75rem' }}
+              />
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   className="input" type="number" min={100}
@@ -123,7 +139,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                 <button
                   className="btn btn--primary btn--sm"
                   onClick={handleRefill}
-                  disabled={refillStatus === 'pending' || refillStatus === 'polling' || !refillAmount || refillAmount < 100}
+                  disabled={refillStatus === 'pending' || refillStatus === 'polling' || !refillAmount || refillAmount < 100 || !refillConsentOk}
                   style={{ whiteSpace: 'nowrap' }}
                 >
                   {refillStatus === 'pending' ? '...' : 'Пополнить'}

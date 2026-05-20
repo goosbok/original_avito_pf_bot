@@ -176,6 +176,8 @@ class GuestPFOrderRequest(BaseModel):
     fix_count: int = Field(ge=5)
     contacts: bool
     phone: str = Field(min_length=5, max_length=32)
+    agreed_privacy: bool
+    agreed_offer: bool
 
     @field_validator("links")
     @classmethod

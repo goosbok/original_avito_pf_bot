@@ -47,6 +47,8 @@ VALID_BODY = {
     "fix_count": 30,
     "contacts": False,
     "phone": "+79991234567",
+    "agreed_privacy": True,
+    "agreed_offer": True,
 }
 
 
@@ -100,6 +102,25 @@ def test_create_guest_order_price_calculated_correctly(client, enabled, monkeypa
     from services.guest_orders import get_guest_order
     order = get_guest_order(gid)
     assert order["price"] == 1260
+
+
+def test_create_guest_order_requires_agreed_privacy(client, enabled):
+    body = {**VALID_BODY, "agreed_privacy": False}
+    r = client.post("/api/guest-orders/pf", json=body)
+    assert r.status_code == 400
+    assert "политику" in r.json()["detail"].lower() or "согласи" in r.json()["detail"].lower()
+
+
+def test_create_guest_order_requires_agreed_offer(client, enabled):
+    body = {**VALID_BODY, "agreed_offer": False}
+    r = client.post("/api/guest-orders/pf", json=body)
+    assert r.status_code == 400
+
+
+def test_create_guest_order_missing_agreed_fields_returns_422(client, enabled):
+    body = {k: v for k, v in VALID_BODY.items() if k not in ("agreed_privacy", "agreed_offer")}
+    r = client.post("/api/guest-orders/pf", json=body)
+    assert r.status_code == 422
 
 
 # ── GET /api/guest-orders/{id}/status ────────────────────────────────────────

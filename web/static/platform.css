@@ -520,6 +520,8 @@ p  { line-height: 1.65; }
 @media (max-width: 768px) {
   :root { --header-h: 56px; }
   .container { padding: 0 16px; }
+  /* Push support widget above sticky footer (~70px tall) */
+  .chat-widget { bottom: 84px; right: 16px; }
   .catalog-grid { grid-template-columns: 1fr !important; }
   .how-steps { grid-template-columns: 1fr; gap: 20px; }
   .landing-hero { padding: 60px 16px 44px; }

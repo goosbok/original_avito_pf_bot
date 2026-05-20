@@ -89,6 +89,11 @@ async def create_refill(
     payload: RefillRequest,
     caller: CurrentCaller = Depends(current_caller),
 ) -> RefillResponse:
+    if not (payload.agreed_privacy and payload.agreed_offer):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Необходимо принять политику конфиденциальности и оферту",
+        )
     try:
         url, pid = create_invoice(caller.user_id, payload.amount)
     except PaymentError as exc:

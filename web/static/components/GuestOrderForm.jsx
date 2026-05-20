@@ -26,6 +26,9 @@ function GuestOrderForm({ onNavigate }) {
   const [paymentAvailable, setPaymentAvailable] = useGOFState(true);
   const [loading, setLoading] = useGOFState(false);
   const [error, setError] = useGOFState('');
+  const [agreedPrivacy, setAgreedPrivacy] = useGOFState(false);
+  const [agreedOffer, setAgreedOffer] = useGOFState(false);
+  const consentOk = agreedPrivacy && agreedOffer;
 
   useGOFEffect(() => {
     api.get('/api/orders/pf/price').then(d => {
@@ -50,6 +53,7 @@ function GuestOrderForm({ onNavigate }) {
   const removeLink = url => setLinks(prev => prev.filter(u => u !== url));
 
   const handleSubmit = async () => {
+    if (!consentOk) return setError('Необходимо принять политику конфиденциальности и оферту');
     if (urlCount === 0) return setError('Вставьте хотя бы одну ссылку на объявление');
     if (!phone.trim()) return setError('Укажите номер телефона');
     if (!paymentAvailable) return setError('Онлайн-оплата временно недоступна');
@@ -61,6 +65,8 @@ function GuestOrderForm({ onNavigate }) {
         fix_count: views,
         contacts,
         phone: phone.trim(),
+        agreed_privacy: agreedPrivacy,
+        agreed_offer: agreedOffer,
       });
       window.location.href = data.payment_url;
     } catch (e) {
@@ -214,10 +220,18 @@ function GuestOrderForm({ onNavigate }) {
                 </div>
               </div>
 
+              <LegalConsent
+                privacyChecked={agreedPrivacy}
+                offerChecked={agreedOffer}
+                onPrivacyChange={setAgreedPrivacy}
+                onOfferChange={setAgreedOffer}
+                disabled={loading}
+                style={{ marginTop: 4 }}
+              />
               <button
                 className="btn btn--primary btn--lg btn--full desktop-only"
                 onClick={handleSubmit}
-                disabled={loading || urlCount === 0 || !paymentAvailable}
+                disabled={loading || urlCount === 0 || !paymentAvailable || !consentOk}
                 style={{ fontSize: '0.9375rem' }}
               >
                 {loading ? 'Создаём заказ...' : 'Перейти к оплате →'}
@@ -233,9 +247,14 @@ function GuestOrderForm({ onNavigate }) {
             <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>{totalPrice.toLocaleString('ru-RU')} ₽</span>
           </div>
           <button className="btn btn--primary btn--lg btn--full" onClick={handleSubmit}
-            disabled={loading || urlCount === 0 || !paymentAvailable}>
+            disabled={loading || urlCount === 0 || !paymentAvailable || !consentOk}>
             {loading ? 'Создаём...' : 'Перейти к оплате →'}
           </button>
+          {!consentOk && urlCount > 0 && paymentAvailable && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 6, textAlign: 'center' }}>
+              Для оплаты примите оба условия выше
+            </div>
+          )}
         </div>
       </div>
     </div>

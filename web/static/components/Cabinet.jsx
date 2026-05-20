@@ -31,6 +31,10 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const [refillAmount, setRefillAmount] = useCabinetState(1000);
   const [refillStatus, setRefillStatus] = useCabinetState(null);
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
+  const [refillAgreedPrivacy, setRefillAgreedPrivacy] = useCabinetState(false);
+  const [refillAgreedOffer, setRefillAgreedOffer] = useCabinetState(false);
+  const [refillErrorMessage, setRefillErrorMessage] = useCabinetState(null);
+  const refillConsentOk = refillAgreedPrivacy && refillAgreedOffer;
 
   const openSupportForRefill = () => {
     const text = `Хочу пополнить баланс на ${Number(refillAmount).toLocaleString('ru-RU')} ₽, но через сайт не получается. Помогите, пожалуйста.`;
@@ -45,14 +49,23 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
 
   const handleRefill = async () => {
     if (!refillAmount || refillAmount < 100) return;
+    if (!refillConsentOk) return;
+    setRefillErrorMessage(null);
     setRefillStatus('pending');
     try {
-      const data = await api.post('/api/refill', { amount: Number(refillAmount) });
+      const data = await api.post('/api/refill', {
+        amount: Number(refillAmount),
+        agreed_privacy: refillAgreedPrivacy,
+        agreed_offer: refillAgreedOffer,
+      });
       setRefillPaymentId(data.payment_id);
       window.open(data.payment_url, '_blank');
       setRefillStatus('polling');
     } catch (e) {
-      // Backend logs error + alerts admins. Client sees generic message only.
+      // 4xx errors surface backend's specific message; 5xx falls back to generic.
+      if (e.status >= 400 && e.status < 500 && e.message) {
+        setRefillErrorMessage(e.message);
+      }
       setRefillStatus('error');
     }
   };
@@ -112,6 +125,14 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                   </button>
                 ))}
               </div>
+              <LegalConsent
+                privacyChecked={refillAgreedPrivacy}
+                offerChecked={refillAgreedOffer}
+                onPrivacyChange={setRefillAgreedPrivacy}
+                onOfferChange={setRefillAgreedOffer}
+                disabled={refillStatus === 'pending' || refillStatus === 'polling'}
+                style={{ marginBottom: 10, fontSize: '0.75rem' }}
+              />
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   className="input" type="number" min={100}
@@ -123,12 +144,17 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                 <button
                   className="btn btn--primary btn--sm"
                   onClick={handleRefill}
-                  disabled={refillStatus === 'pending' || refillStatus === 'polling' || !refillAmount || refillAmount < 100}
+                  disabled={refillStatus === 'pending' || refillStatus === 'polling' || !refillAmount || refillAmount < 100 || !refillConsentOk}
                   style={{ whiteSpace: 'nowrap' }}
                 >
                   {refillStatus === 'pending' ? '...' : 'Пополнить'}
                 </button>
               </div>
+              {!refillConsentOk && refillAmount >= 100 && !refillStatus && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 6 }}>
+                  Для оплаты примите оба условия выше
+                </div>
+              )}
               {refillStatus === 'polling' && (
                 <div className="balance-status balance-status--pending" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>⏳ Ожидаем оплаты</span>
@@ -153,15 +179,17 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
                   }}
                 >
-                  <span>❌ Произошла ошибка</span>
-                  <button
-                    className="btn btn--sm"
-                    onClick={openSupportForRefill}
-                    style={{
-                      fontSize: '0.7rem', padding: '3px 10px', whiteSpace: 'nowrap',
-                      background: 'var(--status-cancel-text)', color: '#fff', borderColor: 'transparent',
-                    }}
-                  >Пополнить через поддержку</button>
+                  <span>❌ {refillErrorMessage || 'Произошла ошибка'}</span>
+                  {!refillErrorMessage && (
+                    <button
+                      className="btn btn--sm"
+                      onClick={openSupportForRefill}
+                      style={{
+                        fontSize: '0.7rem', padding: '3px 10px', whiteSpace: 'nowrap',
+                        background: 'var(--status-cancel-text)', color: '#fff', borderColor: 'transparent',
+                      }}
+                    >Пополнить через поддержку</button>
+                  )}
                 </div>
               )}
             </div>

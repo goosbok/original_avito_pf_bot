@@ -34,6 +34,12 @@ async def payment_available() -> PaymentAvailableResponse:
 
 @router.post("/pf", response_model=GuestPFOrderResponse, status_code=201)
 async def create_guest_pf_order(body: GuestPFOrderRequest) -> GuestPFOrderResponse:
+    if not (body.agreed_privacy and body.agreed_offer):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Необходимо принять политику конфиденциальности и оферту",
+        )
+
     if not is_yookassa_enabled():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

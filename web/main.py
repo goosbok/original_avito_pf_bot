@@ -62,6 +62,10 @@ from web.routers.admin_stats import router as admin_stats_router  # noqa: E402
 
 app.include_router(admin_stats_router)
 
+from web.routers.legal import router as legal_router  # noqa: E402
+
+app.include_router(legal_router)
+
 from pathlib import Path  # noqa: E402
 
 from fastapi.staticfiles import StaticFiles  # noqa: E402

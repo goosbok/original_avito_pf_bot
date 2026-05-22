@@ -66,3 +66,56 @@ def mark_all_read(user_id: int) -> int:
         )
         con.commit()
         return cur.rowcount
+
+
+def _get_tg_id(user_id: int) -> int | None:
+    """Test seam — wraps utils.sqlite3.get_tg_id_for_user."""
+    from utils.sqlite3 import get_tg_id_for_user
+    return get_tg_id_for_user(user_id)
+
+
+async def _send_tg(*, tg_id: int, text: str, reply_markup) -> None:
+    """Test seam — wraps data.loader.bot.send_message."""
+    from data.loader import bot
+    await bot.send_message(chat_id=tg_id, text=text, reply_markup=reply_markup)
+
+
+async def notify_order_status_changed(
+    *,
+    user_id: int,
+    kind: str,
+    order_id: int,
+    old_status: str,
+    new_status: str,
+    **fields: object,
+) -> None:
+    if old_status == new_status:
+        return
+
+    text = _build_text(kind, new_status, order_id=order_id, **fields)
+    if text is None:
+        return
+
+    # 1. durable insert (bell feed)
+    with _connect() as con:
+        con.execute(
+            "INSERT INTO notifications(user_id, kind, order_id, new_status, text) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, kind, order_id, new_status, text),
+        )
+        con.commit()
+
+    # 2. best-effort TG push
+    try:
+        tg_id = _get_tg_id(user_id)
+        if tg_id is None:
+            return
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu"))
+        await _send_tg(tg_id=tg_id, text=text, reply_markup=kb)
+    except Exception:
+        logger.exception(
+            "TG notify failed for user_id=%s kind=%s order=%s",
+            user_id, kind, order_id,
+        )

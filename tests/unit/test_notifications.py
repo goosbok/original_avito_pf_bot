@@ -136,3 +136,126 @@ def test_mark_all_read_only_current_user(tmp_db):
     _insert_notification(tmp_db, user_id=2)
     assert mark_all_read(user_id=1) == 1
     assert unread_count(user_id=2) == 1
+
+
+import asyncio
+
+
+def test_notify_noop_when_same_status(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order", order_id=1,
+        old_status="Completed", new_status="Completed",
+    ))
+    assert notifications.unread_count(user_id=10) == 0
+    assert sent == []
+
+
+def test_notify_skips_status_outside_whitelist(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order", order_id=1,
+        old_status="Posted", new_status="Pending",
+    ))
+    assert notifications.unread_count(user_id=10) == 0
+    assert sent == []
+
+
+def test_notify_inserts_row_and_pushes_tg(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+    async def fake_send(*, tg_id, text, reply_markup):
+        sent.append({"tg_id": tg_id, "text": text})
+
+    monkeypatch.setattr(notifications, "_get_tg_id", lambda uid: 555)
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order", order_id=42,
+        old_status="Pending", new_status="Completed",
+    ))
+
+    rows = notifications.list_notifications(user_id=10)
+    assert len(rows) == 1
+    assert rows[0]["text"] == "✅ Заказ №42 выполнен."
+    assert rows[0]["kind"] == "order"
+    assert rows[0]["new_status"] == "Completed"
+    assert rows[0]["order_id"] == 42
+    assert sent == [{"tg_id": 555, "text": "✅ Заказ №42 выполнен."}]
+
+
+def test_notify_review_with_service_field(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+    async def fake_send(*, tg_id, text, reply_markup):
+        sent.append(text)
+
+    monkeypatch.setattr(notifications, "_get_tg_id", lambda uid: 555)
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order_review", order_id=3,
+        old_status="Posted", new_status="Completed",
+        service="Avito",
+    ))
+
+    rows = notifications.list_notifications(user_id=10)
+    assert rows[0]["text"] == "🎉 Заказ №3 на отзыв (Avito) выполнен."
+    assert rows[0]["kind"] == "order_review"
+    assert sent == ["🎉 Заказ №3 на отзыв (Avito) выполнен."]
+
+
+def test_notify_no_tg_id_still_writes_row(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+
+    monkeypatch.setattr(notifications, "_get_tg_id", lambda uid: None)
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order", order_id=1,
+        old_status="Pending", new_status="Posted",
+    ))
+
+    assert notifications.unread_count(user_id=10) == 1
+    assert sent == []
+
+
+def test_notify_tg_failure_swallowed_row_persists(tmp_db, monkeypatch, caplog):
+    from services import notifications
+    import logging
+
+    async def boom(**kwargs):
+        raise RuntimeError("BotBlocked")
+
+    monkeypatch.setattr(notifications, "_get_tg_id", lambda uid: 555)
+    monkeypatch.setattr(notifications, "_send_tg", boom)
+
+    caplog.set_level(logging.ERROR, logger="services.notifications")
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="order", order_id=1,
+        old_status="Pending", new_status="Posted",
+    ))
+
+    assert notifications.unread_count(user_id=10) == 1
+    assert any("TG notify failed" in rec.message for rec in caplog.records)

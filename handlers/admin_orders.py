@@ -19,7 +19,6 @@ from utils.sqlite3 import (
     get_report_exclude,
     all_orders_reviews, all_orders_delreviews,
     user_orders_all_delreviews,
-    get_tg_id_for_user,
 )
 from utils.other import (
     get_user_string_without_first_name, get_user_string_with_first_name,

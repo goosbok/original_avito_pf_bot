@@ -87,7 +87,7 @@ async def _send_tg(*, tg_id: int, text: str, reply_markup) -> None:
     await bot.send_message(chat_id=tg_id, text=text, reply_markup=reply_markup)
 
 
-async def notify_order_status_changed(
+def record_order_status_change(
     *,
     user_id: int,
     kind: str,
@@ -95,15 +95,15 @@ async def notify_order_status_changed(
     old_status: str,
     new_status: str,
     **fields: object,
-) -> None:
+) -> str | None:
+    """Sync: write durable notification row. Returns the rendered text, or None
+    if the (kind, status) is not in the whitelist or status didn't change.
+    Callers schedule push_tg_notification(user_id=, text=) for TG delivery."""
     if old_status == new_status:
-        return
-
+        return None
     text = _build_text(kind, new_status, order_id=order_id, **fields)
     if text is None:
-        return
-
-    # 1. durable insert (bell feed)
+        return None
     with _connect() as con:
         con.execute(
             "INSERT INTO notifications(user_id, kind, order_id, new_status, text) "
@@ -111,8 +111,11 @@ async def notify_order_status_changed(
             (user_id, kind, order_id, new_status, text),
         )
         con.commit()
+    return text
 
-    # 2. best-effort TG push
+
+async def push_tg_notification(*, user_id: int, text: str) -> None:
+    """Best-effort: send text to user's Telegram with a 'Main menu' inline button."""
     try:
         tg_id = _get_tg_id(user_id)
         if tg_id is None:
@@ -122,7 +125,23 @@ async def notify_order_status_changed(
         kb.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu"))
         await _send_tg(tg_id=tg_id, text=text, reply_markup=kb)
     except Exception:
-        logger.exception(
-            "TG notify failed for user_id=%s kind=%s order=%s",
-            user_id, kind, order_id,
-        )
+        logger.exception("TG notify failed for user_id=%s", user_id)
+
+
+async def notify_order_status_changed(
+    *,
+    user_id: int,
+    kind: str,
+    order_id: int,
+    old_status: str,
+    new_status: str,
+    **fields: object,
+) -> None:
+    """High-level: sync DB row + async TG push, in that order."""
+    text = record_order_status_change(
+        user_id=user_id, kind=kind, order_id=order_id,
+        old_status=old_status, new_status=new_status, **fields,
+    )
+    if text is None:
+        return
+    await push_tg_notification(user_id=user_id, text=text)

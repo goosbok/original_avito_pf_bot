@@ -146,8 +146,6 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
                 status = 'Размещен'
             elif order['status'] == 'Completed':
                 status = 'Выполнен'
-            elif order['status'] == 'In progress':
-                status = 'Выполняется'
             else:
                 status = order['status']
             f_price = format_decimal(order['price'])

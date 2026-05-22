@@ -1,6 +1,8 @@
 """Tests for services.notifications."""
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -138,9 +140,6 @@ def test_mark_all_read_only_current_user(tmp_db):
     assert unread_count(user_id=2) == 1
 
 
-import asyncio
-
-
 def test_notify_noop_when_same_status(tmp_db, monkeypatch):
     from services import notifications
 
@@ -259,3 +258,31 @@ def test_notify_tg_failure_swallowed_row_persists(tmp_db, monkeypatch, caplog):
 
     assert notifications.unread_count(user_id=10) == 1
     assert any("TG notify failed" in rec.message for rec in caplog.records)
+
+
+def test_build_text_missing_template_field_returns_none(caplog):
+    import logging
+    from services.notifications import _build_text
+    caplog.set_level(logging.WARNING, logger="services.notifications")
+    assert _build_text("order_review", "Completed", order_id=3) is None
+    # Note: no service= kwarg passed
+    assert any("missing template field" in rec.message for rec in caplog.records)
+
+
+def test_notify_skips_unknown_kind(tmp_db, monkeypatch):
+    from services import notifications
+
+    sent = []
+    async def fake_send(**kwargs):
+        sent.append(kwargs)
+
+    monkeypatch.setattr(notifications, "_get_tg_id", lambda uid: 555)
+    monkeypatch.setattr(notifications, "_send_tg", fake_send)
+
+    asyncio.run(notifications.notify_order_status_changed(
+        user_id=10, kind="guest_order", order_id=1,
+        old_status="pending", new_status="paid",
+    ))
+
+    assert notifications.unread_count(user_id=10) == 0
+    assert sent == []

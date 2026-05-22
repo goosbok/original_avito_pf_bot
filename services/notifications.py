@@ -25,7 +25,14 @@ def _build_text(kind: str, new_status: str, **fields: object) -> str | None:
     tpl = _TEMPLATES.get((kind, new_status))
     if tpl is None:
         return None
-    return tpl.format(**fields)
+    try:
+        return tpl.format(**fields)
+    except KeyError:
+        logger.warning(
+            "notifications: missing template field for kind=%s status=%s fields=%s",
+            kind, new_status, sorted(fields.keys()),
+        )
+        return None
 
 
 def _connect() -> sqlite3.Connection:

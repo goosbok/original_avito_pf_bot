@@ -1,9 +1,15 @@
 """Admin endpoints for orders — list/filter, change status."""
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from services.db import connect
+from services.notifications import (
+    push_tg_notification,
+    record_order_status_change,
+)
 from web.admin_deps import require_admin
 from web.schemas import (
     AdminOrderItem,
@@ -112,12 +118,26 @@ async def change_status(
 ) -> dict:
     with connect() as con:
         row = con.execute(
-            "SELECT increment FROM orders WHERE increment = ?", (order_id,)
+            "SELECT increment, user_id, status FROM orders WHERE increment = ?",
+            (order_id,),
         ).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="order not found")
-        con.execute(
-            "UPDATE orders SET status = ? WHERE increment = ?", (body.status, order_id)
+        old_status = str(row["status"] or "")
+        user_id = int(row["user_id"])
+        if old_status != body.status:
+            con.execute(
+                "UPDATE orders SET status = ? WHERE increment = ?",
+                (body.status, order_id),
+            )
+            con.commit()
+
+    if old_status != body.status:
+        text = record_order_status_change(
+            user_id=user_id, kind="order", order_id=order_id,
+            old_status=old_status, new_status=body.status,
         )
-        con.commit()
+        if text is not None:
+            asyncio.create_task(push_tg_notification(user_id=user_id, text=text))
+
     return {"order_id": order_id, "status": body.status}

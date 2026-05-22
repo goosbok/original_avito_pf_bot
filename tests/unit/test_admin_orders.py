@@ -105,3 +105,61 @@ def test_change_order_status_404_when_missing(tmp_db: Path):
         json={"status": "Completed"},
     )
     assert r.status_code == 404
+
+
+def test_change_status_creates_notification(tmp_db):
+    _seed(tmp_db)
+    c = _client()
+    r = c.post(
+        "/api/admin/orders/1/status",
+        json={"status": "Completed"},
+        headers={"Authorization": f"Bearer {_token_for(1)}"},
+    )
+    assert r.status_code == 200
+
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        rows = con.execute(
+            "SELECT user_id, kind, order_id, new_status, text "
+            "FROM notifications WHERE user_id = 10"
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][1] == "order"
+    assert rows[0][3] == "Completed"
+    assert "Заказ №1" in rows[0][4]
+
+
+def test_change_status_no_op_does_not_create_notification(tmp_db):
+    _seed(tmp_db)
+    c = _client()
+
+    # order #2 in _seed is already 'Completed'
+    r = c.post(
+        "/api/admin/orders/2/status",
+        json={"status": "Completed"},
+        headers={"Authorization": f"Bearer {_token_for(1)}"},
+    )
+    assert r.status_code == 200
+
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM notifications WHERE user_id = 10"
+        ).fetchone()[0]
+    assert count == 0
+
+
+def test_change_status_to_pending_does_not_notify(tmp_db):
+    _seed(tmp_db)
+    c = _client()
+    r = c.post(
+        "/api/admin/orders/1/status",
+        json={"status": "Pending"},
+        headers={"Authorization": f"Bearer {_token_for(1)}"},
+    )
+    assert r.status_code == 200
+
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        count = con.execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
+    assert count == 0

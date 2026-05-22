@@ -34,6 +34,10 @@ from web.routers.orders import router as orders_router  # noqa: E402
 
 app.include_router(orders_router)
 
+from web.routers.notifications import router as notifications_router  # noqa: E402
+
+app.include_router(notifications_router)
+
 from web.routers.support import router as support_router  # noqa: E402
 
 app.include_router(support_router)

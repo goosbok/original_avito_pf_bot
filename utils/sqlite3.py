@@ -1028,6 +1028,19 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "created_at TEXT NOT NULL)",
             11,
         ),
+        (
+            "notifications",
+            "CREATE TABLE IF NOT EXISTS notifications("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "kind TEXT NOT NULL,"
+            "order_id INTEGER,"
+            "new_status TEXT,"
+            "text TEXT NOT NULL,"
+            "created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"
+            "read_at TIMESTAMP)",
+            8,
+        ),
     ]
 
 
@@ -1038,6 +1051,10 @@ def get_index_statements() -> list[str]:
         "ON funnel_events(service, ts)",
         "CREATE INDEX IF NOT EXISTS idx_funnel_service_step_user "
         "ON funnel_events(service, step, user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_user_unread "
+        "ON notifications(user_id, read_at)",
+        "CREATE INDEX IF NOT EXISTS idx_notifications_user_created "
+        "ON notifications(user_id, created_at DESC)",
     ]
 
 

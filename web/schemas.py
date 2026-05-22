@@ -330,3 +330,22 @@ class AdminStatsResponse(BaseModel):
     orders_today: int
     revenue_today: int
     open_support_threads: int
+
+
+class NotificationItem(BaseModel):
+    id: int
+    kind: str
+    order_id: int | None
+    new_status: str | None
+    text: str
+    created_at: str
+    read_at: str | None
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationItem]
+    unread_count: int
+
+
+class MarkAllReadResponse(BaseModel):
+    marked: int

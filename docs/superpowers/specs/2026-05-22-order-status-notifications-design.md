@@ -14,12 +14,12 @@
 
 ## 2. Скоуп
 
-**Уведомляем при переходе в статусы:**
-- `Posted` — заказ размещён
-- `Completed` — заказ выполнен
-- `Cancelled` — заказ отменён
+**Покрываемые типы заказов (`kind`):**
+- `order` — обычные заказы накрутки ПФ (`orders`). Переходы: `Posted`, `Completed`, `Cancelled`.
+- `order_review` — заказы на отзыв (`order_reviews`). Единственный переход в текущем флоу: `Posted → Completed`.
+- `order_delreview` — заказы на удаление отзыва (`order_delreviews`). Единственный переход: `Posted → Completed`.
 
-Остальные (`Pending`, legacy `In progress`) — молчим.
+**Уведомляем при переходе в статусы (whitelist):** `Posted`, `Completed`, `Cancelled`. Остальные (`Pending`, legacy `In progress`) — молчим.
 
 **Условия:**
 - Не уведомляем, если `old_status == new_status` (защита от двойных кликов).
@@ -36,15 +36,18 @@
 - `web/static/components/NotificationsBell.jsx` — колокольчик с бейджем и дропдауном.
 
 **Изменения в существующих файлах:**
-- `web/routers/admin_orders.py:change_status` — после `UPDATE` зовёт `asyncio.create_task(notify_order_status_changed(...))`.
-- `handlers/admin_orders.py:order_finish` — заменяет ad-hoc `bot.send_message("✅ Ваш заказ №... выполнен.")` на `await notify_order_status_changed(...)`.
+- `web/routers/admin_orders.py:change_status` — после `UPDATE` зовёт `asyncio.create_task(notify_order_status_changed(kind='order', ...))`.
+- `handlers/admin_orders.py:order_finish` — заменяет ad-hoc `bot.send_message("✅ Ваш заказ №... выполнен.")` на `await notify_order_status_changed(kind='order', ...)`.
+- `handlers/admin_reviews.py:review_close` (~стр. 219) — заменяет ad-hoc `bot.send_message("🎉 Ваш заказ номер N на сервисе ... успешно выполнен!")` на `await notify_order_status_changed(kind='order_review', ...)`.
+- `handlers/admin_reviews.py:delreview_close` (~стр. 317) — заменяет аналогичную ad-hoc отправку на `await notify_order_status_changed(kind='order_delreview', ...)`.
+- `handlers/admin_reviews.py` (~стр. 149) — удаляем мёртвую ветку `elif order['status'] == 'In progress':` (статус никто не пишет в код, верифицируется грепом перед удалением).
 - `web/static/components/AppHeader.jsx` — монтирует `<NotificationsBell />` в `header__actions` для авторизованного юзера в non-admin режиме.
 - `web/main.py` — регистрация роутера уведомлений.
 - `web/static/platform.css` — стили `.bell`, `.bell__btn`, `.bell__badge`, `.bell__panel`, `.bell__item`, `.bell__item--unread`, `.bell__empty`.
 - `utils/sqlite3.py` (блок `CREATE TABLE ...` начиная с ~строки 824) — добавить `CREATE TABLE IF NOT EXISTS notifications` и два индекса.
 
 **Что НЕ меняем:**
-- `utils/sqlite3.edit_order` остаётся «тупым» мутатором.
+- `utils/sqlite3.edit_order` и аналоги `edit_order_reviews` / `edit_order_delreviews` остаются «тупыми» мутаторами.
 - Гостевые заказы.
 - Существующие тексты других уведомлений (поддержка, VIP-статус).
 
@@ -84,10 +87,13 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_created
 
 ```python
 async def notify_order_status_changed(
-    order_id: int,
+    *,
     user_id: int,
+    kind: str,                # 'order' | 'order_review' | 'order_delreview'
+    order_id: int,
     old_status: str,
     new_status: str,
+    **fields: str,            # extra шаблонные поля (например, service для отзывов)
 ) -> None
 
 def list_notifications(user_id: int, limit: int = 50) -> list[dict]
@@ -98,30 +104,36 @@ def mark_all_read(user_id: int) -> int  # rowcount
 ### Поведение `notify_order_status_changed`
 
 ```python
-_TEMPLATES = {
-    "Posted":    "📌 Заказ №{order_id} размещён.",
-    "Completed": "✅ Заказ №{order_id} выполнен.",
-    "Cancelled": "❌ Заказ №{order_id} отменён.",
+_TEMPLATES: dict[tuple[str, str], str] = {
+    ('order', 'Posted'):    "📌 Заказ №{order_id} размещён.",
+    ('order', 'Completed'): "✅ Заказ №{order_id} выполнен.",
+    ('order', 'Cancelled'): "❌ Заказ №{order_id} отменён.",
+    ('order_review', 'Completed'):
+        "🎉 Заказ №{order_id} на отзыв ({service}) выполнен.",
+    ('order_delreview', 'Completed'):
+        "🎉 Заказ №{order_id} на удаление отзыва ({service}) выполнен.",
 }
 
-def _build_text(order_id: int, new_status: str) -> str | None:
-    tpl = _TEMPLATES.get(new_status)
-    return tpl.format(order_id=order_id) if tpl else None
+def _build_text(kind: str, new_status: str, **fields: str) -> str | None:
+    tpl = _TEMPLATES.get((kind, new_status))
+    return tpl.format(**fields) if tpl else None
 
 
-async def notify_order_status_changed(order_id, user_id, old_status, new_status):
+async def notify_order_status_changed(
+    *, user_id, kind, order_id, old_status, new_status, **fields,
+):
     if old_status == new_status:
         return
-    text = _build_text(order_id, new_status)
+    text = _build_text(kind, new_status, order_id=order_id, **fields)
     if text is None:
-        return  # статус вне whitelist'а
+        return  # пары (kind, status) нет в whitelist'е
 
     # 1. durable: insert в БД (для ленты ЛК)
     with connect() as con:
         con.execute(
             "INSERT INTO notifications(user_id, kind, order_id, new_status, text) "
-            "VALUES (?, 'order_status', ?, ?, ?)",
-            (user_id, order_id, new_status, text),
+            "VALUES (?, ?, ?, ?, ?)",
+            (user_id, kind, order_id, new_status, text),
         )
         con.commit()
 
@@ -138,14 +150,19 @@ async def notify_order_status_changed(order_id, user_id, old_status, new_status)
         kb.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="to_main_menu"))
         await bot.send_message(chat_id=tg_id, text=text, reply_markup=kb)
     except Exception:
-        logger.exception("TG notify failed for user_id=%s order=%s", user_id, order_id)
+        logger.exception(
+            "TG notify failed for user_id=%s kind=%s order=%s",
+            user_id, kind, order_id,
+        )
 ```
 
 **Решения:**
 - БД-вставка идёт **первой**: если TG упадёт, в ленте ЛК запись уже есть.
+- Шаблоны индексируются по паре `(kind, status)` — единая точка whitelist'а для всех типов заказов и переходов. Отсутствующая пара → молчим. Расширение под новый тип/переход = одна строка в `_TEMPLATES`.
+- `**fields` пробрасывает доп. данные шаблона (`service` для review/delreview). Для обычных заказов `fields` не нужен.
 - `callback_data="to_main_menu"` переиспользует существующий хендлер в `handlers/commands.py:144` — дополнительной правки в боте не нужно.
 - Импорты внутри функции (паттерн как в `web/routers/admin_support._forward_reply_to_user`) — избегаем циклов при загрузке модулей.
-- `_build_text` приватный: знание о whitelist'е статусов и шаблонах в одном месте.
+- `kind` пишется в БД в одноимённую колонку — фронт получит его в `GET /api/notifications` и при желании сможет визуально различать типы (сейчас не различает, лента линейная).
 
 ## 6. HTTP API
 
@@ -207,15 +224,16 @@ with connect() as con:
         con.commit()
 
 if old_status != body.status:
-    asyncio.create_task(
-        notify_order_status_changed(order_id, user_id, old_status, body.status)
-    )
+    asyncio.create_task(notify_order_status_changed(
+        user_id=user_id, kind='order', order_id=order_id,
+        old_status=old_status, new_status=body.status,
+    ))
 return {"order_id": order_id, "status": body.status}
 ```
 
 Чтение `status` и `user_id` идёт в той же сессии, что и `UPDATE` — race-окна нет. Отправка нотификации после `commit`, чтобы не уведомлять об изменении, которое откатилось бы. `asyncio.create_task` — fire-and-forget.
 
-### Telegram-админка (`handlers/admin_orders.py:order_finish`, ~строка 264)
+### Telegram-админка заказов (`handlers/admin_orders.py:order_finish`, ~строка 264)
 
 ```python
 order1 = get_order(order)
@@ -225,15 +243,39 @@ if not order1:
 old_status = str(order1.get('status') or '')
 edit_order(status="Completed", order=order)
 await notify_order_status_changed(
-    order_id=int(order),
-    user_id=int(order1['user_id']),
-    old_status=old_status,
-    new_status="Completed",
+    user_id=int(order1['user_id']), kind='order', order_id=int(order),
+    old_status=old_status, new_status="Completed",
 )
 await bot.send_message(chat_id=message.from_user.id, text="✅ Успешно")
 ```
 
 Удаляется существующий ручной `bot.send_message(chat_id=tg_id, text=f"✅ Ваш заказ №{order} выполнен.")` — теперь это уходит через общий сервис. В этом контексте `await`, а не `create_task`: уже внутри aiogram-хендлера; сервис проглатывает свои исключения.
+
+### Telegram-админка отзывов (`handlers/admin_reviews.py:review_close`, ~строка 214)
+
+```python
+if review['status'] == 'Posted':
+    edit_order_reviews('Completed', message.text)
+    await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
+    await notify_order_status_changed(
+        user_id=int(review['user_id']), kind='order_review',
+        order_id=int(review['increment']),
+        old_status='Posted', new_status='Completed',
+        service=str(review['service']),
+    )
+else:
+    ...
+```
+
+Удаляется ручной `bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ номер {review['increment']} на сервисе {review['service']} успешно выполнен!</b>")` (и сопутствующий вызов `get_tg_id_for_user`/проверку `if tg_id` — сервис справляется сам).
+
+### Telegram-админка удаления отзывов (`handlers/admin_reviews.py:delreview_close`, ~строка 312)
+
+Зеркальная правка для `del_review`: `kind='order_delreview'`, `service=str(del_review['service'])`. Удаляется ручной `bot.send_message` со строки ~317.
+
+### Очистка мёртвой ветки (`handlers/admin_reviews.py:149`)
+
+Перед удалением — `grep -rn "'In progress'" --include="*.py"` (исключая тесты). Если строка нигде не **пишется** (только читается в этой ветке), удаляем `elif order['status'] == 'In progress':` и связанный блок. Иначе оставляем как есть и фиксируем в плане причину отказа.
 
 ## 8. UI колокольчика
 
@@ -345,12 +387,16 @@ function NotificationsBell({ pollMs = 30000 }) {
 
 ### Юнит-тесты (`tests/unit/test_notifications.py`)
 
-- `_build_text`: возвращает строку для Posted/Completed/Cancelled, `None` для Pending и неизвестных.
+- `_build_text`:
+  - возвращает строку для `('order', 'Posted'|'Completed'|'Cancelled')`;
+  - возвращает строку для `('order_review', 'Completed')` и `('order_delreview', 'Completed')` с подстановкой `service`;
+  - `None` для `('order', 'Pending')`, неизвестных kind'ов, и пар вне whitelist'а (например, `('order_review', 'Cancelled')`).
 - `list_notifications` / `unread_count` / `mark_all_read`: in-memory SQLite, фильтр по `user_id`, упорядоченность `ORDER BY id DESC`, идемпотентность `mark_all_read`.
 - `notify_order_status_changed`:
   - no-op при `old == new` (нет вставки в БД, нет вызова бота, бот замокан);
   - whitelist: для `Pending` нет вставки;
-  - happy path: вставка в БД + `bot.send_message` вызван с inline-кнопкой;
+  - happy path для `kind='order'`: вставка в БД + `bot.send_message` вызван с inline-кнопкой;
+  - happy path для `kind='order_review'` с `service='Avito'`: текст содержит `(Avito)`, в БД `kind='order_review'`;
   - TG-провал (мок райзит исключение): запись в БД остаётся, исключение проглочено, лог зафиксирован;
   - нет `tg_id`: запись в БД остаётся, `bot.send_message` НЕ вызван.
 
@@ -403,10 +449,20 @@ function NotificationsBell({ pollMs = 30000 }) {
 4. В ЛК ≤30s — бейдж и запись появляются.
 5. Сервер пишет `logger.exception` про TG.
 
-**TC-7. Канал смены статуса из TG-админки**
+**TC-7. Канал смены статуса из TG-админки (обычный заказ)**
 1. Через `/admin → готовоебать → ввести ID заказа` ставим `Completed`.
 2. Юзер получает стандартное сообщение (с кнопкой), а не старый текст `«Ваш заказ № выполнен.»`.
 3. В ЛК — запись в ленте.
+
+**TC-7a. Закрытие review-заказа**
+1. Создать review-заказ для `@yamagruh` через нормальный флоу (`/reviews`).
+2. В админке отзывов закрыть его (`Posted → Completed`).
+3. В TG приходит `🎉 Заказ №N на отзыв (<service>) выполнен.` с кнопкой `🏠 Главное меню`.
+4. В ЛК — запись в ленте, бейдж колокольчика инкрементируется. Старого жирного `<b>🎉 Ваш заказ номер N…</b>` НЕТ.
+
+**TC-7b. Закрытие delreview-заказа**
+1. Аналогично TC-7a, но для удаления отзыва.
+2. Текст: `🎉 Заказ №N на удаление отзыва (<service>) выполнен.`
 
 **TC-8. Изоляция ленты по юзерам**
 1. Логин в ЛК под другим юзером (например, `@u1tra_zalupa`).
@@ -419,7 +475,23 @@ function NotificationsBell({ pollMs = 30000 }) {
 
 **Авто-сценарий через Telethon** (опционально): TC-1/TC-2 можно автоматизировать через `.test_session.session` (см. memory `project_test_data.md`).
 
-## 11. Не входит в скоуп
+## 11. Уборка легаси (попутно)
+
+Заодно выпиливаем мёртвый и дублирующий код в районе правок:
+
+| Файл / строка | Что убираем | Замена |
+|---|---|---|
+| `handlers/admin_orders.py:268` | `bot.send_message(chat_id=tg_id, text=f"✅ Ваш заказ №{order} выполнен.")` + сопутствующий `tg_id = get_tg_id_for_user(...)` | вызов `notify_order_status_changed(kind='order', ...)` |
+| `handlers/admin_reviews.py:217–219` | `tg_id = get_tg_id_for_user(...)` + `bot.send_message(... "<b>🎉 Ваш заказ номер ... успешно выполнен!</b>")` | вызов `notify_order_status_changed(kind='order_review', ..., service=...)` |
+| `handlers/admin_reviews.py:315–317` | Аналогично для delreview-заказов | `notify_order_status_changed(kind='order_delreview', ..., service=...)` |
+| `handlers/admin_reviews.py:149` (и связанный блок elif) | Мёртвая ветка `elif order['status'] == 'In progress':` | Удалить (после `grep -rn "'In progress'"` подтверждения, что строка нигде не пишется) |
+
+**Что НЕ трогаем сейчас, хотя выглядит легаси:**
+- VIP-уведомления `handlers/admin_users.py:155,185` — другой домен.
+- Гостевые заказы (`paid`/`failed` статусы) — отдельный домен, нет ЛК-получателя.
+- Старые ручные `bot.send_message` в success-сценариях заказов (например, поздравления при создании) — вне «смены статуса».
+
+## 12. Не входит в скоуп
 
 - Гостевые заказы (`guest_orders`) — нет `user_id`/ЛК.
 - Outbox-таблица + воркер с ретраями (отдельный спек, если потребуется).

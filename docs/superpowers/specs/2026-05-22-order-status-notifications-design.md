@@ -147,7 +147,7 @@ async def notify_order_status_changed(
         if not tg_id:
             return
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="to_main_menu"))
+        kb.add(InlineKeyboardButton(text="🏠 Главное меню", callback_data="menu"))
         await bot.send_message(chat_id=tg_id, text=text, reply_markup=kb)
     except Exception:
         logger.exception(
@@ -160,7 +160,7 @@ async def notify_order_status_changed(
 - БД-вставка идёт **первой**: если TG упадёт, в ленте ЛК запись уже есть.
 - Шаблоны индексируются по паре `(kind, status)` — единая точка whitelist'а для всех типов заказов и переходов. Отсутствующая пара → молчим. Расширение под новый тип/переход = одна строка в `_TEMPLATES`.
 - `**fields` пробрасывает доп. данные шаблона (`service` для review/delreview). Для обычных заказов `fields` не нужен.
-- `callback_data="to_main_menu"` переиспользует существующий хендлер в `handlers/commands.py:144` — дополнительной правки в боте не нужно.
+- `callback_data="menu"` ловится существующим `handlers/commands.py:143` (`text_startswith="menu"`) — конвенция в проекте (см. `keyboards/users_menu.py:584` и др.), правки в боте не нужно.
 - Импорты внутри функции (паттерн как в `web/routers/admin_support._forward_reply_to_user`) — избегаем циклов при загрузке модулей.
 - `kind` пишется в БД в одноимённую колонку — фронт получит его в `GET /api/notifications` и при желании сможет визуально различать типы (сейчас не различает, лента линейная).
 

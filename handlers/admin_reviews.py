@@ -204,7 +204,6 @@ async def admin_call_review_close(call: types.CallbackQuery, state: FSMContext):
 
 @dp.message_handler(state=reviews.close)
 async def review_close(message: types.Message, state: FSMContext):
-    from utils.sqlite3 import get_tg_id_for_user
     try:
         review = get_order_reviews(message.text)
         if not review:
@@ -214,9 +213,16 @@ async def review_close(message: types.Message, state: FSMContext):
         if review['status'] == 'Posted':
             edit_order_reviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
-            tg_id = get_tg_id_for_user(review['user_id'])
-            if tg_id:
-                await bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ номер {review['increment']} на сервисе {review['service']} успешно выполнен!</b>")
+
+            from services.notifications import notify_order_status_changed
+            await notify_order_status_changed(
+                user_id=int(review['user_id']),
+                kind="order_review",
+                order_id=int(review['increment']),
+                old_status='Posted',
+                new_status='Completed',
+                service=str(review.get('service') or ''),
+            )
         else:
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
         await state.finish()
@@ -302,7 +308,6 @@ async def admin_call_del_review_close(call: types.CallbackQuery, state: FSMConte
 
 @dp.message_handler(state=del_reviews.close)
 async def del_review_close(message: types.Message, state: FSMContext):
-    from utils.sqlite3 import get_tg_id_for_user
     try:
         del_review = get_order_delreviews(message.text)
         if not del_review:
@@ -312,9 +317,16 @@ async def del_review_close(message: types.Message, state: FSMContext):
         if del_review['status'] == 'Posted':
             edit_order_delreviews('Completed', message.text)
             await message.answer('⚙️ Заказ успешно завершен!', reply_markup=admin_back_kb('reviews_man'))
-            tg_id = get_tg_id_for_user(del_review['user_id'])
-            if tg_id:
-                await bot.send_message(chat_id=tg_id, text=f"<b>🎉 Ваш заказ на удаление негативного отзыва номер {del_review['increment']} на сервисе {del_review['service']} успешно выполнен!</b>")
+
+            from services.notifications import notify_order_status_changed
+            await notify_order_status_changed(
+                user_id=int(del_review['user_id']),
+                kind="order_delreview",
+                order_id=int(del_review['increment']),
+                old_status='Posted',
+                new_status='Completed',
+                service=str(del_review.get('service') or ''),
+            )
         else:
             await message.answer('⚠️ Заказ уже завершен!', reply_markup=admin_back_kb('reviews_man'))
         await state.finish()

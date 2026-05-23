@@ -119,7 +119,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
         <div className="header__actions">
 
           {/* Notifications bell (regular user view only) */}
-          {isApp && user && !adminMode && <NotificationsBell />}
+          {isApp && user && !adminMode && <NotificationsBell onNavigate={onNavigate} />}
 
           {/* Admin-mode toggle (only for admins) */}
           {isApp && user && user.is_admin && (

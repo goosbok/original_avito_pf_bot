@@ -11,7 +11,7 @@ const SERVICES = [
   { id: 'smm',     abbr: 'SMM', name: 'SMM',          desc: 'Ведение соцсетей и создание контента', price: null, badge: 'Скоро', available: false, route: null },
 ];
 
-const PRESETS = [500, 1000, 2000, 5000];
+const PRESETS = [500, 1000, 2000];
 
 function StatusBadge({ status }) {
   const map = { Posted: 'posted', Completed: 'completed', Cancelled: 'cancelled', Pending: 'pending' };
@@ -29,12 +29,12 @@ function displayServiceName(o) {
 function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) {
   const [recentOrders, setRecentOrders] = useCabinetState([]);
   const [refillAmount, setRefillAmount] = useCabinetState(1000);
+  const [customMode, setCustomMode] = useCabinetState(false);
   const [refillStatus, setRefillStatus] = useCabinetState(null);
   const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
-  const [refillAgreedPrivacy, setRefillAgreedPrivacy] = useCabinetState(false);
-  const [refillAgreedOffer, setRefillAgreedOffer] = useCabinetState(false);
   const [refillErrorMessage, setRefillErrorMessage] = useCabinetState(null);
-  const refillConsentOk = refillAgreedPrivacy && refillAgreedOffer;
+  const refillBusy = refillStatus === 'pending' || refillStatus === 'polling';
+  const refillAmountValid = Number(refillAmount) >= 100;
 
   const openSupportForRefill = () => {
     const text = `Хочу пополнить баланс на ${Number(refillAmount).toLocaleString('ru-RU')} ₽, но через сайт не получается. Помогите, пожалуйста.`;
@@ -48,26 +48,38 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   }, []);
 
   const handleRefill = async () => {
-    if (!refillAmount || refillAmount < 100) return;
-    if (!refillConsentOk) return;
+    if (!refillAmountValid) return;
     setRefillErrorMessage(null);
     setRefillStatus('pending');
     try {
       const data = await api.post('/api/refill', {
         amount: Number(refillAmount),
-        agreed_privacy: refillAgreedPrivacy,
-        agreed_offer: refillAgreedOffer,
+        agreed_privacy: true,
+        agreed_offer: true,
       });
       setRefillPaymentId(data.payment_id);
       window.open(data.payment_url, '_blank');
       setRefillStatus('polling');
     } catch (e) {
-      // 4xx errors surface backend's specific message; 5xx falls back to generic.
       if (e.status >= 400 && e.status < 500 && e.message) {
         setRefillErrorMessage(e.message);
       }
       setRefillStatus('error');
     }
+  };
+
+  const selectPreset = (p) => {
+    setRefillAmount(p);
+    setCustomMode(false);
+  };
+
+  const enterCustomMode = () => {
+    setCustomMode(true);
+  };
+
+  const exitCustomMode = () => {
+    setCustomMode(false);
+    setRefillAmount(1000);
   };
 
   const checkRefillStatus = async () => {
@@ -113,48 +125,75 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Баланс</span>
                 <span style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--primary)' }}>{balance.toLocaleString('ru-RU')} ₽</span>
               </div>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-                {PRESETS.slice(0, 3).map(p => (
+
+              {!customMode ? (
+                <div className="balance-presets">
+                  {PRESETS.map(p => (
+                    <button
+                      key={p}
+                      className={`balance-preset${refillAmount === p && !customMode ? ' active' : ''}`}
+                      style={{ flex: 1 }}
+                      onClick={() => selectPreset(p)}
+                      disabled={refillBusy}
+                    >
+                      {p.toLocaleString('ru-RU')}
+                    </button>
+                  ))}
                   <button
-                    key={p}
-                    className={`balance-preset${refillAmount === p ? ' active' : ''}`}
-                    style={{ flex: 1, fontSize: '0.75rem', padding: '5px 4px' }}
-                    onClick={() => setRefillAmount(p)}
+                    className="balance-preset"
+                    style={{ flex: 1 }}
+                    onClick={enterCustomMode}
+                    disabled={refillBusy}
                   >
-                    {p.toLocaleString('ru-RU')}
+                    Другая
                   </button>
-                ))}
-              </div>
-              <LegalConsent
-                privacyChecked={refillAgreedPrivacy}
-                offerChecked={refillAgreedOffer}
-                onPrivacyChange={setRefillAgreedPrivacy}
-                onOfferChange={setRefillAgreedOffer}
-                disabled={refillStatus === 'pending' || refillStatus === 'polling'}
-                style={{ marginBottom: 10, fontSize: '0.75rem' }}
-              />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  className="input" type="number" min={100}
-                  value={refillAmount}
-                  onChange={e => setRefillAmount(Number(e.target.value))}
-                  placeholder="Сумма"
-                  style={{ flex: 1, padding: '8px 10px', fontSize: '0.875rem' }}
-                />
-                <button
-                  className="btn btn--primary btn--sm"
-                  onClick={handleRefill}
-                  disabled={refillStatus === 'pending' || refillStatus === 'polling' || !refillAmount || refillAmount < 100 || !refillConsentOk}
-                  style={{ whiteSpace: 'nowrap' }}
-                >
-                  {refillStatus === 'pending' ? '...' : 'Пополнить'}
-                </button>
-              </div>
-              {!refillConsentOk && refillAmount >= 100 && !refillStatus && (
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-3)', marginTop: 6 }}>
-                  Для оплаты примите оба условия выше
+                </div>
+              ) : (
+                <div className="balance-custom-row">
+                  <button
+                    className="balance-back-btn"
+                    onClick={exitCustomMode}
+                    disabled={refillBusy}
+                    aria-label="К пресетам"
+                    title="К пресетам"
+                  >
+                    ←
+                  </button>
+                  <input
+                    className="input"
+                    type="number"
+                    min={100}
+                    autoFocus
+                    value={refillAmount}
+                    onChange={e => setRefillAmount(Number(e.target.value))}
+                    placeholder="Сумма от 100 ₽"
+                    disabled={refillBusy}
+                    style={{ flex: 1, padding: '8px 10px', fontSize: '0.875rem' }}
+                  />
                 </div>
               )}
+
+              <button
+                className="btn btn--primary balance-cta"
+                onClick={handleRefill}
+                disabled={refillBusy || !refillAmountValid}
+              >
+                {refillStatus === 'pending'
+                  ? '...'
+                  : refillAmountValid
+                    ? `Пополнить ${Number(refillAmount).toLocaleString('ru-RU')} ₽`
+                    : 'Введите сумму от 100 ₽'}
+              </button>
+
+              {!refillStatus && (
+                <div className="balance-fineprint">
+                  Нажимая «Пополнить», вы соглашаетесь с{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer">Политикой конфиденциальности</a>
+                  {' '}и{' '}
+                  <a href="/offer" target="_blank" rel="noopener noreferrer">Публичной офертой</a>
+                </div>
+              )}
+
               {refillStatus === 'polling' && (
                 <div className="balance-status balance-status--pending" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>⏳ Ожидаем оплаты</span>

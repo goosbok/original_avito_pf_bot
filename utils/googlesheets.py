@@ -1,17 +1,28 @@
+"""Экспорты в Google Sheets.
+
+Все 4 функции пишут в ОДНУ заранее созданную таблицу, ID которой задан
+переменной окружения GSHEETS_TARGET_SHEET_ID. Никаких files.create() —
+у сервисного аккаунта Drive-квота 0 байт, поэтому создавать новые файлы
+он не может. Юзер создаёт таблицу руками один раз, шарит её service-account
+email'у с правом Editor, и бот переписывает содержимое нужных вкладок.
+
+Вкладки, в которые пишет каждая функция:
+    create_sheet()              → "Все заказы"
+    create_orders_report()      → "Заказы по юзеру"
+    create_refills_report()     → "Пополнения по юзеру"
+    create_reviews_report()     → "Отзывы"
+
+Если какая-то вкладка отсутствует — она создаётся (addSheet).
+"""
+
 import httplib2
+import logging
 import apiclient.discovery
 from oauth2client.service_account import ServiceAccountCredentials
 from utils.dates import format_display
-from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch
-from data.config import services, GSHEETS_OWNER_EMAIL
-from datetime import *
-import gc
-import logging
-import os
-import csv
-import tempfile
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaFileUpload
+from utils.sqlite3 import all_users, get_user, all_refills, get_report_exclude, get_orders_batch
+from data.config import services, GSHEETS_TARGET_SHEET_ID
+from datetime import datetime
 
 CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'
 
@@ -21,6 +32,11 @@ credentials = None
 httpAuth = None
 service = None
 
+TAB_ALL_ORDERS = 'Все заказы'
+TAB_USER_ORDERS = 'Заказы по юзеру'
+TAB_USER_REFILLS = 'Пополнения по юзеру'
+TAB_REVIEWS = 'Отзывы'
+
 
 def _init():
     global credentials, httpAuth, service
@@ -28,216 +44,128 @@ def _init():
         return
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
         CREDENTIALS_FILE,
-        ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'],
+        ['https://www.googleapis.com/auth/spreadsheets'],
     )
     httpAuth = credentials.authorize(httplib2.Http())
     service = apiclient.discovery.build('sheets', 'v4', http=httpAuth)
 
 
-def _transfer_ownership(drive_service, file_id):
-    """Передаёт ownership созданного файла на GSHEETS_OWNER_EMAIL, чтобы файл
-    не занимал квоту сервисного аккаунта.
+def _require_target():
+    if not GSHEETS_TARGET_SHEET_ID:
+        raise RuntimeError(
+            "GSHEETS_TARGET_SHEET_ID is not set. Create a Google spreadsheet, "
+            "share it as Editor with the service-account email from "
+            f"{CREDENTIALS_FILE}, and put the spreadsheet ID into .env."
+        )
 
-    Для SA → consumer-gmail Google требует pending-ownership: новый владелец
-    получает письмо/уведомление и однократно подтверждает приём в Drive UI.
-    После подтверждения файл уезжает в его My Drive и SA-квота освобождается.
 
-    Если GSHEETS_OWNER_EMAIL не задан — ничего не делает (старое поведение).
-    Любая ошибка логируется и не валит экспорт: даже если transfer не прошёл,
-    файл и публичная ссылка остаются рабочими, просто не освобождается квота.
+def _get_or_create_tab(tab_title):
+    """Returns sheetId of the tab; creates it if missing."""
+    meta = service.spreadsheets().get(spreadsheetId=GSHEETS_TARGET_SHEET_ID).execute()
+    for s in meta['sheets']:
+        if s['properties']['title'] == tab_title:
+            return s['properties']['sheetId']
+    resp = service.spreadsheets().batchUpdate(
+        spreadsheetId=GSHEETS_TARGET_SHEET_ID,
+        body={'requests': [{'addSheet': {'properties': {'title': tab_title}}}]},
+    ).execute()
+    return resp['replies'][0]['addSheet']['properties']['sheetId']
+
+
+def _column_letter(idx):
+    """0 → A, 25 → Z, 26 → AA …"""
+    result = ''
+    n = idx
+    while True:
+        result = chr(ord('A') + n % 26) + result
+        n = n // 26 - 1
+        if n < 0:
+            break
+    return result
+
+
+def _write_tab(tab_title, sheet_id, columns, column_widths):
+    """Очищает вкладку и записывает данные + форматирование.
+
+    columns: список колонок, каждая — список вида [header, *values].
+    column_widths: список троек (start_col_idx, end_col_idx_excl, pixel_width).
+
+    Возвращает URL с #gid= указанной вкладки.
     """
-    if not GSHEETS_OWNER_EMAIL:
-        return
-    try:
-        drive_service.permissions().create(
-            fileId=file_id,
-            body={
-                'type': 'user',
-                'role': 'writer',
-                'emailAddress': GSHEETS_OWNER_EMAIL,
-                'pendingOwner': True,
-            },
-            sendNotificationEmail=True,
-            fields='id',
+    num_cols = len(columns)
+    row_cnt = len(columns[0]) if columns else 1
+
+    # 1) очистить старое содержимое
+    service.spreadsheets().values().clear(
+        spreadsheetId=GSHEETS_TARGET_SHEET_ID,
+        range=f"'{tab_title}'",
+        body={},
+    ).execute()
+
+    # 2) записать данные построчно (majorDimension=COLUMNS, чтобы передать колонками)
+    data = []
+    for col_idx, col_values in enumerate(columns):
+        letter = _column_letter(col_idx)
+        data.append({
+            'range': f"'{tab_title}'!{letter}1:{letter}{row_cnt}",
+            'majorDimension': 'COLUMNS',
+            'values': [col_values],
+        })
+    if data:
+        service.spreadsheets().values().batchUpdate(
+            spreadsheetId=GSHEETS_TARGET_SHEET_ID,
+            body={'valueInputOption': 'USER_ENTERED', 'data': data},
         ).execute()
-        logger.info(
-            "gsheets: pending ownership of %s set to %s — accept in Drive UI",
-            file_id, GSHEETS_OWNER_EMAIL,
-        )
-    except HttpError as e:
-        logger.warning(
-            "gsheets: failed to set pending owner for %s on %s: %s",
-            GSHEETS_OWNER_EMAIL, file_id, e,
-        )
+
+    # 3) форматирование (ширина колонок, заголовок, фильтр)
+    fmt_requests = []
+    for (start, end, width) in column_widths:
+        fmt_requests.append({
+            'updateDimensionProperties': {
+                'range': {'sheetId': sheet_id, 'dimension': 'COLUMNS',
+                          'startIndex': start, 'endIndex': end},
+                'properties': {'pixelSize': width},
+                'fields': 'pixelSize',
+            }
+        })
+    fmt_requests.append({
+        'repeatCell': {
+            'range': {'sheetId': sheet_id, 'startRowIndex': 0, 'endRowIndex': 1,
+                      'startColumnIndex': 0, 'endColumnIndex': num_cols},
+            'cell': {'userEnteredFormat': {
+                'horizontalAlignment': 'CENTER',
+                'backgroundColor': {'red': 0.8, 'green': 0.8, 'blue': 0.8, 'alpha': 1},
+                'textFormat': {'bold': True},
+            }},
+            'fields': 'userEnteredFormat',
+        }
+    })
+    # Старый фильтр сбросить (иначе setBasicFilter упадёт)
+    fmt_requests.append({'clearBasicFilter': {'sheetId': sheet_id}})
+    fmt_requests.append({
+        'setBasicFilter': {'filter': {
+            'range': {'sheetId': sheet_id, 'startRowIndex': 0, 'endRowIndex': 1,
+                      'startColumnIndex': 0, 'endColumnIndex': num_cols},
+        }}
+    })
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=GSHEETS_TARGET_SHEET_ID,
+        body={'requests': fmt_requests},
+    ).execute()
+
+    return f"https://docs.google.com/spreadsheets/d/{GSHEETS_TARGET_SHEET_ID}/edit#gid={sheet_id}"
+
 
 def get_user_str(user):
-    if user['user_name']:
+    if user and user['user_name']:
         return user['user_name']
-    else:
+    if user:
         return str(user['id'])
+    return ''
 
-def create_sheet():
-    _init()
-    csv_file = None
-    try:
-        d = datetime.now()
-        DB_BATCH_SIZE = 1000  # Загружаем из БД пакетами
-        
-        print("🚀 Создание CSV-отчета...")
-        
-        # Создаем временный CSV файл
-        csv_file = tempfile.NamedTemporaryFile(mode='w', newline='', encoding='utf-8', suffix='.csv', delete=False)
-        csv_writer = csv.writer(csv_file)
-        
-        # Пишем заголовки
-        csv_writer.writerow(['№', 'id', 'username', 'Ссылки', 'Контакты', 'Дней/ПФ', 'Итого', 'Статус', 'Дата'])
-        
-        # Получаем список исключений
-        excludes = get_report_exclude()
-        
-        processed_rows = 0
-        db_offset = 0
-        
-        print("📝 Обработка данных из БД...")
-        
-        # Загружаем и пишем в CSV пакетами
-        while True:
-            orders_batch = get_orders_batch(limit=DB_BATCH_SIZE, offset=db_offset)
-            
-            if not orders_batch:
-                break
-            
-            print(f"📦 Обработка заказов {db_offset}-{db_offset + len(orders_batch)}")
-            
-            for order in orders_batch:
-                if str(order['user_id']) not in excludes:
-                    links_array = order['links'].split()
-                    
-                    for link in links_array:
-                        # Пишем строку сразу в CSV (не накапливаем в памяти!)
-                        csv_writer.writerow([
-                            order['increment'],
-                            order['user_id'],
-                            order['user_name'],
-                            link.replace("'", "").replace("[", "").replace("]", ""),
-                            'Да' if order['contacts'] else 'Нет',
-                            order['position_name'],
-                            order['price'],
-                            'Размещён' if order['status'] == 'Posted' else ('Выполнен' if order['status'] == 'Completed' else order['status']),
-                            format_display(order['date'])
-                        ])
-                        processed_rows += 1
-            
-            # Очищаем память после каждого пакета
-            del orders_batch
-            gc.collect()
-            db_offset += DB_BATCH_SIZE
-        
-        csv_file.close()
-        csv_filename = csv_file.name
-        
-        print(f"✅ CSV создан: {processed_rows} строк, размер: {os.path.getsize(csv_filename) / 1024 / 1024:.1f} MB")
-        print("📤 Загрузка в Google Drive...")
-        
-        # Загружаем CSV в Google Drive и конвертируем в Sheets
-        driveService = apiclient.discovery.build('drive', 'v3', http=httpAuth)
-        
-        file_metadata = {
-            'name': f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}",
-            'mimeType': 'application/vnd.google-apps.spreadsheet'  # Автоконвертация в Sheets
-        }
-        
-        media = MediaFileUpload(
-            csv_filename,
-            mimetype='text/csv',
-            resumable=True
-        )
-        
-        spreadsheet = driveService.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id'
-        ).execute()
-        
-        spreadsheet_id = spreadsheet['id']
-        
-        # Удаляем временный CSV
-        os.unlink(csv_filename)
-        
-        print(f"📊 Таблица создана: {spreadsheet_id}")
-        print("🎨 Применение форматирования...")
-        
-        # Получаем реальный sheetId (при загрузке CSV Google может создать не 0)
-        sheet_metadata = service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-        sheet_id = sheet_metadata['sheets'][0]['properties']['sheetId']
-        
-        print(f"📋 Sheet ID: {sheet_id}")
-        
-        # Применяем форматирование (ширина столбцов, заголовки, фильтры)
-        format_requests = [
-            # Ширина столбцов
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": sheet_id, "dimension": "COLUMNS", "startIndex": 8, "endIndex": 9}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            # Форматирование заголовка (серый фон, жирный текст, центрирование)
-            {'repeatCell': {
-                'range': {'sheetId': sheet_id, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}, 
-                'cell': {'userEnteredFormat': {
-                    'horizontalAlignment': 'CENTER',
-                    'backgroundColor': {'red': 0.8, 'green': 0.8, 'blue': 0.8, 'alpha': 1},
-                    'textFormat': {'bold': True}
-                }}, 
-                'fields': 'userEnteredFormat'
-            }},
-            # Фильтр на заголовок
-            {'setBasicFilter': {'filter': {'range': {'sheetId': sheet_id, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}}
-        ]
-        
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={"requests": format_requests}
-        ).execute()
-        
-        print("✅ Форматирование применено")
-        print("🔓 Настройка публичного доступа...")
-        
-        # Публичный доступ
-        driveService.permissions().create(
-            fileId=spreadsheet_id,
-            body={'type': 'anyone', 'role': 'writer'},
-            fields='id'
-        ).execute()
-
-        # Передача ownership на личный аккаунт (освобождает квоту SA после accept)
-        _transfer_ownership(driveService, spreadsheet_id)
-
-        spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
-        print(f"🎉 Отчет готов: {spreadsheet_url}")
-        print(f"📊 Всего строк: {processed_rows}")
-        
-        return spreadsheet_url
-        
-    except Exception as e:
-        print(f'❌ Ошибка при создании отчета: {e}')
-        import traceback
-        traceback.print_exc()
-        
-        # Удаляем временный файл при ошибке
-        if csv_file and hasattr(csv_file, 'name') and os.path.exists(csv_file.name):
-            try:
-                os.unlink(csv_file.name)
-            except:
-                pass
-        
-        raise
 
 def _resolve_user_scope(user_id):
-    """Returns (magic_user, [user_id, *referals]) — все id как int, дедуп с сохранением порядка."""
+    """(magic_user, [user_id, *referals]) — int с дедупом."""
     magic_user = get_user(id=user_id)
     raw_ids = [user_id]
     if magic_user and magic_user.get('referals'):
@@ -256,14 +184,77 @@ def _resolve_user_scope(user_id):
     return magic_user, scope
 
 
-def create_orders_report(user_id):
+def create_sheet():
+    """Полный отчёт по всем заказам, лист 'Все заказы'."""
     _init()
-    orders = all_orders()
-    d = datetime.now()
-    sheet_name = f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}"
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_ALL_ORDERS)
+
+    excludes = get_report_exclude()
+
+    no = ['№']
+    ids = ['id']
+    logins = ['username']
+    links = ['Ссылки']
+    contacts = ['Контакты']
+    position = ['Дней/ПФ']
+    prices = ['Итого']
+    status = ['Статус']
+    dates = ['Дата']
+
+    DB_BATCH_SIZE = 1000
+    db_offset = 0
+    while True:
+        batch = get_orders_batch(limit=DB_BATCH_SIZE, offset=db_offset)
+        if not batch:
+            break
+        logger.info("gsheets: processing orders %d-%d", db_offset, db_offset + len(batch))
+        for order in batch:
+            if str(order['user_id']) in excludes:
+                continue
+            for link in order['links'].split():
+                no.append(order['increment'])
+                ids.append(order['user_id'])
+                logins.append(order['user_name'])
+                links.append(link.replace("'", "").replace("[", "").replace("]", ""))
+                contacts.append('Да' if order['contacts'] else 'Нет')
+                position.append(order['position_name'])
+                prices.append(order['price'])
+                status.append(
+                    'Размещён' if order['status'] == 'Posted'
+                    else ('Выполнен' if order['status'] == 'Completed' else order['status'])
+                )
+                dates.append(format_display(order['date']))
+        db_offset += DB_BATCH_SIZE
+
+    column_widths = [
+        (0, 1, 40),
+        (1, 3, 100),
+        (3, 4, 500),
+        (4, 5, 80),
+        (5, 6, 140),
+        (6, 7, 80),
+        (7, 8, 80),
+        (8, 9, 140),
+    ]
+    url = _write_tab(
+        TAB_ALL_ORDERS, sheet_id,
+        [no, ids, logins, links, contacts, position, prices, status, dates],
+        column_widths,
+    )
+    logger.info("gsheets: 'Все заказы' updated, %d rows, url=%s", len(no) - 1, url)
+    return url
+
+
+def create_orders_report(user_id):
+    """Заказы юзера + его рефералов, лист 'Заказы по юзеру'."""
+    _init()
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_USER_ORDERS)
 
     _, scope_ids = _resolve_user_scope(user_id)
     users_in_scope = {uid: get_user(id=uid) for uid in scope_ids}
+    scope_set = set(scope_ids)
 
     no = ['№']
     ids = ['id']
@@ -275,91 +266,62 @@ def create_orders_report(user_id):
     status = ['Статус']
     reg_date = ['Дата']
 
-    scope_set = set(scope_ids)
-    for order in orders:
-        try:
-            oid = int(order['user_id'])
-        except (TypeError, ValueError):
-            continue
-        if oid not in scope_set:
-            continue
-        usr = users_in_scope.get(oid)
-        no.append(order['increment'])
-        ids.append(order['user_id'])
-        logins.append(get_user_str(usr) if usr else str(oid))
-        links.append(order['links'].replace("'", "").replace(", ", "\n").replace("\n\n", "\n"))
-        contacts.append('Да' if order['contacts'] else 'Нет')
-        position_name.append(order['position_name'])
-        prices.append(order['price'])
-        status.append('Размещён' if order['status'] == 'Posted' else ('Выполнен' if order['status'] == 'Completed' else order['status']))
-        reg_date.append(format_display(order['date']))
+    DB_BATCH_SIZE = 1000
+    db_offset = 0
+    while True:
+        batch = get_orders_batch(limit=DB_BATCH_SIZE, offset=db_offset)
+        if not batch:
+            break
+        for order in batch:
+            try:
+                oid = int(order['user_id'])
+            except (TypeError, ValueError):
+                continue
+            if oid not in scope_set:
+                continue
+            usr = users_in_scope.get(oid)
+            no.append(order['increment'])
+            ids.append(order['user_id'])
+            logins.append(get_user_str(usr) if usr else str(oid))
+            links.append(order['links'].replace("'", "").replace(", ", "\n").replace("\n\n", "\n"))
+            contacts.append('Да' if order['contacts'] else 'Нет')
+            position_name.append(order['position_name'])
+            prices.append(order['price'])
+            status.append(
+                'Размещён' if order['status'] == 'Posted'
+                else ('Выполнен' if order['status'] == 'Completed' else order['status'])
+            )
+            reg_date.append(format_display(order['date']))
+        db_offset += DB_BATCH_SIZE
 
-    row_cnt = len(no)
-    sheet_title = 'Заказы'
-
-    sheets_array = [{'properties': {
-        'sheetType': 'GRID', 'sheetId': 0, 'title': sheet_title,
-        'gridProperties': {'rowCount': max(row_cnt, 1), 'columnCount': 9}
-    }}]
-
-    formated_sheets_array = [
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 8, "endIndex": 9}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-        {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}},
-        {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}},
+    column_widths = [
+        (0, 1, 40),
+        (1, 3, 100),
+        (3, 4, 500),
+        (4, 5, 80),
+        (5, 6, 140),
+        (6, 7, 80),
+        (7, 8, 80),
+        (8, 9, 140),
     ]
+    url = _write_tab(
+        TAB_USER_ORDERS, sheet_id,
+        [no, ids, logins, links, contacts, position_name, prices, status, reg_date],
+        column_widths,
+    )
+    logger.info("gsheets: '%s' updated, %d rows, scope=%s", TAB_USER_ORDERS, len(no) - 1, scope_ids)
+    return url
 
-    data_array = [
-        {"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]},
-        {"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]},
-        {"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]},
-        {"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [links]},
-        {"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [contacts]},
-        {"range": f"{sheet_title}!F1:F{row_cnt}", "majorDimension": "COLUMNS", "values": [position_name]},
-        {"range": f"{sheet_title}!G1:G{row_cnt}", "majorDimension": "COLUMNS", "values": [prices]},
-        {"range": f"{sheet_title}!H1:H{row_cnt}", "majorDimension": "COLUMNS", "values": [status]},
-        {"range": f"{sheet_title}!I1:I{row_cnt}", "majorDimension": "COLUMNS", "values": [reg_date]},
-    ]
-
-    spreadsheet = service.spreadsheets().create(body={
-        'properties': {'title': sheet_name, 'locale': 'ru_RU'},
-        'sheets': sheets_array,
-    }).execute()
-
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet['spreadsheetId'],
-        body={"requests": formated_sheets_array},
-    ).execute()
-
-    service.spreadsheets().values().batchUpdate(
-        spreadsheetId=spreadsheet['spreadsheetId'],
-        body={"valueInputOption": "USER_ENTERED", "data": data_array},
-    ).execute()
-
-    driveService = apiclient.discovery.build('drive', 'v3', http=httpAuth)
-    driveService.permissions().create(
-        fileId=spreadsheet['spreadsheetId'],
-        body={'type': 'anyone', 'role': 'writer'},
-        fields='id',
-    ).execute()
-    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
-
-    return spreadsheet['spreadsheetUrl']
 
 def create_refills_report(user_id):
+    """Пополнения юзера + его рефералов, лист 'Пополнения по юзеру'."""
     _init()
-    refills = all_refills()
-    d = datetime.now()
-    sheet_name = f"Оплаты-{d.strftime('%d-%m-%Y-%H-%M-%S')}"
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_USER_REFILLS)
 
     _, scope_ids = _resolve_user_scope(user_id)
     users_in_scope = {uid: get_user(id=uid) for uid in scope_ids}
+    scope_set = set(scope_ids)
 
     no = ['№']
     ids = ['id']
@@ -367,8 +329,7 @@ def create_refills_report(user_id):
     amount = ['Оплата']
     amount_date = ['Дата']
 
-    scope_set = set(scope_ids)
-    for refill in refills:
+    for refill in all_refills():
         try:
             rid = int(refill['user_id'])
         except (TypeError, ValueError):
@@ -382,131 +343,80 @@ def create_refills_report(user_id):
         amount.append(refill['amount'])
         amount_date.append(format_display(refill['date']))
 
-    row_cnt = len(no)
-    sheet_title = 'Оплаты'
-
-    sheets_array = [{'properties': {
-        'sheetType': 'GRID', 'sheetId': 0, 'title': sheet_title,
-        'gridProperties': {'rowCount': max(row_cnt, 1), 'columnCount': 5}
-    }}]
-
-    formated_sheets_array = [
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 4}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-        {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}},
-        {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}}}},
+    column_widths = [
+        (0, 1, 40),
+        (1, 4, 140),
+        (4, 5, 140),
     ]
+    url = _write_tab(
+        TAB_USER_REFILLS, sheet_id,
+        [no, ids, logins, amount, amount_date],
+        column_widths,
+    )
+    logger.info("gsheets: '%s' updated, %d rows, scope=%s", TAB_USER_REFILLS, len(no) - 1, scope_ids)
+    return url
 
-    data_array = [
-        {"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]},
-        {"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]},
-        {"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]},
-        {"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [amount]},
-        {"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [amount_date]},
-    ]
-
-    spreadsheet = service.spreadsheets().create(body={
-        'properties': {'title': sheet_name, 'locale': 'ru_RU'},
-        'sheets': sheets_array,
-    }).execute()
-
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet['spreadsheetId'],
-        body={"requests": formated_sheets_array},
-    ).execute()
-
-    service.spreadsheets().values().batchUpdate(
-        spreadsheetId=spreadsheet['spreadsheetId'],
-        body={"valueInputOption": "USER_ENTERED", "data": data_array},
-    ).execute()
-
-    driveService = apiclient.discovery.build('drive', 'v3', http=httpAuth)
-    driveService.permissions().create(
-        fileId=spreadsheet['spreadsheetId'],
-        body={'type': 'anyone', 'role': 'writer'},
-        fields='id',
-    ).execute()
-    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
-
-    return spreadsheet['spreadsheetUrl']
 
 def create_reviews_report(orders):
+    """Список отзывов, лист 'Отзывы'."""
     _init()
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_REVIEWS)
+
     users = all_users()
     excludes = get_report_exclude()
-    d=datetime.now()
 
-    #Получаю № заказа
     no = ['№']
     ids = ['id']
     logins = ['username']
     ru_services = ['Сервис']
     links = ['Ссылка']
     prices = ['Итого']
-    reg_date = ['Дата']
     status = ['Статус']
+    reg_date = ['Дата']
+
     for order in orders:
-        if str(order['user_id']) not in excludes:
-            #Получаю № заказа
-            no.append(order['id'])
-            ids.append(order['user_id'])
-            prices.append(str(order['price']))
-            ru_services.append(services[order['service']])
-            reg_date.append(format_display(order['date']))
-            if order['status'] == 'Posted':
-                status.append('Размещён')
-            elif order['status'] == 'Completed':
-                status.append('Выполнен')
-            else:
-                status.append(order['status'])
-            links.append(order['link'].replace("'", "").replace(", ", "").replace("\n", "").replace("\\", "").replace("\"", ""))
-            for user in users:
-                if int(order['user_id']) == int(user['id']):
-                    logins.append(get_user_str(user))
+        if str(order['user_id']) in excludes:
+            continue
+        no.append(order['id'])
+        ids.append(order['user_id'])
+        prices.append(str(order['price']))
+        ru_services.append(services[order['service']])
+        reg_date.append(format_display(order['date']))
+        if order['status'] == 'Posted':
+            status.append('Размещён')
+        elif order['status'] == 'Completed':
+            status.append('Выполнен')
+        else:
+            status.append(order['status'])
+        links.append(
+            order['link'].replace("'", "").replace(", ", "").replace("\n", "")
+                         .replace("\\", "").replace("\"", "")
+        )
+        login = ''
+        for user in users:
+            if int(order['user_id']) == int(user['id']):
+                login = get_user_str(user)
+                break
+        logins.append(login)
 
-    spreadsheet = service.spreadsheets().create(body = {
-        'properties': {'title': f"Отзывы-{d.strftime('%d-%m-%Y-%H-%M-%S')}", 'locale': 'ru_RU'},
-        'sheets': [{'properties': {'sheetType': 'GRID',
-                                    'sheetId': 0,
-                                    'title': 'Отзывы',
-                                    'gridProperties': {'rowCount': len(no), 'columnCount': 8}}}]
-    }).execute()
+    column_widths = [
+        (0, 1, 40),
+        (1, 3, 100),
+        (3, 4, 140),
+        (4, 5, 500),
+        (5, 6, 140),
+        (6, 7, 140),
+        (7, 8, 140),
+    ]
+    url = _write_tab(
+        TAB_REVIEWS, sheet_id,
+        [no, ids, logins, ru_services, links, prices, status, reg_date],
+        column_widths,
+    )
+    logger.info("gsheets: '%s' updated, %d rows", TAB_REVIEWS, len(no) - 1)
+    return url
 
-    results = service.spreadsheets().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "requests": [
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
-            {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 8}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}},
-            {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 8}}}}
-            ]}).execute()
-
-    results = service.spreadsheets().values().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "valueInputOption": "USER_ENTERED",
-        "data": [{"range": f"Отзывы!A1:A{len(no)}", "majorDimension": "COLUMNS", "values": [no]},
-                 {"range": f"Отзывы!B1:B{len(no)}", "majorDimension": "COLUMNS", "values": [ids]},
-                 {"range": f"Отзывы!C1:C{len(no)}", "majorDimension": "COLUMNS", "values": [logins]},
-                 {"range": f"Отзывы!D1:D{len(no)}", "majorDimension": "COLUMNS", "values": [ru_services]},
-                 {"range": f"Отзывы!E1:E{len(no)}", "majorDimension": "COLUMNS", "values": [links]},
-                 {"range": f"Отзывы!F1:F{len(no)}", "majorDimension": "COLUMNS", "values": [prices]},
-                 {"range": f"Отзывы!G1:G{len(no)}", "majorDimension": "COLUMNS", "values": [status]},
-                 {"range": f"Отзывы!H1:H{len(no)}", "majorDimension": "COLUMNS", "values": [reg_date]}]
-    }).execute()
-
-    driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
-    shareRes = driveService.permissions().create(
-        fileId = spreadsheet['spreadsheetId'],
-        body = {'type': 'anyone', 'role': 'writer'},  # доступ на чтение кому угодно
-        fields = 'id'
-    ).execute()
-    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
-
-    return spreadsheet['spreadsheetUrl']
 
 if __name__ == '__main__':
     print("Формируем отчет")

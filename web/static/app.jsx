@@ -57,14 +57,23 @@ function App() {
     }).catch(() => {});
   }, []);
 
-  // Apply theme + variant to <html>
+  // Apply theme + variant to <html>. In admin mode the panel is fully owned by
+  // [data-admin-mode="on"] styles — pin a fixed dark/classic base and drop the
+  // inline --primary so the user's regular-mode theme can't leak in.
   useEffect(() => {
+    const isAdmin = adminMode && user && user.is_admin;
+    if (isAdmin) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.setAttribute('data-variant', 'classic');
+      document.documentElement.style.removeProperty('--primary');
+      return;
+    }
     document.documentElement.setAttribute('data-theme', tweaks.theme);
     document.documentElement.setAttribute('data-variant', tweaks.variant);
     if (tweaks.accentColor) {
       document.documentElement.style.setProperty('--primary', tweaks.accentColor);
     }
-  }, [tweaks]);
+  }, [tweaks, adminMode, user]);
 
   // Restore session from localStorage on mount
   useEffect(() => {

@@ -118,9 +118,6 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
         {/* Right actions */}
         <div className="header__actions">
 
-          {/* Notifications bell (regular user view only) */}
-          {isApp && user && !adminMode && <NotificationsBell onNavigate={onNavigate} />}
-
           {/* Admin-mode toggle (only for admins) */}
           {isApp && user && user.is_admin && (
             <button
@@ -131,6 +128,9 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
               🛠 Админ
             </button>
           )}
+
+          {/* Notifications bell (regular user view only) */}
+          {isApp && user && !adminMode && <NotificationsBell onNavigate={onNavigate} />}
 
           {/* Balance badge */}
           {isApp && user && (
@@ -170,9 +170,10 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                 onClick={() => setUserDropOpen(v => !v)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
+                  height: 36, boxSizing: 'border-box',
                   background: userDropOpen ? 'var(--surface-2)' : 'transparent',
-                  border: '1.5px solid var(--border)', borderRadius: 24,
-                  padding: '4px 10px 4px 4px', cursor: 'pointer',
+                  border: '1.5px solid var(--border)', borderRadius: 18,
+                  padding: '0 10px 0 3px', cursor: 'pointer',
                   transition: 'background 0.15s',
                 }}
               >

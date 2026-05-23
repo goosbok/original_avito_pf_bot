@@ -24,7 +24,7 @@ from utils.sqlite3 import all_users, get_user, all_refills, get_report_exclude, 
 from data.config import services, GSHEETS_TARGET_SHEET_ID
 from datetime import datetime
 
-CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'
+CREDENTIALS_FILE = 'utils/google-creds.json'
 
 logger = logging.getLogger(__name__)
 

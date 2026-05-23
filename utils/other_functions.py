@@ -7,13 +7,6 @@ from data.loader import bot
 from aiogram.utils.exceptions import ChatNotFound
 #from utils.sqlite3 import get_admins, get_spam_exclude
 
-# Получение текущей даты
-def get_date():
-    this_date = datetime.today().replace(microsecond=0)
-    this_date = this_date.strftime("%d.%m.%Y %H:%M:%S")
-
-    return this_date
-
 def format_decimal(value):
     decimal_value = Decimal(value)
     formatted_value = f"{decimal_value:,.2f}".replace(',', ' ')

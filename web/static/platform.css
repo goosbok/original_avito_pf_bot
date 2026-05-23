@@ -191,10 +191,11 @@ p  { line-height: 1.65; }
 /* Balance badge */
 .balance-badge {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border-radius: 20px;
+  height: 36px; padding: 0 14px; border-radius: 18px;
   background: var(--balance-bg); color: var(--balance-text);
   font-size: 0.875rem; font-weight: 700; cursor: pointer;
   white-space: nowrap;
+  box-sizing: border-box;
   transition: opacity 0.15s;
 }
 .balance-badge:hover { opacity: 0.85; }
@@ -235,9 +236,9 @@ p  { line-height: 1.65; }
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 58px;
-  height: 28px;
-  padding: 2px;
+  width: 68px;
+  height: 36px;
+  padding: 3px;
   border: 1.5px solid var(--border);
   border-radius: 999px;
   background: var(--surface-2);
@@ -245,6 +246,7 @@ p  { line-height: 1.65; }
   transition: background 0.15s, border-color 0.15s;
   font-family: inherit;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 .theme-toggle:hover { border-color: var(--text-3); }
 .theme-toggle__opt {
@@ -252,7 +254,7 @@ p  { line-height: 1.65; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1;
   z-index: 1;
   transition: color 0.15s;
@@ -263,17 +265,17 @@ p  { line-height: 1.65; }
 .theme-toggle--dark  .theme-toggle__opt--moon { color: #b9c4ff; }
 .theme-toggle__thumb {
   position: absolute;
-  top: 2px;
-  width: 24px;
-  height: 22px;
+  top: 3px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   background: var(--surface);
   box-shadow: 0 1px 3px rgba(0,0,0,0.15);
   transition: left 0.18s cubic-bezier(0.4, 0.0, 0.2, 1);
   pointer-events: none;
 }
-.theme-toggle--light .theme-toggle__thumb { left: 2px; }
-.theme-toggle--dark  .theme-toggle__thumb { left: 30px; }
+.theme-toggle--light .theme-toggle__thumb { left: 3px; }
+.theme-toggle--dark  .theme-toggle__thumb { left: 35px; }
 
 /* ===== LANDING ===== */
 .landing-hero {
@@ -655,12 +657,13 @@ p  { line-height: 1.65; }
 
 .admin-toggle {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 5px 10px; border-radius: 16px;
+  height: 36px; padding: 0 14px; border-radius: 18px;
   background: rgba(0, 229, 255, 0.10);
   border: 1.5px solid rgba(0, 229, 255, 0.32);
   color: #00e5ff;
-  font-size: 0.78rem; font-weight: 700;
+  font-size: 0.8125rem; font-weight: 700;
   cursor: pointer;
+  box-sizing: border-box;
   transition: background 0.15s, box-shadow 0.15s;
 }
 .admin-toggle:hover { background: rgba(0,229,255,0.18); }
@@ -673,13 +676,14 @@ p  { line-height: 1.65; }
 .bell { position: relative; }
 .bell__btn {
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  width: 38px; height: 38px;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   color: var(--text-1);
   position: relative;
+  box-sizing: border-box;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .bell__btn:hover {

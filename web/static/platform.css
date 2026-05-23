@@ -683,6 +683,45 @@ p  { line-height: 1.65; }
   box-shadow: 0 0 14px rgba(0,229,255,0.45);
 }
 
+/* ===== ADMIN NAV TABS (desktop) ===== */
+.admin-nav__tab {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 14px; border-radius: 18px;
+  background: transparent; border: none; cursor: pointer; font-family: inherit;
+  font-size: 0.875rem; font-weight: 600;
+  color: var(--text-2);
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-nav__tab:hover { background: var(--surface-2); color: var(--text-1); }
+.admin-nav__tab--active { background: var(--primary-dim); color: var(--primary); font-weight: 700; }
+
+/* ===== ADMIN MOBILE MENU (burger dropdown) ===== */
+.admin-mobile-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  padding: 6px;
+  z-index: 200;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.admin-mobile-menu__item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 8px;
+  background: transparent; border: none; cursor: pointer;
+  font-family: inherit; font-size: 0.875rem; font-weight: 500;
+  color: var(--text-1); text-align: left;
+  transition: background 0.15s;
+}
+.admin-mobile-menu__item:hover { background: var(--surface-2); }
+.admin-mobile-menu__item--active { background: var(--primary-dim); color: var(--primary); font-weight: 700; }
+.admin-mobile-menu__divider { height: 1px; background: var(--border); margin: 4px 0; }
+
 /* ===== NOTIFICATIONS BELL ===== */
 .bell { position: relative; }
 .bell__btn {

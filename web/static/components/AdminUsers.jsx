@@ -31,7 +31,7 @@ function AdminUsers({ onNavigate }) {
             onKeyDown={e => e.key === 'Enter' && load(q)}
             style={{ flex: 1 }}
           />
-          <button className="btn btn--primary" onClick={() => load(q)}>Искать</button>
+          <button className="btn btn--primary btn--sm" onClick={() => load(q)}>Искать</button>
         </div>
 
         {loading
@@ -127,7 +127,17 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>Пользователь #{userId}</h2>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>✕</button>
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={onClose}
+            aria-label="Закрыть"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <line x1="6" y1="6" x2="18" y2="18" />
+              <line x1="6" y1="18" x2="18" y2="6" />
+            </svg>
+          </button>
         </div>
         {!data ? <div style={{ color: 'var(--text-3)' }}>Загрузка...</div> : (
           <>

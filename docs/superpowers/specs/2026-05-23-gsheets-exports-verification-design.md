@@ -57,9 +57,19 @@
 
 **Назначение:** одноразово вставить N (по умолчанию 3000) заказов в таблицу `orders` для нагрузочной проверки.
 
+**Доставка в контейнер.** `docker-compose.yml` монтирует только `./storage` — кода в контейнере из новой ветки нет. Чтобы не пересобирать image, скрипт доставляется через `docker cp`:
+
+```
+docker cp scripts/seed_load_test_orders.py original_avito_pf_bot-bot-1:/tmp/seed.py
+docker exec original_avito_pf_bot-bot-1 python /tmp/seed.py 3000
+```
+
+Подключение к БД — через `DATABASE_PATH=/app/storage/database.db` (env уже выставлен в .env), т.е. та же SQLite, с которой работает бот.
+
 **Интерфейс:**
 ```
-python scripts/seed_load_test_orders.py [COUNT] [--user-id ID]
+python /tmp/seed.py [COUNT] [--user-id ID]
+python /tmp/seed.py --cleanup
 ```
 
 **Поведение:**
@@ -129,7 +139,7 @@ Markdown-таблица «пункт / прошло / нет / коммент» 
 2. [ ] `SELECT COUNT(*) FROM orders WHERE user_name='LOAD_TEST_3K'` → 3000
 3. [ ] В отдельном окне запущен `docker stats original_avito_pf_bot-bot-1`
 4. [ ] В админке нажать «📊 Google Sheets», засечь время от нажатия до получения ссылки
-5. [ ] Память контейнера `bot` за время прогона не превысила 1× исходного значения более чем на 200 МБ
+5. [ ] Пиковый RSS контейнера `bot` за время прогона не вырос относительно базового более чем на ~500 МБ, контейнер не убит OOM
 6. [ ] В логах видны батчи: `Обработка заказов 0-1000 / 1000-2000 / 2000-3000` (есть исходные `existing orders + 3000 LOAD_TEST_3K`)
 7. [ ] Таблица создана, открывается, форматирование/фильтр применены даже на большом листе
 8. [ ] Даты `LOAD_TEST_3K` строк в таблице — `dd.mm.yyyy HH:MM MSK` (а не ISO `2026-…T…Z`)

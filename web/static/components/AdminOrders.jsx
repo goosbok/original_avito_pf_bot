@@ -73,8 +73,8 @@ function AdminOrders({ onNavigate }) {
         {loading
           ? <div style={{ color: 'var(--text-3)' }}>Загрузка...</div>
           : (
-            <div className="card" style={{ overflow: 'hidden' }}>
-              <table className="orders-table">
+            <div className="card admin-table-wrap" style={{ overflowX: 'auto', overflowY: 'hidden' }}>
+              <table className="orders-table admin-table">
                 <thead>
                   <tr><th>#</th><th>Юзер</th><th>Услуга</th><th>Сумма</th><th>Статус</th><th>Дата</th><th>Действия</th></tr>
                 </thead>

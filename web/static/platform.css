@@ -567,6 +567,10 @@ p  { line-height: 1.65; }
   .landing-services { padding: 40px 0; }
   .landing-how { padding: 40px 0; }
   .orders-table { display: none; }
+  /* Admin tables: показываем на мобилке с горизонтальным скроллом
+     (в админке нет mobile-only карточного layout как в /orders). */
+  .orders-table.admin-table { display: table; min-width: 640px; }
+  .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .desktop-only { display: none !important; }
   .chat-panel { width: calc(100vw - 32px); right: 0; }
   .order-form-card { padding: 20px 16px; }

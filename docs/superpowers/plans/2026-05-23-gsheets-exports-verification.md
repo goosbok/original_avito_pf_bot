@@ -18,9 +18,42 @@
 - `scripts/seed_load_test_orders.py` — одноразовый CLI: вставляет N заказов с маркером и/или удаляет их (single-responsibility, легко удалить из репо после прогона)
 - `docs/superpowers/specs/2026-05-23-gsheets-exports-verification-results.md` — отчёт по результатам прогона; чек-листы из спеки + найденные баги
 
-**Не меняем:** `utils/googlesheets.py`, хендлеры, юзер-фейсинг — цель работы только верификация.
+**Меняем (UX-B пивот, добавлено 2026-05-23):**
+- `utils/googlesheets.py` — `create_orders_report` и `create_refills_report` схлопываются с multi-tab на одну плоскую вкладку с фильтром по `username`. В refills попутно фиксится дата (`format_display`) и `get_user_str` для логинов. См. Task 0 ниже.
+
+**Не меняем:** хендлеры, юзер-фейсинг хендлеров, `create_sheet()`, `create_reviews_report()` — цель работы для них только верификация.
 
 **Запуск из:** прод-worktree `/Users/belikov/Documents/pets/bots/telegram/original_avito_pf_bot`. Сам worktree этой ветки — для разработки скрипта; для прогона скрипт доставляется в контейнер через `docker cp`.
+
+---
+
+## Task 0: UX-B рефакторинг — одна плоская вкладка для отчётов по юзеру+рефералам
+
+**Files:**
+- Modify: `utils/googlesheets.py` — `create_orders_report`, `create_refills_report`, общий хелпер `_resolve_user_scope`
+
+- [x] **Step 0.1: Заменить `create_orders_report` на single-tab**
+  - Вынести `_resolve_user_scope(user_id) → (magic_user, scope_ids)` с дедупом
+  - Один проход по `all_orders()`, отбор по `scope_set`
+  - Вкладка `Заказы`, 9 колонок, форматирование/фильтр сохранены
+  - Привести `Контакты`/`Статус` к стилю `create_sheet()` (Да/Нет, Размещён/Выполнен)
+
+- [x] **Step 0.2: Заменить `create_refills_report` на single-tab + два фикса**
+  - Один проход по `all_refills()`, отбор по `scope_set`
+  - Фикс: `format_display(refill['date'])` вместо сырой ISO
+  - Фикс: `get_user_str(usr)` вместо `usr['user_name']` (как в orders)
+  - Вкладка `Оплаты`, 5 колонок, форматирование/фильтр сохранены
+
+- [x] **Step 0.3: Парсинг + смок**
+```
+python3 -c "import ast; ast.parse(open('utils/googlesheets.py').read()); print('parse ok')"
+```
+
+- [ ] **Step 0.4: Commit**
+```
+git add utils/googlesheets.py docs/superpowers/specs/2026-05-23-gsheets-exports-verification-design.md docs/superpowers/plans/2026-05-23-gsheets-exports-verification.md
+git commit -m "refactor(gsheets): orders+refills reports — single flat tab, fix refills date"
+```
 
 ---
 

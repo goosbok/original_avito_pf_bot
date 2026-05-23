@@ -122,7 +122,7 @@ function App() {
   };
 
   const handleNavigate = (target, payload) => {
-    if (['cabinet', 'order-pf', 'orders', 'profile', 'order-detail'].includes(target) && !user) {
+    if (['cabinet', 'order-pf', 'orders', 'profile', 'order-detail', 'notifications'].includes(target) && !user) {
       setAuthMode('login');
       setRoute('auth');
       return;
@@ -179,6 +179,7 @@ function App() {
       case 'guest-order-pf':      return <GuestOrderForm onNavigate={handleNavigate} />;
       case 'guest-order-success': return <GuestOrderSuccess guestOrderId={guestOrderId} onNavigate={handleNavigate} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
+      case 'notifications': return <NotificationsPage onNavigate={handleNavigate} />;
       case 'order-detail': return <OrderDetailPage order={selectedOrder} onNavigate={handleNavigate} />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;
       default:         return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;

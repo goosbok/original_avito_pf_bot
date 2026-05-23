@@ -1,8 +1,29 @@
 // NotificationsBell — bell icon with unread badge + dropdown panel of recent notifications.
 // Polls /api/notifications periodically; marks all as read when the panel opens.
+// Dropdown shows up to DROPDOWN_LIMIT recent items + footer link to full notifications page.
 const { useState: useBellState, useEffect: useBellEffect, useRef: useBellRef } = React;
 
-function NotificationsBell({ pollMs = 30000 }) {
+const DROPDOWN_LIMIT = 5;
+
+function BellIcon() {
+  return (
+    <svg
+      className="bell__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 8a6 6 0 0 1 12 0c0 4.5 1.2 6.2 2 7H4c.8-.8 2-2.5 2-7Z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </svg>
+  );
+}
+
+function NotificationsBell({ pollMs = 30000, onNavigate }) {
   const [items, setItems] = useBellState([]);
   const [unread, setUnread] = useBellState(0);
   const [open, setOpen] = useBellState(false);
@@ -46,33 +67,49 @@ function NotificationsBell({ pollMs = 30000 }) {
     }
   };
 
+  const onViewAll = () => {
+    setOpen(false);
+    if (typeof onNavigate === 'function') onNavigate('notifications');
+  };
+
   const formatTime = (iso) => {
     if (!iso) return '';
     const m = String(iso).match(/(\d{2}):(\d{2}):\d{2}/);
     return m ? `${m[1]}:${m[2]}` : '';
   };
 
+  const visible = items.slice(0, DROPDOWN_LIMIT);
+
   return (
     <div className="bell" ref={panelRef}>
       <button className="bell__btn" onClick={onToggle} aria-label="Уведомления">
-        🔔
+        <BellIcon />
         {unread > 0 && (
           <span className="bell__badge">{unread > 99 ? '99+' : unread}</span>
         )}
       </button>
       {open && (
         <div className="bell__panel">
-          {items.length === 0 ? (
+          {visible.length === 0 ? (
             <div className="bell__empty">Уведомлений пока нет</div>
-          ) : items.map(n => (
-            <div
-              key={n.id}
-              className={`bell__item ${n.read_at ? '' : 'bell__item--unread'}`}
-            >
-              <div className="bell__item-text">{n.text}</div>
-              <div className="bell__item-time">{formatTime(n.created_at)}</div>
-            </div>
-          ))}
+          ) : (
+            <>
+              <div className="bell__list">
+                {visible.map(n => (
+                  <div
+                    key={n.id}
+                    className={`bell__item ${n.read_at ? '' : 'bell__item--unread'}`}
+                  >
+                    <div className="bell__item-text">{n.text}</div>
+                    <div className="bell__item-time">{formatTime(n.created_at)}</div>
+                  </div>
+                ))}
+              </div>
+              <button className="bell__footer" onClick={onViewAll}>
+                Посмотреть все
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

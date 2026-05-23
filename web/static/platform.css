@@ -576,7 +576,17 @@ p  { line-height: 1.65; }
   .order-two-col { grid-template-columns: 1fr !important; }
   /* Cabinet balance widget stacks */
   .cabinet-top-row { flex-direction: column !important; }
-  .cabinet-balance-card { min-width: unset !important; width: 100% !important; }
+  .cabinet-balance-card { min-width: unset !important; width: 100% !important; max-width: unset !important; }
+  /* Header — compact admin button (icon only) and tighter actions */
+  .header__inner { gap: 10px; padding: 0 12px; }
+  .header__actions { gap: 6px; }
+  .admin-toggle {
+    width: 36px; padding: 0; gap: 0;
+    justify-content: center;
+    font-size: 1rem;
+  }
+  .admin-toggle__label { display: none; }
+  .admin-toggle__icon { font-size: 1rem; line-height: 1; }
   /* Landing stats: 1 col on phones */
   .landing-stats-grid { grid-template-columns: 1fr !important; gap: 8px !important; }
   /* Trust grid */
@@ -663,6 +673,7 @@ p  { line-height: 1.65; }
   color: #00e5ff;
   font-size: 0.8125rem; font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
   box-sizing: border-box;
   transition: background 0.15s, box-shadow 0.15s;
 }

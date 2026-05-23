@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, ContentType, InlineKeyboardBut
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from utils.dates import format_display
 from utils.error_handler import report_handler_error
 from data.loader import dp, bot
 from keyboards.users_menu import (
@@ -246,7 +247,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                 pos_name = order['position_name']
                 status = order['status']
                 con_str = 'Да' if order['contacts'] else 'Нет'
-                ord_date = order['date']
+                ord_date = format_display(order['date'])
                 links_cnt = len(order['links'])
                 links_str = ""
                 for link in order['links'].split(','):

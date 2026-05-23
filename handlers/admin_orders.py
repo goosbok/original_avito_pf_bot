@@ -20,6 +20,7 @@ from utils.sqlite3 import (
     all_orders_reviews, all_orders_delreviews,
     user_orders_all_delreviews,
 )
+from utils.dates import format_display
 from utils.other import (
     get_user_string_without_first_name, get_user_string_with_first_name,
     get_days_suffix, format_decimal, split_messages, decline_order,
@@ -231,7 +232,7 @@ async def order_work_start(message: types.Message, state: FSMContext):
         cont = '✅Да'
     else:
         cont = '❎Нет'
-    dat = order['date']
+    dat = format_display(order['date'])
     links = ''
     links_cnt = 0
     for link in order['links'].split():
@@ -475,7 +476,7 @@ async def gen_magic_report(user_id):
     name = await get_user_string_with_first_name(user)
 
     if user:
-        report['general'] = f"📖 Отчет по пользователю\nID {name}\nЗарегистрирован: <b>{user['reg_date']}</b>\nБаланс <b>{user['balance']} руб.</b>"
+        report['general'] = f"📖 Отчет по пользователю\nID {name}\nЗарегистрирован: <b>{format_display(user['reg_date'])}</b>\nБаланс <b>{user['balance']} руб.</b>"
 
         if user['ref_id']:
             refer = get_user(id=user['ref_id'])

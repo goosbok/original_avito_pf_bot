@@ -1,6 +1,7 @@
 import httplib2
 import apiclient.discovery
 from oauth2client.service_account import ServiceAccountCredentials
+from utils.dates import format_display
 from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch
 from data.config import services
 from datetime import *
@@ -82,7 +83,7 @@ def create_sheet():
                             order['position_name'],
                             order['price'],
                             'Размещён' if order['status'] == 'Posted' else ('Выполнен' if order['status'] == 'Completed' else order['status']),
-                            order['date']
+                            format_display(order['date'])
                         ])
                         processed_rows += 1
             
@@ -230,7 +231,7 @@ def create_orders_report(user_id):
                 contacts.append(order['contacts'])
                 position_name.append(order['position_name'])
                 prices.append(order['price'])
-                reg_date.append(order['date'])
+                reg_date.append(format_display(order['date']))
                 status.append(order['status'])
                 #logins.append(usr['user_name'])
                 logins.append(get_user_str(usr))
@@ -404,7 +405,7 @@ def create_reviews_report(orders):
             ids.append(order['user_id'])
             prices.append(str(order['price']))
             ru_services.append(services[order['service']])
-            reg_date.append(str(order['date']))
+            reg_date.append(format_display(order['date']))
             if order['status'] == 'Posted':
                 status.append('Размещён')
             elif order['status'] == 'Completed':

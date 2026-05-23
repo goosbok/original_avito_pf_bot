@@ -45,6 +45,11 @@ price_flamp  = {'100': 120, '50': 150, '20': 180, '10': 200, '5': 300}
 price_2gis   = {'100': 120, '50': 150, '20': 180, '10': 200, '5': 300}
 price_avito  = {'100': 650, '50': 650, '20': 650, '10': 650, '5': 650}
 
+# Google Sheets exports
+# Email of the user who should own files created by the service account.
+# Empty string = old behavior (files stay owned by SA, will hit storage quota).
+GSHEETS_OWNER_EMAIL: str = os.getenv("GSHEETS_OWNER_EMAIL", "")
+
 # Web / JWT
 JWT_SECRET: str = os.getenv("JWT_SECRET", "")
 WEB_HOST: str = os.getenv("WEB_HOST", "127.0.0.1")

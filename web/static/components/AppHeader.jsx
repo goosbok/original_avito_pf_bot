@@ -124,8 +124,10 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
               className={`admin-toggle${adminMode ? ' admin-toggle--on' : ''}`}
               onClick={onToggleAdminMode}
               title="Переключить админ-режим"
+              aria-label="Переключить админ-режим"
             >
-              🛠 Админ
+              <span className="admin-toggle__icon" aria-hidden="true">🛠</span>
+              <span className="admin-toggle__label">Админ</span>
             </button>
           )}
 

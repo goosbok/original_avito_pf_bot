@@ -8,9 +8,10 @@
 В БД сейчас сосуществуют два формата дат:
 
 - **Legacy** — `"23.05.2026 14:30:00"` (`%d.%m.%Y %H:%M:%S`, локальное время сервера).
-  Пишется в: `orders.date`, `orders_reviews.date`, `orders_delreviews.date`,
-  `orders_seo.date`, `guest_orders.created_at`, `refills.date`,
-  `support_messages.created_at`.
+  Пишется в: `orders.date`, `reviews.date`, `delreviews.date`, `seo.date`
+  (если таблица есть — CREATE для неё отсутствует, но `add_order_seo` пишет туда;
+  миграция должна быть защищена от OperationalError), `guest_orders.created_at`,
+  `refills.date`, `support_messages.created_at`.
 - **ISO+UTC** — `"2026-05-23T11:30:00+00:00"`. Пишется в `users.reg_date`,
   `auth_providers.*`, `email_verification_tokens.*`, `password_reset_tokens.*`,
   `application_*.*`, `notifications.created_at` и т.д.
@@ -169,9 +170,9 @@ Usage: python scripts/migrate_dates_to_iso.py [--dry-run]
 """
 TARGETS = [
     ("orders", "date"),
-    ("orders_reviews", "date"),
-    ("orders_delreviews", "date"),
-    ("orders_seo", "date"),
+    ("reviews", "date"),
+    ("delreviews", "date"),
+    ("seo", "date"),                      # пропускается, если таблицы нет
     ("guest_orders", "created_at"),
     ("refills", "date"),
     ("support_messages", "created_at"),

@@ -1,15 +1,6 @@
 // AdminHeader — neon nav for admin pages. Desktop: inline tabs. Mobile: burger menu.
 const { useState: useAdmHState, useEffect: useAdmHEffect, useRef: useAdmHRef } = React;
 
-function AdmIconWrench() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-         strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
-}
-
 function AdmIconLogout() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -54,7 +45,6 @@ function AdminHeader({ route, user, balance, brandName, onToggleAdminMode, onNav
   }, [menuOpen]);
 
   const handleNav = (key) => { setMenuOpen(false); onNavigate(key); };
-  const handleExitAdmin = () => { setMenuOpen(false); onToggleAdminMode(); };
 
   return (
     <header className="header">
@@ -80,18 +70,20 @@ function AdminHeader({ route, user, balance, brandName, onToggleAdminMode, onNav
         <div className="header__spacer" />
 
         <div className="header__actions">
-          {/* Desktop: full-text exit-admin button */}
+          {/* Exit admin mode — top-level, icon-only on mobile (label hidden by .admin-toggle__label CSS) */}
           <button
-            className="admin-toggle admin-toggle--on desktop-only"
+            className="admin-toggle admin-toggle--on"
             onClick={onToggleAdminMode}
-            title="Выйти из админ-режима"
+            title="Обычный режим"
+            aria-label="Обычный режим"
           >
-            <AdmIconWrench /> Выйти из админ-режима
+            <span className="admin-toggle__icon" aria-hidden="true">🛠</span>
+            <span className="admin-toggle__label">Обычный режим</span>
           </button>
 
-          {/* Logout — round icon button, always visible */}
+          {/* Logout — desktop only; on mobile lives inside burger menu */}
           <button
-            className="btn btn--ghost btn--icon"
+            className="btn btn--ghost btn--icon desktop-only"
             onClick={onLogout}
             title="Выйти из аккаунта"
             aria-label="Выйти из аккаунта"
@@ -124,9 +116,10 @@ function AdminHeader({ route, user, balance, brandName, onToggleAdminMode, onNav
                 <div className="admin-mobile-menu__divider" />
                 <button
                   className="admin-mobile-menu__item"
-                  onClick={handleExitAdmin}
+                  onClick={() => { setMenuOpen(false); onLogout(); }}
+                  style={{ color: '#dc3545' }}
                 >
-                  <AdmIconWrench /> Выйти из админ-режима
+                  <AdmIconLogout /> Выйти из аккаунта
                 </button>
               </div>
             )}

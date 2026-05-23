@@ -192,107 +192,117 @@ def create_sheet():
         
         raise
 
+def _resolve_user_scope(user_id):
+    """Returns (magic_user, [user_id, *referals]) — все id как int, дедуп с сохранением порядка."""
+    magic_user = get_user(id=user_id)
+    raw_ids = [user_id]
+    if magic_user and magic_user.get('referals'):
+        raw_ids += [x for x in magic_user['referals'].split(',') if x.strip()]
+    seen = set()
+    scope = []
+    for rid in raw_ids:
+        try:
+            iid = int(rid)
+        except (TypeError, ValueError):
+            continue
+        if iid in seen:
+            continue
+        seen.add(iid)
+        scope.append(iid)
+    return magic_user, scope
+
+
 def create_orders_report(user_id):
     _init()
     orders = all_orders()
-    users = all_users()
-    d=datetime.now()
+    d = datetime.now()
     sheet_name = f"Заказы-{d.strftime('%d-%m-%Y-%H-%M-%S')}"
 
-    sheets_array = []
-    formated_sheets_array = []
-    data_array = []
-    magic_user = get_user(id=user_id)
-    ids_array = []
-    if magic_user['referals']:
-        ids_array = [str(user_id)] + magic_user['referals'].split(',')
-    else:
-        ids_array = [str(user_id)]
+    _, scope_ids = _resolve_user_scope(user_id)
+    users_in_scope = {uid: get_user(id=uid) for uid in scope_ids}
 
-    for i in range(len(ids_array)):
-        usr = get_user(id=ids_array[i])
-        row_cnt = 1
+    no = ['№']
+    ids = ['id']
+    logins = ['username']
+    links = ['Ссылки']
+    contacts = ['Контакты']
+    position_name = ['Тариф']
+    prices = ['Итого']
+    status = ['Статус']
+    reg_date = ['Дата']
 
-        no = ['№']
-        ids = ['id']
-        logins = ['username']
-        links = ['Ссылки']
-        contacts = ['Контакты']
-        position_name = ['Тариф']
-        prices = ['Итого']
-        reg_date = ['Дата']
-        status = ['Статус']
+    scope_set = set(scope_ids)
+    for order in orders:
+        try:
+            oid = int(order['user_id'])
+        except (TypeError, ValueError):
+            continue
+        if oid not in scope_set:
+            continue
+        usr = users_in_scope.get(oid)
+        no.append(order['increment'])
+        ids.append(order['user_id'])
+        logins.append(get_user_str(usr) if usr else str(oid))
+        links.append(order['links'].replace("'", "").replace(", ", "\n").replace("\n\n", "\n"))
+        contacts.append('Да' if order['contacts'] else 'Нет')
+        position_name.append(order['position_name'])
+        prices.append(order['price'])
+        status.append('Размещён' if order['status'] == 'Posted' else ('Выполнен' if order['status'] == 'Completed' else order['status']))
+        reg_date.append(format_display(order['date']))
 
-        for order in orders:
-            if int(usr['id']) == int(order['user_id']):
-                no.append(order['increment'])
-                ids.append(order['user_id'])
-                links.append(order['links'].replace("'", "").replace(", ", "\n").replace("\n\n", "\n"))
-                contacts.append(order['contacts'])
-                position_name.append(order['position_name'])
-                prices.append(order['price'])
-                reg_date.append(format_display(order['date']))
-                status.append(order['status'])
-                #logins.append(usr['user_name'])
-                logins.append(get_user_str(usr))
-                row_cnt += 1
+    row_cnt = len(no)
+    sheet_title = 'Заказы'
 
-        #Массив для создания таблицы
-        #sheet_title = usr['user_name']
-        sheet_title = get_user_str(usr)
-        sheets_array.append({'properties':
-            {'sheetType': 'GRID', 'sheetId': i, 'title': sheet_title, 'gridProperties': {'rowCount': row_cnt, 'columnCount': 10}}}
-        )
+    sheets_array = [{'properties': {
+        'sheetType': 'GRID', 'sheetId': 0, 'title': sheet_title,
+        'gridProperties': {'rowCount': max(row_cnt, 1), 'columnCount': 9}
+    }}]
 
-        #Массив для форматирования
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40},"fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 8, "endIndex": 9}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}})
-        formated_sheets_array.append({'repeatCell': {'range': {'sheetId': i, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}})
-        formated_sheets_array.append({'setBasicFilter': {'filter': {'range': {'sheetId': i, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}})
+    formated_sheets_array = [
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 3}, "properties": {"pixelSize": 100}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 3, "endIndex": 4}, "properties": {"pixelSize": 500}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 5, "endIndex": 6}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 6, "endIndex": 7}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 7, "endIndex": 8}, "properties": {"pixelSize": 80}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 8, "endIndex": 9}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+        {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}},
+        {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 9}}}},
+    ]
 
-        #Самое важное - массив данных!
-        data_array.append({"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]})
-        data_array.append({"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]})
-        data_array.append({"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]})
-        data_array.append({"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [links]})
-        data_array.append({"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [contacts]})
-        data_array.append({"range": f"{sheet_title}!F1:F{row_cnt}", "majorDimension": "COLUMNS", "values": [position_name]})
-        data_array.append({"range": f"{sheet_title}!G1:G{row_cnt}", "majorDimension": "COLUMNS", "values": [prices]})
-        data_array.append({"range": f"{sheet_title}!H1:H{row_cnt}", "majorDimension": "COLUMNS", "values": [status]})
-        data_array.append({"range": f"{sheet_title}!I1:I{row_cnt}", "majorDimension": "COLUMNS", "values": [reg_date]})
+    data_array = [
+        {"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]},
+        {"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]},
+        {"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]},
+        {"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [links]},
+        {"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [contacts]},
+        {"range": f"{sheet_title}!F1:F{row_cnt}", "majorDimension": "COLUMNS", "values": [position_name]},
+        {"range": f"{sheet_title}!G1:G{row_cnt}", "majorDimension": "COLUMNS", "values": [prices]},
+        {"range": f"{sheet_title}!H1:H{row_cnt}", "majorDimension": "COLUMNS", "values": [status]},
+        {"range": f"{sheet_title}!I1:I{row_cnt}", "majorDimension": "COLUMNS", "values": [reg_date]},
+    ]
 
-    """
-    Создаем таблицу
-    """
-    spreadsheet = service.spreadsheets().create(body = {
+    spreadsheet = service.spreadsheets().create(body={
         'properties': {'title': sheet_name, 'locale': 'ru_RU'},
-        'sheets': sheets_array
+        'sheets': sheets_array,
     }).execute()
 
-    """
-    Форматируем
-    """
-    results = service.spreadsheets().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {"requests": formated_sheets_array}).execute()
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet['spreadsheetId'],
+        body={"requests": formated_sheets_array},
+    ).execute()
 
-    """
-    Заполняем данными
-    """
-    results = service.spreadsheets().values().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "valueInputOption": "USER_ENTERED",
-        "data": data_array
-    }).execute()
+    service.spreadsheets().values().batchUpdate(
+        spreadsheetId=spreadsheet['spreadsheetId'],
+        body={"valueInputOption": "USER_ENTERED", "data": data_array},
+    ).execute()
 
-    driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
-    shareRes = driveService.permissions().create(
-        fileId = spreadsheet['spreadsheetId'],
-        body = {'type': 'anyone', 'role': 'writer'},  # доступ на чтение кому угодно
-        fields = 'id'
+    driveService = apiclient.discovery.build('drive', 'v3', http=httpAuth)
+    driveService.permissions().create(
+        fileId=spreadsheet['spreadsheetId'],
+        body={'type': 'anyone', 'role': 'writer'},
+        fields='id',
     ).execute()
 
     return spreadsheet['spreadsheetUrl']
@@ -300,85 +310,77 @@ def create_orders_report(user_id):
 def create_refills_report(user_id):
     _init()
     refills = all_refills()
-    users = all_users()
-    d=datetime.now()
+    d = datetime.now()
     sheet_name = f"Оплаты-{d.strftime('%d-%m-%Y-%H-%M-%S')}"
 
-    sheets_array = []
-    formated_sheets_array = []
-    data_array = []
-    magic_user = get_user(id=user_id)
-    ids_array = []
-    if magic_user['referals']:
-        ids_array = [str(user_id)] + magic_user['referals'].split(',')
-    else:
-        ids_array = [str(user_id)]
+    _, scope_ids = _resolve_user_scope(user_id)
+    users_in_scope = {uid: get_user(id=uid) for uid in scope_ids}
 
-    for i in range(len(ids_array)):
-        usr = get_user(id=ids_array[i])
-        row_cnt = 1
+    no = ['№']
+    ids = ['id']
+    logins = ['username']
+    amount = ['Оплата']
+    amount_date = ['Дата']
 
-        no = ['№']
-        ids = ['id']
-        logins = ['username']
-        amount = ['Оплата']
-        amount_date = ['Дата']
+    scope_set = set(scope_ids)
+    for refill in refills:
+        try:
+            rid = int(refill['user_id'])
+        except (TypeError, ValueError):
+            continue
+        if rid not in scope_set:
+            continue
+        usr = users_in_scope.get(rid)
+        no.append(refill['increment'])
+        ids.append(refill['user_id'])
+        logins.append(get_user_str(usr) if usr else str(rid))
+        amount.append(refill['amount'])
+        amount_date.append(format_display(refill['date']))
 
-        for refill in refills:
-            if int(usr['id']) == int(refill['user_id']):
-                no.append(refill['increment'])
-                ids.append(refill['user_id'])
-                amount_date.append(refill['date'])
-                amount.append(refill['amount'])
-                logins.append(usr['user_name'])
-                row_cnt += 1
+    row_cnt = len(no)
+    sheet_title = 'Оплаты'
 
-        #Массив для создания таблицы
-        sheet_title = get_user_str(usr)
-        sheets_array.append({'properties':
-            {'sheetType': 'GRID', 'sheetId': i, 'title': sheet_title, 'gridProperties': {'rowCount': row_cnt, 'columnCount': 5}}}
-        )
+    sheets_array = [{'properties': {
+        'sheetType': 'GRID', 'sheetId': 0, 'title': sheet_title,
+        'gridProperties': {'rowCount': max(row_cnt, 1), 'columnCount': 5}
+    }}]
 
-        #Массив для форматирования
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40},"fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 4}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}})
-        formated_sheets_array.append({"updateDimensionProperties": {"range": {"sheetId": i, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}})
-        formated_sheets_array.append({'repeatCell': {'range': {'sheetId': i, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}})
-        formated_sheets_array.append({'setBasicFilter': {'filter': {'range': {'sheetId': i, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}}}})
+    formated_sheets_array = [
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 0, "endIndex": 1}, "properties": {"pixelSize": 40}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 1, "endIndex": 4}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+        {"updateDimensionProperties": {"range": {"sheetId": 0, "dimension": "COLUMNS", "startIndex": 4, "endIndex": 5}, "properties": {"pixelSize": 140}, "fields": "pixelSize"}},
+        {'repeatCell': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}, 'cell': {'userEnteredFormat': {'horizontalAlignment': 'CENTER', "backgroundColor": {"red": 0.8, "green": 0.8, "blue": 0.8, "alpha": 1}, 'textFormat': {'bold': True}}}, 'fields': 'userEnteredFormat'}},
+        {'setBasicFilter': {'filter': {'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1, 'startColumnIndex': 0, 'endColumnIndex': 5}}}},
+    ]
 
-        #Самое важное - массив данных!
-        data_array.append({"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]})
-        data_array.append({"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]})
-        data_array.append({"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]})
-        data_array.append({"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [amount]})
-        data_array.append({"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [amount_date]})
+    data_array = [
+        {"range": f"{sheet_title}!A1:A{row_cnt}", "majorDimension": "COLUMNS", "values": [no]},
+        {"range": f"{sheet_title}!B1:B{row_cnt}", "majorDimension": "COLUMNS", "values": [ids]},
+        {"range": f"{sheet_title}!C1:C{row_cnt}", "majorDimension": "COLUMNS", "values": [logins]},
+        {"range": f"{sheet_title}!D1:D{row_cnt}", "majorDimension": "COLUMNS", "values": [amount]},
+        {"range": f"{sheet_title}!E1:E{row_cnt}", "majorDimension": "COLUMNS", "values": [amount_date]},
+    ]
 
-    """
-    Создаем таблицу
-    """
-    spreadsheet = service.spreadsheets().create(body = {
+    spreadsheet = service.spreadsheets().create(body={
         'properties': {'title': sheet_name, 'locale': 'ru_RU'},
-        'sheets': sheets_array
+        'sheets': sheets_array,
     }).execute()
 
-    """
-    Форматируем
-    """
-    results = service.spreadsheets().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {"requests": formated_sheets_array}).execute()
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=spreadsheet['spreadsheetId'],
+        body={"requests": formated_sheets_array},
+    ).execute()
 
-    """
-    Заполняем данными
-    """
-    results = service.spreadsheets().values().batchUpdate(spreadsheetId = spreadsheet['spreadsheetId'], body = {
-        "valueInputOption": "USER_ENTERED",
-        "data": data_array
-    }).execute()
+    service.spreadsheets().values().batchUpdate(
+        spreadsheetId=spreadsheet['spreadsheetId'],
+        body={"valueInputOption": "USER_ENTERED", "data": data_array},
+    ).execute()
 
-    driveService = apiclient.discovery.build('drive', 'v3', http = httpAuth)
-    shareRes = driveService.permissions().create(
-        fileId = spreadsheet['spreadsheetId'],
-        body = {'type': 'anyone', 'role': 'writer'},  # доступ на чтение кому угодно
-        fields = 'id'
+    driveService = apiclient.discovery.build('drive', 'v3', http=httpAuth)
+    driveService.permissions().create(
+        fileId=spreadsheet['spreadsheetId'],
+        body={'type': 'anyone', 'role': 'writer'},
+        fields='id',
     ).execute()
 
     return spreadsheet['spreadsheetUrl']

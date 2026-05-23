@@ -4,6 +4,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram import types
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
+from utils.dates import format_display
 from utils.error_handler import report_handler_error
 from data.loader import dp
 from keyboards.users_menu import (
@@ -142,7 +143,7 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: i
             MSG = get_string('str_new_review_admin_report')
             famount = format_decimal(amount)
             user_str = await get_user_string_without_first_name(user)
-            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
+            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], format_display(order['date']), order['link'])
             await call.message.answer(STR, reply_markup=get_menu_kb())
             await send_admins(MSG)
         except Exception as exc:
@@ -203,7 +204,7 @@ async def avito_del_review(message: types.Message, state: FSMContext, user_id: i
             MSG = get_string('str_new_review_admin_report')
             famount = format_decimal(amount)
             user_str = await get_user_string_without_first_name(user)
-            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], order['date'], order['link'])
+            MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], format_display(order['date']), order['link'])
             await message.answer(STR, reply_markup=get_menu_kb())
             await send_admins(MSG)
         except Exception as exc:

@@ -5,6 +5,7 @@ from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from utils.dates import format_display
 from data.loader import dp, bot
 from data.config import services
 from utils.sqlite3 import (
@@ -149,7 +150,7 @@ async def user_all_reviews(message: types.Message, state: FSMContext):
             else:
                 status = order['status']
             f_price = format_decimal(order['price'])
-            STR = STR.format(order['increment'], f_price, usr_str, service, status, order['date'], order['link'])
+            STR = STR.format(order['increment'], f_price, usr_str, service, status, format_display(order['date']), order['link'])
             rev_arr.append(STR)
 
         await message.answer(rev_arr[-1], reply_markup=show_admin_review_by_index(len(orders)-1, len(orders)))

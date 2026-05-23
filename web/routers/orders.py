@@ -11,6 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from utils.dates import format_display
 from services import orders as orders_svc
 from services.exceptions import UserNotFound
 from services.orders import InsufficientBalance
@@ -130,7 +131,7 @@ async def _notify_new_order(user_id: int, order_id: int, total_price: int) -> No
             f"📋 Тариф: {order['position_name']}",
             f"📊 Статус: {order['status']}",
             f"📞 Контакт: {'Да' if order['contacts'] else 'Нет'}",
-            f"📅 Дата: {order['date']}",
+            f"📅 Дата: {format_display(order['date'])}",
             f"🔗 Ссылок: {len(links_list)}{links_str}",
         ]
 

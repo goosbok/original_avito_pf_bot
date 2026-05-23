@@ -120,7 +120,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
               </p>
             </div>
 
-            <div className="card cabinet-balance-card" style={{ padding: '16px 20px', minWidth: 260, flex: '0 0 auto' }}>
+            <div className="card cabinet-balance-card" style={{ padding: '16px 20px', width: '100%', maxWidth: 340, flex: '0 0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Баланс</span>
                 <span style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--primary)' }}>{balance.toLocaleString('ru-RU')} ₽</span>
@@ -164,8 +164,8 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                     type="number"
                     min={100}
                     autoFocus
-                    value={refillAmount}
-                    onChange={e => setRefillAmount(Number(e.target.value))}
+                    value={refillAmount === 0 ? '' : refillAmount}
+                    onChange={e => setRefillAmount(e.target.value === '' ? 0 : Number(e.target.value))}
                     placeholder="Сумма от 100 ₽"
                     disabled={refillBusy}
                     style={{ flex: 1, padding: '8px 10px', fontSize: '0.875rem' }}

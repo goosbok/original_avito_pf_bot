@@ -72,11 +72,7 @@ function NotificationsBell({ pollMs = 30000, onNavigate }) {
     if (typeof onNavigate === 'function') onNavigate('notifications');
   };
 
-  const formatTime = (iso) => {
-    if (!iso) return '';
-    const m = String(iso).match(/(\d{2}):(\d{2}):\d{2}/);
-    return m ? `${m[1]}:${m[2]}` : '';
-  };
+  // formatTime — глобал из /dates.js, корректно конвертирует ISO+UTC в MSK.
 
   const visible = items.slice(0, DROPDOWN_LIMIT);
 

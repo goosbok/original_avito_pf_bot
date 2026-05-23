@@ -293,7 +293,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                             <td style={{ fontWeight: 600 }}>{displayServiceName(o)}</td>
                             <td style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</td>
                             <td><StatusBadge status={o.status} /></td>
-                            <td style={{ color: 'var(--text-3)' }}>{o.date || '—'}</td>
+                            <td style={{ color: 'var(--text-3)' }}>{formatDisplay(o.date) || '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -305,7 +305,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                           <div>
                             <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{displayServiceName(o)}</div>
-                            <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>#{o.order_id} · {o.date || '—'}</div>
+                            <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>#{o.order_id} · {formatDisplay(o.date) || '—'}</div>
                           </div>
                           <StatusBadge status={o.status} />
                         </div>

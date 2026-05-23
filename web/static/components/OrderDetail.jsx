@@ -159,7 +159,7 @@ function OrderDetailPage({ order, onNavigate }) {
                 {serviceDisplayName(serviceType, order)}
               </h1>
               <div style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                {order.date ? `Создан: ${order.date}` : ''}
+                {order.date ? `Создан: ${formatDisplay(order.date)}` : ''}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>

@@ -136,7 +136,7 @@ function SupportChat() {
             {messages.map(m => (
               <div key={m.id} className={`chat-msg chat-msg--${m.direction}`}>
                 <div className="chat-msg__bubble">{m.text}</div>
-                <div className="chat-msg__time">{typeof m.created_at === 'string' ? (m.created_at.length > 5 ? m.created_at.slice(11, 16) : m.created_at) : m.created_at}</div>
+                <div className="chat-msg__time">{formatTime(m.created_at)}</div>
               </div>
             ))}
           </div>

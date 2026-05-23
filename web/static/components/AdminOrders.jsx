@@ -91,7 +91,7 @@ function AdminOrders({ onNavigate }) {
                       <td>{o.position_name}</td>
                       <td style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</td>
                       <td><StatusBadge status={o.status} /></td>
-                      <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{o.date || '—'}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{formatDisplay(o.date) || '—'}</td>
                       <td>
                         {o.is_guest ? (
                           <StatusBadge status={o.status} />

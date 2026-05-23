@@ -86,7 +86,7 @@ function AdminSupport({ onNavigate }) {
                     {t.last_message_text}
                   </div>
                   <div style={{ color: 'var(--text-3)', fontSize: '0.68rem', marginTop: 4 }}>
-                    {t.last_message_at ? t.last_message_at.slice(0, 16).replace('T', ' ') : ''} · {t.message_count} сообщ.
+                    {formatDisplay(t.last_message_at)} · {t.message_count} сообщ.
                   </div>
                 </div>
               ))}
@@ -120,7 +120,7 @@ function AdminSupport({ onNavigate }) {
                   {messages.map(m => (
                     <div key={m.id} className={`chat-msg chat-msg--${m.direction}`}>
                       <div className="chat-msg__bubble">{m.text}</div>
-                      <div className="chat-msg__time">{m.created_at ? m.created_at.slice(11, 16) : ''}</div>
+                      <div className="chat-msg__time">{formatTime(m.created_at)}</div>
                     </div>
                   ))}
                 </div>

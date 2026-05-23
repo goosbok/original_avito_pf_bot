@@ -1,13 +1,6 @@
 // NotificationsPage — full list view for all notifications (up to API limit of 50).
+// Использует window.formatDisplay из /dates.js — ISO+UTC → "dd.mm.yyyy HH:MM" в MSK.
 const { useState: useNotifState, useEffect: useNotifEffect } = React;
-
-function formatNotifTime(iso) {
-  if (!iso) return '';
-  const s = String(iso);
-  const dt = s.match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
-  if (!dt) return s;
-  return `${dt[3]}.${dt[2]}.${dt[1]} ${dt[4]}:${dt[5]}`;
-}
 
 function NotificationsPage({ onNavigate }) {
   const [items, setItems] = useNotifState([]);
@@ -49,7 +42,7 @@ function NotificationsPage({ onNavigate }) {
               className={`notif-page__item ${n.read_at ? '' : 'notif-page__item--unread'}`}
             >
               <div className="notif-page__text">{n.text}</div>
-              <div className="notif-page__time">{formatNotifTime(n.created_at)}</div>
+              <div className="notif-page__time">{formatDisplay(n.created_at)}</div>
             </div>
           ))}
         </div>

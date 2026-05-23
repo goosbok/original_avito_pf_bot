@@ -26,7 +26,7 @@ function OrderMobileCard({ order: o, onNavigate }) {
           <div>
             <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{displayServiceName(o)}</div>
             <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>
-              #{o.order_id} · {o.date || '—'}
+              #{o.order_id} · {formatDisplay(o.date) || '—'}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -133,7 +133,7 @@ function OrdersPage({ onNavigate }) {
                           <td><span style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</span></td>
                           <td><StatusBadge status={o.status} /></td>
                           <td style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                            {o.date || '—'}
+                            {formatDisplay(o.date) || '—'}
                           </td>
                           <td style={{ color: 'var(--text-3)', fontSize: '0.75rem' }}>
                             {links.length > 0 ? `${links.length} ссылк.` : '—'}

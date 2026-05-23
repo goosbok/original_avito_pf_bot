@@ -50,7 +50,7 @@ function AdminUsers({ onNavigate }) {
                       <td>{u.first_name || '—'}</td>
                       <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{u.balance.toLocaleString('ru-RU')} ₽</td>
                       <td>{u.is_vip ? '⭐' : ''}</td>
-                      <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{u.reg_date ? u.reg_date.slice(0, 10) : '—'}</td>
+                      <td style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>{formatDate(u.reg_date) || '—'}</td>
                     </tr>
                   ))}
                   {items.length === 0 && (
@@ -143,7 +143,7 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
           <>
             <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
               <div style={{ marginBottom: 8 }}><strong>{data.first_name || '—'}</strong> {data.user_name ? '· @' + data.user_name : ''}</div>
-              <div style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>Регистрация: {data.reg_date ? data.reg_date.slice(0, 10) : '—'}</div>
+              <div style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>Регистрация: {formatDate(data.reg_date) || '—'}</div>
               <div style={{ marginTop: 10, fontSize: '0.875rem' }}>
                 Баланс: <strong style={{ color: 'var(--primary)' }}>{data.balance.toLocaleString('ru-RU')} ₽</strong> · VIP: {data.is_vip ? '⭐ да' : 'нет'}
               </div>

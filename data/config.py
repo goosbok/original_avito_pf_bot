@@ -46,9 +46,10 @@ price_2gis   = {'100': 120, '50': 150, '20': 180, '10': 200, '5': 300}
 price_avito  = {'100': 650, '50': 650, '20': 650, '10': 650, '5': 650}
 
 # Google Sheets exports
-# Email of the user who should own files created by the service account.
-# Empty string = old behavior (files stay owned by SA, will hit storage quota).
-GSHEETS_OWNER_EMAIL: str = os.getenv("GSHEETS_OWNER_EMAIL", "")
+# ID существующей таблицы, в которую бот пишет все 4 отчёта (по вкладкам).
+# Service account из utils/dev-trees-*.json должен быть добавлен в шаринг этой
+# таблицы с правом Editor. Никаких новых файлов SA не создаёт (у него Drive-квота 0).
+GSHEETS_TARGET_SHEET_ID: str = os.getenv("GSHEETS_TARGET_SHEET_ID", "")
 
 # Web / JWT
 JWT_SECRET: str = os.getenv("JWT_SECRET", "")

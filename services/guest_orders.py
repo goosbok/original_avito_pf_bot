@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone
 
+from utils.dates import now_iso
 from services.db import connect
 from services.exceptions import PaymentError
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S")
+    return now_iso()
 
 
 def create_guest_order(

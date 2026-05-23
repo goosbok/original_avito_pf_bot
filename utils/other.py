@@ -4,12 +4,13 @@ import re
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-# Получение текущей даты
-def get_date():
-    this_date = datetime.today().replace(microsecond=0)
-    this_date = this_date.strftime("%d.%m.%Y %H:%M:%S")
+from utils.dates import now_iso
 
-    return this_date
+# Получение текущей даты в ISO+UTC.
+# Старый формат "dd.mm.yyyy HH:MM:SS" больше не пишется — для отображения
+# используйте utils.dates.format_display().
+def get_date():
+    return now_iso()
 
 
 def parse_refill_date(value):

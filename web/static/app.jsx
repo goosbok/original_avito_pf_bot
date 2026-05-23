@@ -193,7 +193,7 @@ function App() {
         : <AppHeader {...headerProps} />
       }
       {renderScreen()}
-      {user && <SupportChat />}
+      {user && !adminMode && <SupportChat />}
     </div>
   );
 }

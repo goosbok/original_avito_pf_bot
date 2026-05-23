@@ -8,6 +8,13 @@ function AdminSupport({ onNavigate }) {
   const [reply, setReply] = useAdmSState('');
   const [sending, setSending] = useAdmSState(false);
   const [error, setError] = useAdmSState('');
+  const [isMobile, setIsMobile] = useAdmSState(typeof window !== 'undefined' && window.innerWidth < 768);
+
+  useAdmSEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const loadThreads = async () => {
     try {
@@ -50,45 +57,65 @@ function AdminSupport({ onNavigate }) {
 
         {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, alignItems: 'start' }}>
-          {/* Threads list */}
-          <div className="card" style={{ overflow: 'hidden', maxHeight: '70vh', overflowY: 'auto' }}>
-            {threads.length === 0 && <div style={{ padding: 24, color: 'var(--text-3)' }}>Обращений нет</div>}
-            {threads.map(t => (
-              <div
-                key={t.user_id}
-                onClick={() => setSelected(t.user_id)}
-                style={{
-                  padding: '12px 14px',
-                  borderBottom: '1px solid var(--border)',
-                  cursor: 'pointer',
-                  background: selected === t.user_id ? 'var(--primary-dim)' : 'transparent',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <strong style={{ fontSize: '0.875rem' }}>{t.user_name ? '@' + t.user_name : '#' + t.user_id}</strong>
-                  {t.has_unanswered && <span className="badge badge--posted" style={{ fontSize: '0.65rem' }}>● новый</span>}
+        <div style={{
+          display: isMobile ? 'block' : 'grid',
+          gridTemplateColumns: isMobile ? undefined : '300px 1fr',
+          gap: 16,
+          alignItems: 'start',
+        }}>
+          {/* Threads list — hidden on mobile when a thread is open */}
+          {(!isMobile || !selected) && (
+            <div className="card" style={{ overflow: 'hidden', maxHeight: isMobile ? 'none' : '70vh', overflowY: 'auto' }}>
+              {threads.length === 0 && <div style={{ padding: 24, color: 'var(--text-3)' }}>Обращений нет</div>}
+              {threads.map(t => (
+                <div
+                  key={t.user_id}
+                  onClick={() => setSelected(t.user_id)}
+                  style={{
+                    padding: '12px 14px',
+                    borderBottom: '1px solid var(--border)',
+                    cursor: 'pointer',
+                    background: selected === t.user_id ? 'var(--primary-dim)' : 'transparent',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <strong style={{ fontSize: '0.875rem' }}>{t.user_name ? '@' + t.user_name : '#' + t.user_id}</strong>
+                    {t.has_unanswered && <span className="badge badge--posted" style={{ fontSize: '0.65rem' }}>● новый</span>}
+                  </div>
+                  <div style={{ color: 'var(--text-2)', fontSize: '0.78rem', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {t.last_message_text}
+                  </div>
+                  <div style={{ color: 'var(--text-3)', fontSize: '0.68rem', marginTop: 4 }}>
+                    {t.last_message_at ? t.last_message_at.slice(0, 16).replace('T', ' ') : ''} · {t.message_count} сообщ.
+                  </div>
                 </div>
-                <div style={{ color: 'var(--text-2)', fontSize: '0.78rem', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {t.last_message_text}
-                </div>
-                <div style={{ color: 'var(--text-3)', fontSize: '0.68rem', marginTop: 4 }}>
-                  {t.last_message_at ? t.last_message_at.slice(0, 16).replace('T', ' ') : ''} · {t.message_count} сообщ.
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* Thread view */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '70vh' }}>
-            {!selected ? (
-              <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)' }}>Выберите обращение слева</div>
-            ) : (
-              <>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
-                  <strong>{sel ? (sel.user_name ? '@' + sel.user_name : '#' + sel.user_id) : ''}</strong>
-                  {sel && sel.first_name && <span style={{ color: 'var(--text-3)', marginLeft: 8 }}>({sel.first_name})</span>}
-                </div>
+          {/* Thread view — on mobile only shown when a thread is selected */}
+          {(!isMobile || selected) && (
+            <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: isMobile ? 'calc(100vh - 200px)' : '70vh' }}>
+              {!selected ? (
+                <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-3)' }}>Выберите обращение слева</div>
+              ) : (
+                <>
+                  <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {isMobile && (
+                      <button
+                        onClick={() => setSelected(null)}
+                        aria-label="Назад к списку"
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: 'var(--text-1)', fontSize: '1.1rem', padding: 0, lineHeight: 1,
+                        }}
+                      >
+                        ←
+                      </button>
+                    )}
+                    <strong>{sel ? (sel.user_name ? '@' + sel.user_name : '#' + sel.user_id) : ''}</strong>
+                    {sel && sel.first_name && <span style={{ color: 'var(--text-3)', marginLeft: 8 }}>({sel.first_name})</span>}
+                  </div>
                 <div style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {messages.map(m => (
                     <div key={m.id} className={`chat-msg chat-msg--${m.direction}`}>
@@ -114,8 +141,9 @@ function AdminSupport({ onNavigate }) {
                   </button>
                 </div>
               </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

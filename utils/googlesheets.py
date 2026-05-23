@@ -3,15 +3,19 @@ import apiclient.discovery
 from oauth2client.service_account import ServiceAccountCredentials
 from utils.dates import format_display
 from utils.sqlite3 import all_users, all_orders, get_user, all_refills, get_report_exclude, get_orders_batch
-from data.config import services
+from data.config import services, GSHEETS_OWNER_EMAIL
 from datetime import *
 import gc
+import logging
 import os
 import csv
 import tempfile
+from googleapiclient.errors import HttpError
 from googleapiclient.http import MediaFileUpload
 
 CREDENTIALS_FILE = 'utils/dev-trees-414317-e16633571d94.json'
+
+logger = logging.getLogger(__name__)
 
 credentials = None
 httpAuth = None
@@ -28,6 +32,43 @@ def _init():
     )
     httpAuth = credentials.authorize(httplib2.Http())
     service = apiclient.discovery.build('sheets', 'v4', http=httpAuth)
+
+
+def _transfer_ownership(drive_service, file_id):
+    """Передаёт ownership созданного файла на GSHEETS_OWNER_EMAIL, чтобы файл
+    не занимал квоту сервисного аккаунта.
+
+    Для SA → consumer-gmail Google требует pending-ownership: новый владелец
+    получает письмо/уведомление и однократно подтверждает приём в Drive UI.
+    После подтверждения файл уезжает в его My Drive и SA-квота освобождается.
+
+    Если GSHEETS_OWNER_EMAIL не задан — ничего не делает (старое поведение).
+    Любая ошибка логируется и не валит экспорт: даже если transfer не прошёл,
+    файл и публичная ссылка остаются рабочими, просто не освобождается квота.
+    """
+    if not GSHEETS_OWNER_EMAIL:
+        return
+    try:
+        drive_service.permissions().create(
+            fileId=file_id,
+            body={
+                'type': 'user',
+                'role': 'writer',
+                'emailAddress': GSHEETS_OWNER_EMAIL,
+                'pendingOwner': True,
+            },
+            sendNotificationEmail=True,
+            fields='id',
+        ).execute()
+        logger.info(
+            "gsheets: pending ownership of %s set to %s — accept in Drive UI",
+            file_id, GSHEETS_OWNER_EMAIL,
+        )
+    except HttpError as e:
+        logger.warning(
+            "gsheets: failed to set pending owner for %s on %s: %s",
+            GSHEETS_OWNER_EMAIL, file_id, e,
+        )
 
 def get_user_str(user):
     if user['user_name']:
@@ -171,7 +212,10 @@ def create_sheet():
             body={'type': 'anyone', 'role': 'writer'},
             fields='id'
         ).execute()
-        
+
+        # Передача ownership на личный аккаунт (освобождает квоту SA после accept)
+        _transfer_ownership(driveService, spreadsheet_id)
+
         spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
         print(f"🎉 Отчет готов: {spreadsheet_url}")
         print(f"📊 Всего строк: {processed_rows}")
@@ -304,6 +348,7 @@ def create_orders_report(user_id):
         body={'type': 'anyone', 'role': 'writer'},
         fields='id',
     ).execute()
+    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
 
     return spreadsheet['spreadsheetUrl']
 
@@ -382,6 +427,7 @@ def create_refills_report(user_id):
         body={'type': 'anyone', 'role': 'writer'},
         fields='id',
     ).execute()
+    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
 
     return spreadsheet['spreadsheetUrl']
 
@@ -458,6 +504,7 @@ def create_reviews_report(orders):
         body = {'type': 'anyone', 'role': 'writer'},  # доступ на чтение кому угодно
         fields = 'id'
     ).execute()
+    _transfer_ownership(driveService, spreadsheet['spreadsheetId'])
 
     return spreadsheet['spreadsheetUrl']
 

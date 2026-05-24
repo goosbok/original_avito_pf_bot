@@ -171,7 +171,7 @@ function OrderDetailPage({ order, onNavigate }) {
           </div>
 
           <button className="btn btn--secondary btn--full" onClick={handleContactSupport}>
-            💬 Связаться с поддержкой по этому заказу
+            💬 Написать в поддержку
           </button>
         </div>
 

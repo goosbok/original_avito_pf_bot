@@ -8,8 +8,15 @@ import pytest
 
 
 @pytest.fixture
-def _patch_admins(monkeypatch):
-    """Make get_admins() return a fixed list inside handlers.admin_funnel."""
+def _patch_admins(tmp_db, monkeypatch):
+    """Make get_admins() return a fixed list inside handlers.admin_funnel.
+
+    Depends on tmp_db so the production schema (incl. `settings`) is in place
+    before importing handlers.admin_funnel — which transitively triggers
+    keyboards.users_menu top-level `get_price()` calls that query `settings`.
+    Without tmp_db first, those reads hit `data/database.db` (may not exist
+    in CI) and the import explodes with `no such table: settings`.
+    """
     import handlers.admin_funnel as mod  # ensure module loaded before patching
 
     monkeypatch.setattr(mod, "get_admins", lambda: ["100500"])
@@ -82,9 +89,11 @@ async def test_funnel_period_callback_sends_photo(admin_call, tmp_db: Path):
     admin_call.message.answer_photo.assert_awaited_once()
     _args, kwargs = admin_call.message.answer_photo.call_args
     caption = kwargs.get("caption", "")
-    assert "view_tariff" in caption
+    # Caption uses Russian step labels from services.funnel.STEP_LABELS,
+    # not the raw step keys.
+    assert "Открыл карточку ПФ" in caption  # view_tariff label
+    assert "Выбрал срок" in caption  # select_period label
     assert "2" in caption  # users at view_tariff
-    assert "select_period" in caption
 
 
 @pytest.mark.asyncio

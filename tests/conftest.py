@@ -47,6 +47,13 @@ def _make_config_stub() -> types.ModuleType:
     stub.JWT_SECRET = "test_jwt_secret_placeholder_at_least_32_chars"
     stub.WEB_HOST = "127.0.0.1"
     stub.WEB_PORT = 8000
+    # Added later in production data/config.py — keep stub in sync so module
+    # imports (utils.googlesheets, services.email_otp, etc.) don't ImportError.
+    stub.GSHEETS_TARGET_SHEET_ID = ""
+    stub.OTP_TTL_SECONDS = 300
+    stub.OTP_MAX_ATTEMPTS = 5
+    stub.OTP_RESEND_COOLDOWN = 60
+    stub.BOT_HTTP_API_BASE = "https://api.telegram.org"
     return stub
 
 
@@ -66,7 +73,25 @@ def _make_loader_stub() -> types.ModuleType:
     stub.bot = MagicMock()
     stub.bot.send_message = AsyncMock()
     stub.storage = MagicMock()
-    stub.dp = MagicMock()
+
+    # `dp` is used as a decorator factory (`@dp.callback_query_handler(...)`,
+    # `@dp.message_handler(...)`). A bare MagicMock would replace decorated
+    # handlers with MagicMocks, breaking unit tests that import and await
+    # them directly. Make every decorator factory a passthrough that returns
+    # the original function unchanged.
+    def _passthrough_decorator(*_args, **_kwargs):
+        def _wrap(func):
+            return func
+        return _wrap
+
+    dp = MagicMock()
+    dp.callback_query_handler = _passthrough_decorator
+    dp.message_handler = _passthrough_decorator
+    dp.errors_handler = _passthrough_decorator
+    dp.edited_message_handler = _passthrough_decorator
+    dp.channel_post_handler = _passthrough_decorator
+    dp.inline_handler = _passthrough_decorator
+    stub.dp = dp
     return stub
 
 

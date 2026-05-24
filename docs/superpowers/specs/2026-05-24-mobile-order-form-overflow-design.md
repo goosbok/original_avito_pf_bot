@@ -213,17 +213,43 @@ style={{ display: 'flex', alignItems: 'center', gap: 8,
 | `AdminUsers`, `AdminPanel`, `AdminDashboard`, `SupportChat`, `Notifications` | ✅ без anti-pattern `maxWidth + nowrap` |
 | `Profile`        | ⚠ **UX gap**: `Профиль` отсутствует в мобильном burger-меню `AppHeader.jsx:295-298`, доступен только из desktop-дропдауна. Сам компонент — `maxWidth: 600` на контейнере без overflow. Это отдельный тикет, не часть текущего фикса. |
 
-## Спинофф-задачи
+## Итоги follow-up плана (2026-05-24)
 
-- Добавить `Профиль` в массив `mobile-menu` в `AppHeader.jsx:295-298`.
-- Проверить `AdminSupport.jsx:85` с реальными длинными сообщениями
-  под админ-учёткой.
-- Рассмотреть глобальный CSS `body { overflow-x: hidden }` как
-  safety-net (но это маскирует баги, лучше точечные `min-width: 0`).
+План `docs/superpowers/plans/2026-05-24-mobile-qa-followup.md`
+выполнен — 7 задач, 5 коммитов на ветке
+`claude/hardcore-thompson-8f3e40` (поверх `dev`):
 
-## Следующий шаг
+| Коммит | Цель | Статус |
+|---|---|---|
+| `f09cf8f` | T1: основной фикс `OrderForm/GuestOrderForm/platform.css` | ✅ live-проверено, docW=vw=388 |
+| `d8b1af7` | T1-docs: спека + план | ✅ |
+| `b5dc92b` | T2: `Профиль` в мобильный burger-menu | ✅ live: пункт виден, /profile открывается без overflow |
+| `7c50420` | T5.1: первая попытка фикса `.bell__panel` | ⚠ заместить — недостаточно (см. T5.2) |
+| `b07358d` | T5.2: `.bell__panel` через `position: fixed` + `!important` | ✅ live: panel x=16, right=372, top=62, внутри viewport |
 
-Текущий фикс готов к коммиту. Опции:
-1. Закоммитить 4 файла (3 правки + spec) в `dev` (см. branching strategy).
-2. Передать в `superpowers:writing-plans` если нужно формальное
-   PR-описание / changelog.
+Проверены без overflow и без правок:
+- **T3 OrderDetail** (засижен order #9 с 2 длинными Avito URL) —
+  ссылки рендерятся `wordBreak: break-all`, sw=cw=296.
+- **T4 Refill «Другая сумма»** с экстремальным значением `99 999 999 ₽`
+  — input 276 px, кнопка умещается, нет overflow.
+- **T5 SupportChat overlay** — `.chat-panel` width=356, x=8 уже
+  корректно с `width: calc(100vw - 32px)`.
+- **T6 AdminSupport** (юзер 4 повышен в админы, засижен тикет 17 с
+  632-символьным сообщением) — превью с ellipsis работает,
+  страница docW=vw=388. Ранее зафиксированный риск снят.
+
+## Открытые spinoffs (не блокеры)
+
+- 💬 Кнопка «Связаться с поддержкой по этому заказу» в OrderDetail
+  имеет 16 px inner-overflow на 388 px viewport (sw=303 vs cw=287).
+  Текст всё ещё виден, но желательно укоротить лейбл или разрешить
+  wrap. Отдельный chip-task создан через `spawn_task`.
+- Пара `OrderForm.jsx` / `GuestOrderForm.jsx` дублирует ~50 строк
+  JSX (список добавленных ссылок). Code-quality reviewer T1 отметил
+  как known дублирование — кандидат на consolidation refactor.
+
+## Что НЕ изменилось из изначального плана
+
+- `body { overflow-x: hidden }` глобальный safety-net рассмотрен и
+  отклонён — маскирует баги вместо их устранения. Точечные `min-width: 0`
+  предпочтительнее.

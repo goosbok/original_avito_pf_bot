@@ -137,9 +137,9 @@ function GuestOrderForm({ onNavigate }) {
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Добавленные объявления</div>
                       {links.map((url, i) => (
-                        <div key={url} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: i < links.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                        <div key={url} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '7px 0', borderBottom: i < links.length - 1 ? '1px solid var(--border)' : 'none' }}>
                           <a href={url} target="_blank" rel="noopener noreferrer" title={url}
-                            style={{ flex: 1, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 380, textDecoration: 'none' }}>
+                            style={{ flex: '1 1 0', minWidth: 0, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}>
                             {url.length > 60 ? url.slice(0, 60) + '…' : url}
                           </a>
                           <button onClick={() => removeLink(url)}

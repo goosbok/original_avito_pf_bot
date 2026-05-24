@@ -578,6 +578,9 @@ p  { line-height: 1.65; }
   /* Ensure content scrolls above sticky footer (~100px tall on mobile) */
   .order-page { padding-bottom: 110px; }
   .order-two-col { grid-template-columns: 1fr !important; }
+  /* Prevent flex/grid children from pushing layout past viewport on long unbreakable strings (e.g., long Avito URLs in the added-links list). */
+  .order-two-col,
+  .order-two-col > * { min-width: 0; }
   /* Cabinet balance widget stacks */
   .cabinet-top-row { flex-direction: column !important; }
   .cabinet-balance-card { min-width: unset !important; width: 100% !important; max-width: unset !important; }

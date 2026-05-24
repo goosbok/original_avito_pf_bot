@@ -133,23 +133,7 @@ function GuestOrderForm({ onNavigate }) {
                   {noUrlsWarning && (
                     <div style={{ fontSize: '0.8rem', color: 'var(--status-cancel-text)', marginTop: 6 }}>⚠ Авито-ссылки не найдены</div>
                   )}
-                  {urlCount > 0 && (
-                    <div style={{ marginTop: 12 }}>
-                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>Добавленные объявления</div>
-                      {links.map((url, i) => (
-                        <div key={url} style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, padding: '7px 0', borderBottom: i < links.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                          <a href={url} target="_blank" rel="noopener noreferrer" title={url}
-                            style={{ flex: '1 1 0', minWidth: 0, fontSize: '0.775rem', fontFamily: 'monospace', color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}>
-                            {url.length > 60 ? url.slice(0, 60) + '…' : url}
-                          </a>
-                          <button onClick={() => removeLink(url)}
-                            style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--status-cancel-text)', fontWeight: 700, fontSize: '1.1rem', padding: '0 4px', lineHeight: 1 }}>
-                            −
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <AddedLinksList links={links} onRemove={removeLink} />
                   {urlCount === 0 && (
                     <div className="form-hint" style={{ marginTop: 6 }}>Каждое уникальное объявление — отдельная строка в счёте</div>
                   )}

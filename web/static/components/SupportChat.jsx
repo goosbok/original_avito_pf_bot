@@ -152,13 +152,12 @@ function SupportChat() {
           </div>
         </div>
       )}
-      <button className={`chat-widget__btn${chatOpen ? ' chat-widget__btn--close' : ''}`} onClick={() => setChatOpen(v => !v)} title="Поддержка">
-        {chatOpen
-          ? '×'
-          : <><span className="chat-widget__icon">💬</span><span>Тех Поддержка</span></>
-        }
-        {!chatOpen && unread > 0 && <span className="chat-widget__badge">{unread}</span>}
-      </button>
+      {!chatOpen && (
+        <button className="chat-widget__btn" onClick={() => setChatOpen(true)} title="Поддержка">
+          <span className="chat-widget__icon">💬</span><span>Тех Поддержка</span>
+          {unread > 0 && <span className="chat-widget__badge">{unread}</span>}
+        </button>
+      )}
     </div>
   );
 }

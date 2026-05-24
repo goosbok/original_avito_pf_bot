@@ -573,6 +573,7 @@ p  { line-height: 1.65; }
   .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .desktop-only { display: none !important; }
   .chat-panel { width: calc(100vw - 32px); right: 0; }
+  .bell__panel { width: calc(100vw - 32px); right: 0; max-width: 360px; }
   .order-form-card { padding: 20px 16px; }
   .order-sticky-footer { padding: 10px 16px; }
   /* Ensure content scrolls above sticky footer (~100px tall on mobile) */

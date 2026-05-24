@@ -294,6 +294,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                   {[
                     { label: 'Кабинет',     route: 'cabinet' },
                     { label: 'Мои заказы',  route: 'orders' },
+                    { label: 'Профиль',     route: 'profile' },
                     { label: 'Заказать ПФ', route: 'order-pf' },
                   ].map(item => (
                     <button

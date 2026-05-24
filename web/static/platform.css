@@ -573,11 +573,28 @@ p  { line-height: 1.65; }
   .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .desktop-only { display: none !important; }
   .chat-panel { width: calc(100vw - 32px); right: 0; }
+  /* Bell dropdown: on mobile the bell button sits mid-header, so the
+     default `position: absolute; right: 0` (relative to .bell) puts the
+     panel's left edge ~80px off-screen. Switch to viewport-anchored
+     positioning so the panel sits inside the visible area regardless of
+     where the bell renders. !important because base rule defined later. */
+  .bell__panel {
+    position: fixed !important;
+    top: calc(var(--header-h) + 6px) !important;
+    right: 16px !important;
+    left: 16px !important;
+    width: auto !important;
+    max-width: 360px !important;
+    margin-left: auto;
+  }
   .order-form-card { padding: 20px 16px; }
   .order-sticky-footer { padding: 10px 16px; }
   /* Ensure content scrolls above sticky footer (~100px tall on mobile) */
   .order-page { padding-bottom: 110px; }
   .order-two-col { grid-template-columns: 1fr !important; }
+  /* Prevent flex/grid children from pushing layout past viewport on long unbreakable strings (e.g., long Avito URLs in the added-links list). */
+  .order-two-col,
+  .order-two-col > * { min-width: 0; }
   /* Cabinet balance widget stacks */
   .cabinet-top-row { flex-direction: column !important; }
   .cabinet-balance-card { min-width: unset !important; width: 100% !important; max-width: unset !important; }
@@ -815,9 +832,9 @@ p  { line-height: 1.65; }
 }
 .bell__footer:hover { background: var(--surface-3); }
 
-@media (max-width: 640px) {
-  .bell__panel { width: 90vw; right: -8px; }
-}
+/* Note: .bell__panel mobile width handled in the @media (max-width: 768px)
+   block above (alongside .chat-panel). Prior 640px override with
+   `right: -8px` left a 79 px left-overflow on iPhone-class viewports. */
 
 /* ===== NOTIFICATIONS PAGE ===== */
 .notif-page {

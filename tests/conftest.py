@@ -27,6 +27,10 @@ def _make_config_stub() -> types.ModuleType:
     stub.support_tag = "test"
     stub.ADMINS = []
     stub.SUPPORT_CHAT_ID = 0
+    stub.SUPPORT_THREAD_QUESTIONS = 0
+    stub.SUPPORT_THREAD_ORDERS = 0
+    stub.SUPPORT_THREAD_ERRORS = 0
+    stub.SUPPORT_THREAD_NEW_USERS = 0
     stub.CODER = 0
     stub.botlink = "https://t.me/test"
     stub.SITE_URL = ""

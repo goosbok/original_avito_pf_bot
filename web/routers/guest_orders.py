@@ -131,6 +131,6 @@ async def _notify_guest_order_paid(order: dict) -> None:
             f"📞 Контакты: {'Да' if order['contacts'] else 'Нет'}\n"
             f"🔗 Объявлений: {len(links)}{links_str}"
         )
-        await send_admins(msg)
+        await send_admins(msg, "orders")
     except Exception:
         logger.exception("_notify_guest_order_paid failed for order id=%s", order.get("id"))

@@ -136,7 +136,7 @@ async def _notify_new_order(user_id: int, order_id: int, total_price: int) -> No
         ]
 
         adm_msg = "\n".join(lines)
-        await send_admins(adm_msg)
+        await send_admins(adm_msg, "orders")
 
         if tg_id:
             await bot.send_message(

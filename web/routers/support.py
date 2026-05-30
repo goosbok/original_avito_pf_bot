@@ -49,10 +49,9 @@ async def send_message(
 
 async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
     try:
-        from data.loader import bot
-        import data.config as _cfg
         from services import identity
         from services.db import connect as db_connect
+        from utils.sender import send_admins
 
         try:
             u = identity.get_user(user_id)
@@ -65,11 +64,13 @@ async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
             f"От: {user_str}\n\n{text}"
         )
 
-        sent = await bot.send_message(
-            chat_id=_cfg.SUPPORT_CHAT_ID,
-            text=fwd_text,
-            parse_mode="HTML",
-        )
+        sent = await send_admins(fwd_text, "questions", parse_mode="HTML")
+        if sent is None:
+            logger.warning(
+                "support: SUPPORT_THREAD_QUESTIONS unset — message %s for user %s not delivered to admins",
+                msg_id, user_id,
+            )
+            return
 
         with db_connect() as con:
             con.execute(

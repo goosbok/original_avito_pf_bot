@@ -105,8 +105,10 @@ def test_forward_to_admins_sends_to_group(monkeypatch, tmp_db):
     sent_mock.message_id = 99
     mock_send = AsyncMock(return_value=sent_mock)
 
-    # Patch config
+    # Patch config — both chat id and the questions thread id (non-zero so
+    # send_admins actually delivers and returns the Message)
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 7)
 
     # Patch identity.get_user
     mock_user = MagicMock()
@@ -120,19 +122,22 @@ def test_forward_to_admins_sends_to_group(monkeypatch, tmp_db):
         yield sqlite3.connect(tmp_db)
     monkeypatch.setattr("services.db.connect", mock_db_connect)
 
-    # Create a mock for data.loader.bot - need to patch before import
+    # Patch bot.send_message — send_admins imports `bot` from data.loader,
+    # so patch it on that module.
+    import data.loader
     mock_bot = MagicMock()
     mock_bot.send_message = mock_send
-
-    # Directly patch in data.loader
-    import data.loader
     monkeypatch.setattr(data.loader, "bot", mock_bot)
+    # utils.sender did `from data.loader import bot`, so patch the bound name there too.
+    import utils.sender
+    monkeypatch.setattr(utils.sender, "bot", mock_bot)
 
     from web.routers.support import _forward_to_admins
     asyncio.run(_forward_to_admins(10, 5, "Help"))
 
     mock_send.assert_called_once()
     assert mock_send.call_args.kwargs["chat_id"] == -100500
+    assert mock_send.call_args.kwargs["message_thread_id"] == 7
 
     with sqlite3.connect(tmp_db) as con:
         row = con.execute(

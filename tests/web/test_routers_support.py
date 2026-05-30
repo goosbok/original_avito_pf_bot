@@ -105,8 +105,10 @@ def test_forward_to_admins_sends_to_group(monkeypatch, tmp_db):
     sent_mock.message_id = 99
     mock_send = AsyncMock(return_value=sent_mock)
 
-    # Patch config
+    # Patch config — both chat id and the questions thread id (non-zero so
+    # send_admins actually delivers and returns the Message)
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 7)
 
     # Patch identity.get_user
     mock_user = MagicMock()
@@ -120,22 +122,84 @@ def test_forward_to_admins_sends_to_group(monkeypatch, tmp_db):
         yield sqlite3.connect(tmp_db)
     monkeypatch.setattr("services.db.connect", mock_db_connect)
 
-    # Create a mock for data.loader.bot - need to patch before import
+    # Patch bot.send_message — send_admins imports `bot` from data.loader,
+    # so patch it on that module.
+    import data.loader
     mock_bot = MagicMock()
     mock_bot.send_message = mock_send
-
-    # Directly patch in data.loader
-    import data.loader
     monkeypatch.setattr(data.loader, "bot", mock_bot)
+    # utils.sender did `from data.loader import bot`, so patch the bound name there too.
+    import utils.sender
+    monkeypatch.setattr(utils.sender, "bot", mock_bot)
 
     from web.routers.support import _forward_to_admins
     asyncio.run(_forward_to_admins(10, 5, "Help"))
 
     mock_send.assert_called_once()
     assert mock_send.call_args.kwargs["chat_id"] == -100500
+    assert mock_send.call_args.kwargs["message_thread_id"] == 7
 
     with sqlite3.connect(tmp_db) as con:
         row = con.execute(
             "SELECT tg_message_id FROM support_messages WHERE id = 5"
         ).fetchone()
     assert row[0] == 99
+
+
+def test_forward_to_admins_skips_db_update_when_questions_unset(monkeypatch, tmp_db: Path):
+    """If QUESTIONS topic is unset, message falls back to errors topic but
+    tg_message_id is NOT persisted (admin replies wouldn't route back anyway)."""
+    import asyncio
+    import sqlite3
+    from unittest.mock import AsyncMock, MagicMock
+
+    # Seed support_messages row
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO users(id, user_name, first_name, balance, reg_date) "
+            "VALUES (10, 'alice', 'Alice', 0, '2026-01-01')"
+        )
+        con.execute(
+            "INSERT INTO support_messages(id, user_id, direction, text, created_at) "
+            "VALUES (7, 10, 'user', 'Help!', '2026-01-01 00:00:00')"
+        )
+        con.commit()
+
+    sent_mock = MagicMock()
+    sent_mock.message_id = 999
+    mock_send = AsyncMock(return_value=sent_mock)
+
+    monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ERRORS", 7)
+
+    mock_user = MagicMock()
+    mock_user.user_name = "alice"
+    monkeypatch.setattr("services.identity.get_user", lambda uid: mock_user)
+
+    import contextlib
+    @contextlib.contextmanager
+    def mock_db_connect():
+        yield sqlite3.connect(tmp_db)
+    monkeypatch.setattr("services.db.connect", mock_db_connect)
+
+    import data.loader
+    mock_bot = MagicMock()
+    mock_bot.send_message = mock_send
+    monkeypatch.setattr(data.loader, "bot", mock_bot)
+    import utils.sender
+    monkeypatch.setattr(utils.sender, "bot", mock_bot)
+
+    from web.routers.support import _forward_to_admins
+    asyncio.run(_forward_to_admins(user_id=10, msg_id=7, text="Help!"))
+
+    # Message was sent (to fallback errors topic)
+    assert mock_send.call_count == 1
+    assert mock_send.call_args.kwargs["message_thread_id"] == 7
+
+    # But tg_message_id was NOT persisted (because QUESTIONS is unset)
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT tg_message_id FROM support_messages WHERE id = 7"
+        ).fetchone()
+    assert row[0] is None

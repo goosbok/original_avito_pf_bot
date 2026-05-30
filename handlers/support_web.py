@@ -22,6 +22,8 @@ async def admin_reply_to_support(message: Message) -> None:
     import data.config as _cfg
     if message.chat.id != _cfg.SUPPORT_CHAT_ID:
         return
+    if message.message_thread_id != _cfg.SUPPORT_THREAD_QUESTIONS:
+        return
 
     from utils.sqlite3 import get_admins, get_tg_id_for_user
     admin_tg_ids = {get_tg_id_for_user(int(a)) or int(a) for a in get_admins()}

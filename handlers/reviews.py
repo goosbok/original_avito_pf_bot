@@ -145,7 +145,7 @@ async def call_confirm_review(call: CallbackQuery, state: FSMContext, user_id: i
             user_str = await get_user_string_without_first_name(user)
             MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], format_display(order['date']), order['link'])
             await call.message.answer(STR, reply_markup=get_menu_kb())
-            await send_admins(MSG)
+            await send_admins(MSG, "orders")
         except Exception as exc:
             await report_handler_error(
                 exc,
@@ -206,7 +206,7 @@ async def avito_del_review(message: types.Message, state: FSMContext, user_id: i
             user_str = await get_user_string_without_first_name(user)
             MSG = MSG.format(order['increment'], famount, user_str, services[service], order['status'], format_display(order['date']), order['link'])
             await message.answer(STR, reply_markup=get_menu_kb())
-            await send_admins(MSG)
+            await send_admins(MSG, "orders")
         except Exception as exc:
             await report_handler_error(
                 exc,

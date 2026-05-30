@@ -62,7 +62,7 @@ async def _notify_refill_error(user_id: int, amount: int, error: str) -> None:
             f"💰 Сумма: <b>{amount} ₽</b>\n"
             f"❌ {error}"
         )
-        await send_admins(msg)
+        await send_admins(msg, "orders")
     except Exception:
         logger.exception("failed to notify admins about refill error")
 

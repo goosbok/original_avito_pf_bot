@@ -129,7 +129,7 @@ const LandingPage = ({ onNavigate, brandName }) => {
             margin: '0 auto', padding: '32px 0'
           }}>
             {[
-            { num: '50 000+', label: 'Выполненных заказов', color: '#0088cc' },
+            { num: '100 000+', label: 'Выполненных заказов', color: '#0088cc' },
             { num: '98%',     label: 'Довольных клиентов',  color: '#0088cc' },
             { num: '3 года',  label: 'На рынке',            color: '#0088cc' }].
             map((s, i) =>

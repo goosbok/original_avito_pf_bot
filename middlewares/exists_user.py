@@ -46,7 +46,8 @@ class ExistsUserMiddleware(BaseMiddleware):
             try:
                 await send_admins(
                     f"<b>💎 Зарегистрирован новый пользователь @{user_name} "
-                    f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>"
+                    f"(<a href='tg://user?id={user_id}'>{user_id}</a>)</b>",
+                    "new_users",
                 )
             except Exception:
                 logger.warning("send_admins failed for new user tg_id=%s", user_id, exc_info=True)

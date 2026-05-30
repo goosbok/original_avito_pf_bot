@@ -86,7 +86,10 @@ async def serve_web():
 
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
+    from utils.sender import warn_missing_support_topics
+
     _log.info("Bot startup")
+    await warn_missing_support_topics()
     # Reset allowed_updates so Telegram delivers all update types.
     # Without this, a stale webhook config (e.g. allowed_updates=["message"])
     # survives bot restarts and silently drops callback_query updates.
@@ -148,6 +151,9 @@ def run_bot_forever(restart_delay_seconds: int = 5):
         time.sleep(restart_delay_seconds)
 
 if __name__ == '__main__':
+    from utils.sender import assert_errors_topic_configured
+    assert_errors_topic_configured()
+
     from middlewares import *
     dp.setup_middleware(ExistsUserMiddleware())
     run_bot_forever()

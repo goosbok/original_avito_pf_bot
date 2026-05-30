@@ -139,7 +139,7 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
     STR2 = get_string('str_usr_pay_success').format(f_amount, f_balance)
     await bot.send_message(chat_id=tg_id, text=STR2, reply_markup=user_back_kb('user:profile'))
     STR3 = get_string('str_adm_pay_success').format(f_amount, user_string, f_balance)
-    await send_admins(STR3)
+    await send_admins(STR3, "orders")
     logger.info("payment success: user_id=%s amount=%s", usr['id'], amount)
 
     if result.referrer_bonus > 0 and result.referrer_id is not None:

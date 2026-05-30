@@ -60,7 +60,7 @@ async def report_handler_error(
             f"<code>{type(exc).__name__}: {exc}</code>\n"
             f"<b>Контекст:</b> <code>{ctx_str[:300]}</code>"
         )
-        await send_admins(alert)
+        await send_admins(alert, "errors")
     except Exception as alert_exc:
         _log.warning("report_handler_error: send_admins failed: %s", alert_exc)
 

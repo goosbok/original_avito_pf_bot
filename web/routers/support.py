@@ -65,9 +65,21 @@ async def _forward_to_admins(user_id: int, msg_id: int, text: str) -> None:
         )
 
         sent = await send_admins(fwd_text, "questions", parse_mode="HTML")
-        if sent is None:
+
+        import data.config as _cfg
+        questions_thread = int(getattr(_cfg, "SUPPORT_THREAD_QUESTIONS", 0) or 0)
+        if questions_thread == 0:
             logger.warning(
-                "support: SUPPORT_THREAD_QUESTIONS unset — message %s for user %s not delivered to admins",
+                "support: SUPPORT_THREAD_QUESTIONS unset — message %s for user %s "
+                "rerouted to errors topic; admin replies there won't reach the user",
+                msg_id, user_id,
+            )
+            return
+
+        if sent is None:
+            # Both QUESTIONS and ERRORS topics unset.
+            logger.warning(
+                "support: no admin topic configured — message %s for user %s not delivered",
                 msg_id, user_id,
             )
             return

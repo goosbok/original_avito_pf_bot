@@ -33,16 +33,36 @@ async def send_admins(
 ) -> Optional[Message]:
     """Send `msg` to the support group's forum topic for `category`.
 
-    Returns the sent Message, or None if the topic is not configured
-    (so callers like support.py can decide whether to persist message_id).
+    If the category's topic is not configured (thread id == 0), the message is
+    rerouted into the errors topic with an explanatory prefix so admins can still
+    see it. Returns the sent Message, or None if neither the requested topic nor
+    the errors topic is configured (so callers can decide whether to persist
+    message_id).
     """
     thread_id = _resolve_thread_id(category)
-    if thread_id == 0:
-        return None
+    if thread_id != 0:
+        return await bot.send_message(
+            chat_id=config.SUPPORT_CHAT_ID,
+            text=msg,
+            message_thread_id=thread_id,
+            parse_mode=parse_mode,
+            disable_web_page_preview=True,
+        )
+
+    # Fallback: requested topic unset. Reroute into the errors topic with prefix.
+    if category == "errors":
+        return None  # cannot fall back to ourselves
+    errors_thread = int(getattr(config, "SUPPORT_THREAD_ERRORS", 0) or 0)
+    if errors_thread == 0:
+        return None  # nothing to fall back to
+    fallback_msg = (
+        f"⚠️ Не задан топик для {category}, вот текст уведомления:\n\n"
+        f"{msg}"
+    )
     return await bot.send_message(
         chat_id=config.SUPPORT_CHAT_ID,
-        text=msg,
-        message_thread_id=thread_id,
+        text=fallback_msg,
+        message_thread_id=errors_thread,
         parse_mode=parse_mode,
         disable_web_page_preview=True,
     )

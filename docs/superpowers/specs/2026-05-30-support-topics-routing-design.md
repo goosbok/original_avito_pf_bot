@@ -92,6 +92,8 @@ async def send_admins(
 
 `_resolve_thread` читает соответствующий атрибут из `data.config` через `getattr`. Возврат `Message` нужен для `support.py`, который сохраняет `tg_message_id` в БД.
 
+**Fallback behavior (added post-spec):** if the requested category's topic is unset (thread id == 0), the message is rerouted into the errors topic with a prefix `⚠️ Не задан топик для {category}, вот текст уведомления:\n\n` followed by the original message. This ensures admins always see notifications, even when an env var was forgotten. If the errors topic itself is unset (or category=='errors' and its topic is unset), the message is dropped — but `assert_errors_topic_configured()` prevents this at runtime.
+
 ## Refactor: `web/routers/support.py`
 
 `_forward_to_admins` сейчас делает `bot.send_message` напрямую, чтобы получить `sent.message_id` и записать его в `support_messages.tg_message_id`. После рефакторинга:
@@ -110,6 +112,8 @@ if sent is not None:
 ```
 
 Если `sent is None` (топик `questions` не сконфигурирован), `tg_message_id` остаётся `NULL` — обработчик ответа всё равно не сможет сработать без topic-привязки, поэтому это согласованное поведение.
+
+**Post-spec update (QUESTIONS-unset early return):** с добавлением fallback в `send_admins`, при не сконфигурированном `SUPPORT_THREAD_QUESTIONS` сообщение всё равно доедет до errors-топика (с префиксом). Но обновлять `support_messages.tg_message_id` в этом случае нельзя — ответ админа в errors-топике будет отброшен topic-фильтром в `handlers/support_web.py`. Поэтому `_forward_to_admins` отдельно проверяет `SUPPORT_THREAD_QUESTIONS` через `data.config` и делает early return до UPDATE, оставив `tg_message_id = NULL` и записав warning в логи.
 
 ## Refactor: остальные точки вызова
 

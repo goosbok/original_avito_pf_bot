@@ -65,13 +65,43 @@ def test_send_admins_routes_new_users_to_thread(monkeypatch):
     assert mock_send.call_args.kwargs["message_thread_id"] == 9
 
 
-def test_send_admins_drops_when_thread_unset(monkeypatch):
-    """If the category's thread id == 0, do not call bot.send_message at all."""
+def test_send_admins_falls_back_to_errors_topic_when_unset(monkeypatch):
+    """When the requested category's topic is unset, route to errors topic with prefix."""
     mock_send = _patch_common(monkeypatch)
     monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ERRORS", 7)
+
+    from utils import sender
+    result = asyncio.run(sender.send_admins("orphan question", "questions"))
+
+    assert result == "sent-message-sentinel"
+    mock_send.assert_called_once()
+    kwargs = mock_send.call_args.kwargs
+    assert kwargs["message_thread_id"] == 7
+    assert "Не задан топик для questions" in kwargs["text"]
+    assert "orphan question" in kwargs["text"]
+
+
+def test_send_admins_returns_none_when_both_target_and_errors_unset(monkeypatch):
+    """If both the requested topic and the errors topic are unset, drop the message."""
+    mock_send = _patch_common(monkeypatch)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ERRORS", 0)
 
     from utils import sender
     result = asyncio.run(sender.send_admins("orphan", "questions"))
+
+    assert result is None
+    mock_send.assert_not_called()
+
+
+def test_send_admins_does_not_recurse_when_errors_itself_unset(monkeypatch):
+    """If category=='errors' and its own topic is unset, just drop (don't loop forever)."""
+    mock_send = _patch_common(monkeypatch)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ERRORS", 0)
+
+    from utils import sender
+    result = asyncio.run(sender.send_admins("alert", "errors"))
 
     assert result is None
     mock_send.assert_not_called()

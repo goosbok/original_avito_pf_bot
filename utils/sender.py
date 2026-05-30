@@ -48,28 +48,44 @@ async def send_admins(
     )
 
 
-async def validate_support_topics() -> None:
-    """Validate forum-topic configuration at bot startup.
+def assert_errors_topic_configured() -> None:
+    """Verify SUPPORT_THREAD_ERRORS is set before starting the bot.
 
-    Raises SystemExit if SUPPORT_THREAD_ERRORS is unset — without it we have no
-    place to surface other misconfiguration alerts. For any other unset category,
-    emit a single ⚠️ warning into the errors topic and continue: the corresponding
-    send_admins() calls will then be silent no-ops.
+    Raises SystemExit when the errors topic id is 0 — without it the bot has no
+    channel to surface runtime alerts. Synchronous so it can be called from
+    `__main__` *before* `executor.start_polling`, which would otherwise swallow
+    a SystemExit raised inside an async on_startup hook.
     """
-    errors_thread = int(getattr(config, "SUPPORT_THREAD_ERRORS", 0) or 0)
-    if errors_thread == 0:
+    if int(getattr(config, "SUPPORT_THREAD_ERRORS", 0) or 0) == 0:
         raise SystemExit(
             "SUPPORT_THREAD_ERRORS must be configured (forum topic id) — "
             "without it the bot has no channel for runtime alerts."
         )
 
+
+async def warn_missing_support_topics() -> None:
+    """For each non-errors category whose thread id is 0, send a ⚠️ warning to the
+    errors topic. Failures are logged and swallowed so a transient startup network
+    blip cannot crash the bot into a restart loop.
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+
     for category, attr in _CATEGORY_TO_CONFIG_ATTR.items():
         if category == "errors":
             continue
         if int(getattr(config, attr, 0) or 0) == 0:
-            await send_admins(
-                f"⚠️ <b>{attr} не задан</b>\n"
-                f"Сообщения категории {category} не будут отправляться в группу.",
-                "errors",
-                parse_mode="HTML",
-            )
+            try:
+                await send_admins(
+                    f"⚠️ <b>{attr} не задан</b>\n"
+                    f"Сообщения категории {category} не будут отправляться в группу.",
+                    "errors",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                log.warning(
+                    "warn_missing_support_topics: failed to send warning for %s",
+                    attr,
+                    exc_info=True,
+                )

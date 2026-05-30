@@ -36,12 +36,14 @@ def _make_reply_message(
     chat_id: int,
     replied_text: str,
     msg_text: str,
+    message_thread_id: int | None = 3,
 ) -> MagicMock:
     msg = MagicMock()
     msg.from_user.id = from_user_id
     msg.chat.id = chat_id
     msg.text = msg_text
     msg.message_id = 42
+    msg.message_thread_id = message_thread_id
     msg.reply_to_message = MagicMock()
     msg.reply_to_message.text = replied_text
     msg.bot.send_message = AsyncMock()
@@ -80,6 +82,7 @@ def test_admin_reply_saved(monkeypatch, tmp_db: Path):
     _seed(tmp_db, admin_value="111")
     _stub_httpx(monkeypatch)
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 3)
 
     msg = _make_reply_message(
         from_user_id=111,
@@ -101,6 +104,7 @@ def test_admin_reply_saved(monkeypatch, tmp_db: Path):
 def test_reply_from_wrong_chat_ignored(monkeypatch, tmp_db: Path):
     _seed(tmp_db, admin_value="111")
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 3)
 
     msg = _make_reply_message(
         from_user_id=111,
@@ -122,6 +126,7 @@ def test_reply_from_wrong_chat_ignored(monkeypatch, tmp_db: Path):
 def test_non_admin_reply_ignored(monkeypatch, tmp_db: Path):
     _seed(tmp_db, admin_value="111")
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 3)
 
     msg = _make_reply_message(
         from_user_id=9999,  # not in admin list
@@ -164,6 +169,7 @@ def test_admin_stored_as_internal_id_can_reply(monkeypatch, tmp_db: Path):
 
     _stub_httpx(monkeypatch)
     monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 3)
 
     msg = _make_reply_message(
         from_user_id=999888777,  # Telegram ID, while admin list stores internal ID 42
@@ -180,3 +186,26 @@ def test_admin_stored_as_internal_id_can_reply(monkeypatch, tmp_db: Path):
             "SELECT direction, text FROM support_messages WHERE direction = 'admin'"
         ).fetchone()
     assert row == ("admin", "Fixed!")
+
+
+def test_reply_in_wrong_topic_ignored(monkeypatch, tmp_db: Path):
+    _seed(tmp_db, admin_value="111")
+    monkeypatch.setattr("data.config.SUPPORT_CHAT_ID", -100500)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_QUESTIONS", 3)
+
+    msg = _make_reply_message(
+        from_user_id=111,
+        chat_id=-100500,
+        replied_text="💬 Вопрос из веб #7\nОт: @alice\n\nHelp!",
+        msg_text="answer",
+        message_thread_id=99,  # admin replied in some other topic
+    )
+
+    from handlers.support_web import admin_reply_to_support
+    asyncio.run(admin_reply_to_support(msg))
+
+    with sqlite3.connect(tmp_db) as con:
+        count = con.execute(
+            "SELECT count(*) FROM support_messages WHERE direction = 'admin'"
+        ).fetchone()[0]
+    assert count == 0

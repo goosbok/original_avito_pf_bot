@@ -258,10 +258,10 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                     con_str, ord_date, links_cnt, links_str,
                 )
                 if len(ADM_MSG) < 4096:
-                    await send_admins(ADM_MSG)
+                    await send_admins(ADM_MSG, "orders")
                 else:
                     for msg in split_messages(ADM_MSG.split('\n'), '\n'):
-                        await send_admins(msg)
+                        await send_admins(msg, "orders")
                 USR_MSG = get_string('str_order_confirm').format(ord_id)
                 await call.message.answer(USR_MSG, reply_markup=get_menu_kb())
                 logger.info(

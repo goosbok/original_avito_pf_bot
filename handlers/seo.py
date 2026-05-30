@@ -135,7 +135,7 @@ async def user_call_seo_yes(call: CallbackQuery, state: FSMContext, user_id: int
         f_price = format_decimal(int(o['price']))
         username = await get_user_string_without_first_name(user)
         MSG = adm_message.format(o['increment'], o['months'], f_price, username, o['status'], o['date'], o['link'])
-        await send_admins(MSG)
+        await send_admins(MSG, "orders")
         msg = get_string('str_seo_order_confirm').format(o['increment'], manager)
         await call.message.answer(msg, reply_markup=get_menu_kb())
     else:

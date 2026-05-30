@@ -57,7 +57,7 @@ async def promik(message: types.Message, state: FSMContext, user_id: int):
             usr = get_user(id=user_id)
             str_user = await get_user_string_without_first_name(usr)
             MSG = get_string('str_msg_admin_promo')
-            await send_admins(MSG.format(code, str_user, f_balance))
+            await send_admins(MSG.format(code, str_user, f_balance), "orders")
 
         elif promocode['isactivated'] == 1:
             STR = get_string('str_promo_inactive')
@@ -77,7 +77,7 @@ async def promik(message: types.Message, state: FSMContext, user_id: int):
                 usr = get_user(id=user_id)
                 str_user = await get_user_string_without_first_name(usr)
                 MSG = get_string('str_msg_admin_promo')
-                await send_admins(MSG.format(code, str_user, f_balance))
+                await send_admins(MSG.format(code, str_user, f_balance), "orders")
             else:
                 users_array = promocode['prom_users'].split(",")
 
@@ -96,7 +96,7 @@ async def promik(message: types.Message, state: FSMContext, user_id: int):
                     usr = get_user(id=user_id)
                     str_user = await get_user_string_without_first_name(usr)
                     MSG = get_string('str_msg_admin_promo')
-                    await send_admins(MSG.format(code, str_user, f_balance))
+                    await send_admins(MSG.format(code, str_user, f_balance), "orders")
                 else:
                     STR = get_string('str_promo_reactiv')
                     await message.answer(STR.format(code), reply_markup=get_menu_kb())

@@ -99,7 +99,8 @@ async def probe_and_alert() -> None:
             f"YooKassa не принял тестовый платёж.\n\n"
             f"<b>Ошибка:</b> <code>{(result.error_msg or '')[:400]}</code>\n"
             f"<b>Задержка:</b> {result.latency_ms:.0f} мс\n"
-            f"<b>Время:</b> {ts}"
+            f"<b>Время:</b> {ts}",
+            "errors",
         )
     except Exception as send_exc:
         _log.warning("payment probe: send_admins failed: %s", send_exc)

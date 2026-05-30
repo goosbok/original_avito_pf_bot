@@ -86,6 +86,9 @@ async def serve_web():
 
 # Выполнение функции после запуска бота
 async def on_startup(dp: Dispatcher):
+    from utils.sender import validate_support_topics
+    await validate_support_topics()
+
     _log.info("Bot startup")
     # Reset allowed_updates so Telegram delivers all update types.
     # Without this, a stale webhook config (e.g. allowed_updates=["message"])

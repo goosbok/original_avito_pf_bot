@@ -46,3 +46,30 @@ async def send_admins(
         parse_mode=parse_mode,
         disable_web_page_preview=True,
     )
+
+
+async def validate_support_topics() -> None:
+    """Validate forum-topic configuration at bot startup.
+
+    Raises SystemExit if SUPPORT_THREAD_ERRORS is unset — without it we have no
+    place to surface other misconfiguration alerts. For any other unset category,
+    emit a single ⚠️ warning into the errors topic and continue: the corresponding
+    send_admins() calls will then be silent no-ops.
+    """
+    errors_thread = int(getattr(config, "SUPPORT_THREAD_ERRORS", 0) or 0)
+    if errors_thread == 0:
+        raise SystemExit(
+            "SUPPORT_THREAD_ERRORS must be configured (forum topic id) — "
+            "without it the bot has no channel for runtime alerts."
+        )
+
+    for category, attr in _CATEGORY_TO_CONFIG_ATTR.items():
+        if category == "errors":
+            continue
+        if int(getattr(config, attr, 0) or 0) == 0:
+            await send_admins(
+                f"⚠️ <b>{attr} не задан</b>\n"
+                f"Сообщения категории {category} не будут отправляться в группу.",
+                "errors",
+                parse_mode="HTML",
+            )

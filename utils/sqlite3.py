@@ -859,6 +859,10 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "date TIMESTAMP,"
             "contacts BOOLEN DEFAULT False,"
             "user_name TEXT,"
+            "payment_method TEXT,"
+            "payment_expires_at TIMESTAMP,"
+            "payment_id TEXT,"
+            "phone TEXT,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             9,
         ),
@@ -924,6 +928,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "credential_hash TEXT,"
             "created_at TIMESTAMP NOT NULL,"
             "last_used_at TIMESTAMP,"
+            "verified INTEGER NOT NULL DEFAULT 1,"
             "UNIQUE(provider, identifier),"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             8,
@@ -946,7 +951,8 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "CREATE TABLE IF NOT EXISTS otp_codes("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"
             "purpose TEXT NOT NULL,"
-            "telegram_id INTEGER NOT NULL,"
+            "destination TEXT NOT NULL,"
+            "channel TEXT NOT NULL DEFAULT 'telegram',"
             "code_hash TEXT NOT NULL,"
             "user_id_to_link INTEGER,"
             "created_at TIMESTAMP NOT NULL,"
@@ -1080,6 +1086,37 @@ def apply_phase2_migrations():
         if 'user_name' not in existing_orders:
             con.execute("ALTER TABLE orders ADD COLUMN user_name TEXT")
             print("orders.user_name added")
+
+        # === unpaid order flow ===
+        if 'payment_method' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN payment_method TEXT")
+            print("orders.payment_method added")
+        if 'payment_expires_at' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN payment_expires_at TIMESTAMP")
+            print("orders.payment_expires_at added")
+        if 'payment_id' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN payment_id TEXT")
+            print("orders.payment_id added")
+        if 'phone' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN phone TEXT")
+            print("orders.phone added")
+
+        # === auth_providers.verified ===
+        existing_ap = {row['name'] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}
+        if 'verified' not in existing_ap:
+            con.execute("ALTER TABLE auth_providers ADD COLUMN verified INTEGER NOT NULL DEFAULT 1")
+            print("auth_providers.verified added (existing rows defaulted to verified=1)")
+
+        # === otp_codes generalization ===
+        existing_otp = {row['name'] for row in con.execute("PRAGMA table_info(otp_codes)").fetchall()}
+        if 'destination' not in existing_otp:
+            if 'telegram_id' in existing_otp:
+                con.execute("ALTER TABLE otp_codes RENAME COLUMN telegram_id TO destination")
+                print("otp_codes.telegram_id -> destination renamed")
+        if 'channel' not in existing_otp:
+            con.execute("ALTER TABLE otp_codes ADD COLUMN channel TEXT NOT NULL DEFAULT 'telegram'")
+            print("otp_codes.channel added (default='telegram')")
+
         con.commit()
 
 

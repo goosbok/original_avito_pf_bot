@@ -24,11 +24,11 @@ def _seed(tmp_db: Path):
         )
         con.execute(
             "INSERT INTO orders(user_id, price, position_name, status, links, date, contacts, user_name) "
-            "VALUES (10, 1260, '7/30', 'Posted', '[\"https://www.avito.ru/foo\"]', '2026-05-11', 0, 'alice')"
+            "VALUES (10, 1260, '7/30', 'paid', '[\"https://www.avito.ru/foo\"]', '2026-05-11', 0, 'alice')"
         )
         con.execute(
             "INSERT INTO orders(user_id, price, position_name, status, links, date, contacts, user_name) "
-            "VALUES (10, 500, '7/15', 'Completed', '', '2026-05-12', 1, 'alice')"
+            "VALUES (10, 500, '7/15', 'done', '', '2026-05-12', 1, 'alice')"
         )
         con.commit()
 
@@ -57,18 +57,18 @@ def test_list_orders_returns_all(tmp_db: Path):
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["total"] == 2
-    assert {o["status"] for o in body["items"]} == {"Posted", "Completed"}
+    assert {o["status"] for o in body["items"]} == {"paid", "done"}
 
 
 def test_list_orders_filtered_by_status(tmp_db: Path):
     _seed(tmp_db)
     c = _client()
     r = c.get(
-        "/api/admin/orders?status=Posted",
+        "/api/admin/orders?status=paid",
         headers={"Authorization": f"Bearer {_token_for(1)}"},
     )
     assert r.status_code == 200
-    assert {o["status"] for o in r.json()["items"]} == {"Posted"}
+    assert {o["status"] for o in r.json()["items"]} == {"paid"}
 
 
 def test_change_order_status(tmp_db: Path):
@@ -77,12 +77,12 @@ def test_change_order_status(tmp_db: Path):
     r = c.post(
         "/api/admin/orders/1/status",
         headers={"Authorization": f"Bearer {_token_for(1)}"},
-        json={"status": "Completed"},
+        json={"status": "done"},
     )
     assert r.status_code == 200, r.text
     with sqlite3.connect(tmp_db) as con:
         s = con.execute("SELECT status FROM orders WHERE increment=1").fetchone()[0]
-    assert s == "Completed"
+    assert s == "done"
 
 
 def test_change_order_status_rejects_unknown(tmp_db: Path):
@@ -102,7 +102,7 @@ def test_change_order_status_404_when_missing(tmp_db: Path):
     r = c.post(
         "/api/admin/orders/9999/status",
         headers={"Authorization": f"Bearer {_token_for(1)}"},
-        json={"status": "Completed"},
+        json={"status": "done"},
     )
     assert r.status_code == 404
 
@@ -112,7 +112,7 @@ def test_change_status_creates_notification(tmp_db):
     c = _client()
     r = c.post(
         "/api/admin/orders/1/status",
-        json={"status": "Completed"},
+        json={"status": "done"},
         headers={"Authorization": f"Bearer {_token_for(1)}"},
     )
     assert r.status_code == 200
@@ -125,7 +125,7 @@ def test_change_status_creates_notification(tmp_db):
         ).fetchall()
     assert len(rows) == 1
     assert rows[0][1] == "order"
-    assert rows[0][3] == "Completed"
+    assert rows[0][3] == "done"
     assert "Заказ №1" in rows[0][4]
 
 
@@ -133,10 +133,10 @@ def test_change_status_no_op_does_not_create_notification(tmp_db):
     _seed(tmp_db)
     c = _client()
 
-    # order #2 in _seed is already 'Completed'
+    # order #2 in _seed is already 'done' — no-op transition
     r = c.post(
         "/api/admin/orders/2/status",
-        json={"status": "Completed"},
+        json={"status": "done"},
         headers={"Authorization": f"Bearer {_token_for(1)}"},
     )
     assert r.status_code == 200
@@ -149,17 +149,21 @@ def test_change_status_no_op_does_not_create_notification(tmp_db):
     assert count == 0
 
 
-def test_change_status_to_pending_does_not_notify(tmp_db):
+def test_change_status_to_payment_failed_creates_notification(tmp_db):
     _seed(tmp_db)
     c = _client()
     r = c.post(
         "/api/admin/orders/1/status",
-        json={"status": "Pending"},
+        json={"status": "payment_failed"},
         headers={"Authorization": f"Bearer {_token_for(1)}"},
     )
     assert r.status_code == 200
 
     import sqlite3
     with sqlite3.connect(tmp_db) as con:
-        count = con.execute("SELECT COUNT(*) FROM notifications").fetchone()[0]
-    assert count == 0
+        rows = con.execute(
+            "SELECT new_status, text FROM notifications WHERE user_id = 10"
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0][0] == "payment_failed"
+    assert "не оплачен" in rows[0][1]

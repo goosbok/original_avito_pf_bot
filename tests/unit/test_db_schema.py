@@ -49,3 +49,35 @@ def test_notifications_indexes_present(tmp_db):
         )}
     assert "idx_notifications_user_unread" in idx
     assert "idx_notifications_user_created" in idx
+
+
+def test_orders_has_new_payment_columns(tmp_db):
+    from utils.sqlite3 import create_db
+    create_db()
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(orders)").fetchall()}
+    assert "payment_method" in cols
+    assert "payment_expires_at" in cols
+    assert "payment_id" in cols
+    assert "phone" in cols
+
+
+def test_auth_providers_has_verified_column(tmp_db):
+    from utils.sqlite3 import create_db
+    create_db()
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}
+    assert "verified" in cols
+
+
+def test_otp_codes_has_channel_and_destination_columns(tmp_db):
+    from utils.sqlite3 import create_db
+    create_db()
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(otp_codes)").fetchall()}
+    assert "channel" in cols
+    assert "destination" in cols
+    assert "telegram_id" not in cols  # переименовано

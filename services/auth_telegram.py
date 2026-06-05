@@ -16,6 +16,7 @@ import httpx
 from services import identity, otp
 from services.db import connect
 from services.exceptions import BotCantReachUser, OTPInvalid
+from utils.phones import normalize_phone
 
 
 # Telegram's official minimum is 5, but we relax to 1 to support short test usernames
@@ -24,37 +25,6 @@ _USERNAME_RE = re.compile(r"^@?([A-Za-z0-9_]{1,32})$")
 
 # Strip whitespace, parentheses, dashes from user-entered phone numbers.
 _PHONE_STRIP_RE = re.compile(r"[\s()\-]+")
-
-
-def _normalize_phone(raw: str) -> str | None:
-    """Return E.164-ish phone (+digits) if the input looks like a phone, else None.
-
-    Rules:
-    - Strip whitespace, parentheses, dashes.
-    - If starts with '+' and the rest is all digits → keep as-is.
-    - If 11 digits starting with '8' → replace leading '8' with '+7' (RU).
-    - If 11 digits starting with '7' → prepend '+'.
-    - If 10–15 digits → prepend '+' (already international without the plus).
-    - Otherwise: None (not a phone).
-    """
-    s = _PHONE_STRIP_RE.sub("", raw)
-    if not s:
-        return None
-    if s.startswith("+"):
-        rest = s[1:]
-        if rest.isdigit() and 10 <= len(rest) <= 15:
-            return "+" + rest
-        return None
-    if not s.isdigit():
-        return None
-    # All digits at this point.
-    if len(s) == 11 and s.startswith("8"):
-        return "+7" + s[1:]
-    if len(s) == 11 and s.startswith("7"):
-        return "+" + s
-    if 10 <= len(s) <= 15:
-        return "+" + s
-    return None
 
 
 def _looks_like_phone(identifier: str) -> bool:
@@ -80,7 +50,7 @@ def resolve_telegram_id(identifier: str) -> int:
     # Phone path: check first so that numeric phones like 89001234567 / 79001234567
     # don't get treated as Telegram numeric IDs.
     if _looks_like_phone(identifier):
-        phone = _normalize_phone(identifier)
+        phone = normalize_phone(identifier)
         if phone is None:
             raise OTPInvalid(f"unknown identifier format: {identifier!r}")
         with connect() as con:
@@ -160,7 +130,10 @@ def request_code(
     from web.config import BOT_TOKEN
 
     tg_id = resolve_telegram_id(identifier)
-    code = otp.request_code(purpose, tg_id, user_id_to_link=user_id_to_link)
+    code = otp.issue(
+        channel='telegram', destination=str(tg_id),
+        purpose=purpose, user_id_to_link=user_id_to_link,
+    )
     text = f"Ваш код подтверждения: {code}\n\nДействителен 5 минут."
     _send_telegram_message(BOT_TOKEN, tg_id, text)
     return tg_id
@@ -169,7 +142,10 @@ def request_code(
 def verify_code_login(identifier: str, code: str) -> int:
     """Проверить код для логина. Возвращает internal user_id (создаёт юзера, если нужно)."""
     tg_id = resolve_telegram_id(identifier)
-    otp.verify_code("login", tg_id, code)
+    ok = otp.verify(channel='telegram', destination=str(tg_id),
+                    code=code, purpose='login')
+    if not ok:
+        raise OTPInvalid("invalid code")
 
     user_name = _lookup_username(tg_id)
     return identity.get_or_create_user_by_telegram(tg_id, user_name=user_name)
@@ -178,9 +154,15 @@ def verify_code_login(identifier: str, code: str) -> int:
 def verify_code_link(identifier: str, code: str, current_user_id: int) -> None:
     """Проверить код для привязки telegram к current_user_id."""
     tg_id = resolve_telegram_id(identifier)
-    expected = otp.verify_code("link", tg_id, code)
+    # Peek user_id_to_link до consume — чтобы дать корректную ошибку владельца.
+    expected = otp.get_user_id_to_link(channel='telegram', destination=str(tg_id),
+                                       code=code, purpose='link')
     if expected is not None and expected != current_user_id:
         raise OTPInvalid("code was issued for a different user")
+    ok = otp.verify(channel='telegram', destination=str(tg_id),
+                    code=code, purpose='link')
+    if not ok:
+        raise OTPInvalid("invalid code")
     identity.link_provider(current_user_id, "telegram", str(tg_id))
 
 

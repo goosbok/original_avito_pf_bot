@@ -21,6 +21,7 @@ router = APIRouter(prefix="/api/admin/orders", tags=["admin"])
 
 
 def _row_to_item(row) -> AdminOrderItem:
+    phone = row["phone"] if "phone" in row.keys() else None
     return AdminOrderItem(
         order_id=int(row["increment"]),
         user_id=int(row["user_id"]),
@@ -31,22 +32,8 @@ def _row_to_item(row) -> AdminOrderItem:
         links=str(row["links"] or ""),
         date=str(row["date"] or ""),
         contacts=bool(row["contacts"]),
-    )
-
-
-def _guest_row_to_item(row) -> AdminOrderItem:
-    return AdminOrderItem(
-        order_id=int(row["id"]),
-        user_id=None,
-        user_name=None,
-        price=int(row["price"] or 0),
-        position_name="Авито ПФ (гостевой)",
-        status=str(row["status"] or ""),
-        links=str(row["links"] or ""),
-        date=str(row["created_at"] or ""),
-        contacts=bool(row["contacts"]),
-        is_guest=True,
-        guest_phone=str(row["phone"] or ""),
+        is_guest=phone is not None,
+        guest_phone=str(phone) if phone is not None else None,
     )
 
 
@@ -63,25 +50,8 @@ async def list_orders(
     page_size = max(1, min(100, page_size))
     offset = (page - 1) * page_size
 
-    if is_guest is True:
-        # Query guest_orders table only
-        with connect() as con:
-            total = con.execute(
-                "SELECT COUNT(*) AS c FROM guest_orders"
-            ).fetchone()["c"]
-            rows = con.execute(
-                "SELECT id, phone, price, status, links, created_at, contacts "
-                "FROM guest_orders ORDER BY id DESC LIMIT ? OFFSET ?",
-                (page_size, offset),
-            ).fetchall()
-        return AdminOrderListResponse(
-            items=[_guest_row_to_item(r) for r in rows],
-            total=int(total),
-            page=page,
-            page_size=page_size,
-        )
-
-    # Default: regular orders only (existing behaviour, backward-compatible)
+    # После Task 2 миграции гостевых заказов больше нет в отдельной таблице:
+    # они лежат в orders с phone IS NOT NULL (и payment_method='yookassa').
     where = []
     params: list = []
     if status:
@@ -90,6 +60,10 @@ async def list_orders(
     if user_id is not None:
         where.append("user_id = ?")
         params.append(user_id)
+    if is_guest is True:
+        where.append("phone IS NOT NULL")
+    elif is_guest is False:
+        where.append("phone IS NULL")
     where_sql = ("WHERE " + " AND ".join(where)) if where else ""
 
     with connect() as con:
@@ -97,7 +71,7 @@ async def list_orders(
             f"SELECT COUNT(*) AS c FROM orders {where_sql}", tuple(params)
         ).fetchone()["c"]
         rows = con.execute(
-            f"SELECT increment, user_id, user_name, price, position_name, status, links, date, contacts "
+            f"SELECT increment, user_id, user_name, price, position_name, status, links, date, contacts, phone "
             f"FROM orders {where_sql} ORDER BY increment DESC LIMIT ? OFFSET ?",
             tuple(params) + (page_size, offset),
         ).fetchall()

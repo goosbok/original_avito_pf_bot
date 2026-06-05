@@ -1,4 +1,13 @@
-"""Tests for /api/orders and /api/orders/pf endpoints."""
+"""Tests for /api/orders endpoints.
+
+Покрывает «классические» эндпоинты роутера:
+- GET /api/orders/pf/price (public)
+- GET /api/orders (auth required)
+- POST /api/orders/pf — новый unpaid-flow (создание + список доступных методов)
+
+Полный flow создание → оплата → polling статуса лежит в
+`test_order_pf_flow.py` — здесь только базовые проверки маршрутизации/валидации.
+"""
 from pathlib import Path
 
 import pytest
@@ -9,6 +18,9 @@ from fastapi.testclient import TestClient
 def authed(tmp_db: Path, monkeypatch):
     monkeypatch.setattr("web.config.JWT_SECRET", "x" * 32)
     monkeypatch.setattr("web.auth.JWT_SECRET", "x" * 32)
+    # yookassa нужен для available_methods (см. comment в test_order_pf_flow).
+    monkeypatch.setattr("services.payment_probe.SHOP_ID", 12345, raising=False)
+    monkeypatch.setattr("services.payment_probe.SECRET_KEY", "test_secret", raising=False)
     from services import auth_email
     uid = auth_email.register("user@example.com", "password123", first_name="User")
     from web.auth import create_jwt
@@ -54,72 +66,88 @@ def test_list_orders_requires_auth(authed):
     assert r.status_code == 401
 
 
-def test_create_pf_order_success(authed_with_balance, monkeypatch):
-    client, uid, headers = authed_with_balance
+def test_create_pf_unpaid_returns_methods(authed_with_balance, monkeypatch):
+    client, _, headers = authed_with_balance
     monkeypatch.setattr("services.orders.get_pf_price_per_unit", lambda: 1)
 
-    async def _noop(*a, **kw):
-        pass
-
-    monkeypatch.setattr("web.routers.orders._notify_new_order", _noop)
-
-    r = client.post("/api/orders/pf", headers=headers, json={
-        "links": ["https://www.avito.ru/item/123"],
-        "days": 3,
-        "fix_count": 5,
-        "contacts": False,
-    })
-    assert r.status_code == 201
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://www.avito.ru/item/123"],
+            "days": 3,
+            "fix_count": 5,
+            "contacts": False,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
+    assert r.status_code == 201, r.text
     body = r.json()
     assert body["order_id"] > 0
-    assert body["total_price"] == 1 * 5 * 3 * 1
-    assert body["status"] == "Posted"
+    # 1 * 5 * 3 * 1
+    assert body["price"] == 15
+    assert "balance" in body["available_methods"]
+    assert "yookassa" in body["available_methods"]
 
 
-def test_create_pf_order_insufficient_balance(authed, monkeypatch):
+def test_create_pf_no_balance_but_yookassa_available(authed, monkeypatch):
     client, _, headers = authed
     monkeypatch.setattr("services.orders.get_pf_price_per_unit", lambda: 9999999)
 
-    async def _noop(*a, **kw):
-        pass
-
-    monkeypatch.setattr("web.routers.orders._notify_new_order", _noop)
-
-    r = client.post("/api/orders/pf", headers=headers, json={
-        "links": ["https://www.avito.ru/item/123"],
-        "days": 1,
-        "fix_count": 5,
-        "contacts": False,
-    })
-    assert r.status_code == 402
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://www.avito.ru/item/123"],
+            "days": 1,
+            "fix_count": 5,
+            "contacts": False,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
+    # Юзер без баланса всё равно может создать unpaid и оплатить yookassa.
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert "balance" not in body["available_methods"]
+    assert "yookassa" in body["available_methods"]
 
 
 def test_create_pf_order_invalid_link(authed_with_balance):
     client, _, headers = authed_with_balance
-    r = client.post("/api/orders/pf", headers=headers, json={
-        "links": ["https://www.example.com/not-avito"],
-        "days": 1,
-        "fix_count": 5,
-        "contacts": False,
-    })
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://www.example.com/not-avito"],
+            "days": 1,
+            "fix_count": 5,
+            "contacts": False,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
     assert r.status_code == 422
 
 
 def test_list_orders_after_create(authed_with_balance, monkeypatch):
-    client, uid, headers = authed_with_balance
+    client, _, headers = authed_with_balance
     monkeypatch.setattr("services.orders.get_pf_price_per_unit", lambda: 1)
 
-    async def _noop(*a, **kw):
-        pass
-
-    monkeypatch.setattr("web.routers.orders._notify_new_order", _noop)
-
-    client.post("/api/orders/pf", headers=headers, json={
-        "links": ["https://www.avito.ru/item/1", "https://www.avito.ru/item/2"],
-        "days": 2,
-        "fix_count": 5,
-        "contacts": True,
-    })
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://www.avito.ru/item/1", "https://www.avito.ru/item/2"],
+            "days": 2,
+            "fix_count": 5,
+            "contacts": True,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
+    assert r.status_code == 201, r.text
 
     r = client.get("/api/orders", headers=headers)
     assert r.status_code == 200
@@ -134,18 +162,19 @@ def test_list_orders_pagination(authed_with_balance, monkeypatch):
     client, _, headers = authed_with_balance
     monkeypatch.setattr("services.orders.get_pf_price_per_unit", lambda: 1)
 
-    async def _noop(*a, **kw):
-        pass
-
-    monkeypatch.setattr("web.routers.orders._notify_new_order", _noop)
-
     for _ in range(5):
-        client.post("/api/orders/pf", headers=headers, json={
-            "links": ["https://www.avito.ru/item/1"],
-            "days": 1,
-            "fix_count": 5,
-            "contacts": False,
-        })
+        client.post(
+            "/api/orders/pf",
+            headers=headers,
+            json={
+                "links": ["https://www.avito.ru/item/1"],
+                "days": 1,
+                "fix_count": 5,
+                "contacts": False,
+                "agreed_privacy": True,
+                "agreed_offer": True,
+            },
+        )
 
     r = client.get("/api/orders?page=1&page_size=3", headers=headers)
     assert r.status_code == 200

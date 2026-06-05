@@ -5,9 +5,37 @@ Routers подключаются ниже по мере добавления (в
 """
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-app = FastAPI(title="Avito PF Bot Web", version="0.1.0")
+from services.payment_expiry import run_expiry_loop
+from utils.sqlite3 import create_db
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Старт/стоп фоновых задач приложения."""
+    # Создаём таблицы и применяем миграции при старте API.
+    # На проде api стартует вместе с ботом через __main__.py, но standalone
+    # uvicorn (docker compose) тоже должен уметь инициализировать БД.
+    await asyncio.get_event_loop().run_in_executor(None, create_db)
+    expiry_task = asyncio.create_task(run_expiry_loop())
+    try:
+        yield
+    finally:
+        expiry_task.cancel()
+        try:
+            await expiry_task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+
+
+app = FastAPI(title="Avito PF Bot Web", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/api/health")
@@ -19,6 +47,7 @@ from web.routers import refill as refill_router  # noqa: E402
 from web.routers.applications import router as applications_router  # noqa: E402
 from web.routers.auth_email import router as auth_email_router, router_auth as auth_router  # noqa: E402
 from web.routers.auth_link import router as auth_link_router  # noqa: E402
+from web.routers.auth_phone import router as auth_phone_router  # noqa: E402
 from web.routers.auth_telegram import router as auth_telegram_router  # noqa: E402
 from web.routers.me import router as me_router  # noqa: E402
 
@@ -27,6 +56,7 @@ app.include_router(applications_router)
 app.include_router(auth_email_router)
 app.include_router(auth_router)
 app.include_router(auth_link_router)
+app.include_router(auth_phone_router)
 app.include_router(auth_telegram_router)
 app.include_router(me_router)
 
@@ -45,10 +75,6 @@ app.include_router(support_router)
 from web.routers.config import router as config_router  # noqa: E402
 
 app.include_router(config_router)
-
-from web.routers.guest_orders import router as guest_orders_router  # noqa: E402
-
-app.include_router(guest_orders_router)
 
 from web.routers.admin_users import router as admin_users_router  # noqa: E402
 

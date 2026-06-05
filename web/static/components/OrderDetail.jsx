@@ -1,7 +1,7 @@
-// Order detail page — service-agnostic shell + per-service detail renderers.
-// To add a new service: define a *Detail component and register it in
-// SERVICE_DETAIL_RENDERERS by service type key returned from detectServiceType().
-const { useState: useODState } = React;
+// Order detail page — universal for all statuses (unpaid / paid / done / failed /
+// payment_failed / cancelled). Polls /payment-status every 5s while 'unpaid'.
+// Terminal statuses show "Повторить заказ" with prefill.
+const { useState: useODState, useEffect: useODEffect, useRef: useODRef } = React;
 
 function odParseLinks(s) {
   if (!s) return [];
@@ -21,6 +21,8 @@ function serviceDisplayName(serviceType, order) {
   if (serviceType === 'avito-pf') return 'Авито ПФ';
   return order.position_name || '—';
 }
+
+const TERMINAL_STATUSES = ['done', 'failed', 'payment_failed', 'cancelled'];
 
 // --- Avito PF specific details ---
 function AvitoPFDetail({ order }) {
@@ -123,13 +125,113 @@ const SERVICE_DETAIL_RENDERERS = {
   'generic':  GenericDetail,
 };
 
-function OrderDetailPage({ order, onNavigate }) {
-  if (!order) {
+function formatMmSs(seconds) {
+  if (seconds == null || seconds < 0) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function OrderDetailPage({ order: payload, orderId: orderIdProp, user, onNavigate }) {
+  // Accept either { order_id, ... } payload from old callsites OR orderId prop.
+  const orderId = orderIdProp != null
+    ? orderIdProp
+    : (payload && (payload.order_id != null ? payload.order_id : payload.increment));
+
+  const [order, setOrder] = useODState(() => (payload && payload.status) ? payload : null);
+  const [timeRemaining, setTimeRemaining] = useODState(null);
+  const [loadError, setLoadError] = useODState(null);
+  const pollTimerRef = useODRef(null);
+  const mountedRef = useODRef(true);
+
+  // Fetch full order detail once.
+  useODEffect(() => {
+    if (!orderId) return;
+    let cancelled = false;
+    api.get(`/api/orders/pf/${orderId}`).then(data => {
+      if (cancelled || !mountedRef.current) return;
+      if (data && !data.__unauthorized && data.order_id) {
+        setOrder(data);
+      } else if (data && data.__unauthorized) {
+        // Public endpoint should never 401, but guard anyway.
+      } else {
+        setLoadError('Не удалось загрузить заказ');
+      }
+    }).catch(e => {
+      if (!cancelled && mountedRef.current) setLoadError(e.message || 'Не удалось загрузить заказ');
+    });
+    return () => { cancelled = true; };
+  }, [orderId]);
+
+  // Poll payment-status while unpaid. Stop on terminal status.
+  useODEffect(() => {
+    mountedRef.current = true;
+    if (!orderId) return () => { mountedRef.current = false; };
+
+    const stop = () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+
+    const tick = async () => {
+      try {
+        const data = await api.get(`/api/orders/pf/${orderId}/payment-status`);
+        if (!mountedRef.current) return;
+        if (data && !data.__unauthorized) {
+          if (data.time_remaining_seconds != null) {
+            setTimeRemaining(data.time_remaining_seconds);
+          }
+          if (data.status && data.status !== (order && order.status)) {
+            // Status changed → refetch full order.
+            try {
+              const fresh = await api.get(`/api/orders/pf/${orderId}`);
+              if (mountedRef.current && fresh && !fresh.__unauthorized && fresh.order_id) {
+                setOrder(fresh);
+              }
+            } catch (_) {}
+          }
+          if (data.status && data.status !== 'unpaid') {
+            stop();
+            return;
+          }
+        }
+      } catch (_) {
+        // Network blip — keep polling.
+      }
+      if (mountedRef.current) {
+        pollTimerRef.current = setTimeout(tick, 5000);
+      }
+    };
+
+    // Initial poll immediately so we get time_remaining_seconds right away.
+    tick();
+
+    return () => {
+      mountedRef.current = false;
+      stop();
+    };
+  }, [orderId]);
+
+  if (!orderId) {
     return (
       <div className="page-wrap">
         <div className="container" style={{ padding: '60px 20px', textAlign: 'center' }}>
           <p style={{ color: 'var(--text-3)', marginBottom: 16 }}>Заказ не выбран.</p>
-          <button className="btn btn--primary" onClick={() => onNavigate('orders')}>К списку заказов</button>
+          <button className="btn btn--primary" onClick={() => onNavigate(user ? 'orders' : 'order-new')}>
+            {user ? 'К списку заказов' : 'Создать заказ'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!order) {
+    return (
+      <div className="page-wrap">
+        <div className="container" style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-3)' }}>
+          {loadError ? loadError : 'Загрузка заказа...'}
         </div>
       </div>
     );
@@ -137,16 +239,41 @@ function OrderDetailPage({ order, onNavigate }) {
 
   const serviceType = detectServiceType(order);
   const DetailComponent = SERVICE_DETAIL_RENDERERS[serviceType] || GenericDetail;
+  const isUnpaid = order.status === 'unpaid';
+  const isTerminal = TERMINAL_STATUSES.includes(order.status);
 
   const handleContactSupport = () => {
     const text = `У меня возникли проблемы с заказом #${order.order_id}`;
     window.dispatchEvent(new CustomEvent('support-chat-send', { detail: { text } }));
   };
 
+  const handleRepeat = () => {
+    try {
+      const linksArr = odParseLinks(order.links);
+      const m = String(order.position_name || '').match(/^(\d+)\/(\d+)$/);
+      const daysVal = m ? Number(m[1]) : null;
+      const fixVal = m ? Number(m[2]) : 30;
+      sessionStorage.setItem('order_prefill', JSON.stringify({
+        links: linksArr,
+        days: daysVal,
+        fix_count: fixVal,
+        contacts: !!order.contacts,
+      }));
+    } catch (_) {}
+    onNavigate('order-new');
+  };
+
+  const handleBack = () => {
+    if (user) onNavigate('orders');
+    else onNavigate('order-new');
+  };
+
   return (
     <div className="page-wrap">
       <div className="container" style={{ padding: '28px 20px 80px', maxWidth: 760 }}>
-        <button className="order-back" onClick={() => onNavigate('orders')}>← К списку заказов</button>
+        <button className="order-back" onClick={handleBack}>
+          ← {user ? 'К списку заказов' : 'К новому заказу'}
+        </button>
 
         {/* Summary */}
         <div className="card" style={{ padding: '24px 28px', marginBottom: 16 }}>
@@ -159,16 +286,28 @@ function OrderDetailPage({ order, onNavigate }) {
                 {serviceDisplayName(serviceType, order)}
               </h1>
               <div style={{ color: 'var(--text-3)', fontSize: '0.8125rem' }}>
-                {order.date ? `Создан: ${formatDisplay(order.date)}` : ''}
+                {order.date ? `Создан: ${typeof formatDisplay === 'function' ? formatDisplay(order.date) : order.date}` : ''}
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
               <StatusBadge status={order.status} />
               <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)', marginTop: 10, letterSpacing: '-0.03em' }}>
-                {order.price.toLocaleString('ru-RU')} ₽
+                {Number(order.price || 0).toLocaleString('ru-RU')} ₽
               </div>
             </div>
           </div>
+
+          {isUnpaid && timeRemaining != null && timeRemaining > 0 && (
+            <div className="alert alert--info" style={{ marginBottom: 12 }}>
+              ⏳ Осталось на оплату: <strong>{formatMmSs(timeRemaining)}</strong>
+            </div>
+          )}
+
+          {isTerminal && (
+            <button className="btn btn--primary btn--full" onClick={handleRepeat} style={{ marginBottom: 10 }}>
+              Повторить заказ
+            </button>
+          )}
 
           <button className="btn btn--secondary btn--full" onClick={handleContactSupport}>
             💬 Написать в поддержку

@@ -11,7 +11,7 @@ from web.schemas import AdminStatsResponse
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-_GUEST_UNPAID_STATUSES = ("pending_payment", "payment_failed", "cancelled")
+_REVENUE_EXCLUDED_STATUSES = ("unpaid", "payment_failed", "cancelled")
 
 
 @router.get("/stats", response_model=AdminStatsResponse)
@@ -29,28 +29,17 @@ async def stats(_: int = Depends(require_admin)) -> AdminStatsResponse:
             (prefix,),
         ).fetchone()["c"]
 
-        orders_reg = con.execute(
+        orders_today = con.execute(
             "SELECT COUNT(*) AS c FROM orders WHERE date LIKE ?",
             (prefix,),
         ).fetchone()["c"]
-        orders_guest = con.execute(
-            "SELECT COUNT(*) AS c FROM guest_orders WHERE created_at LIKE ?",
-            (prefix,),
-        ).fetchone()["c"]
-        orders_today = orders_reg + orders_guest
 
-        revenue_reg = con.execute(
-            "SELECT COALESCE(SUM(price), 0) AS s FROM orders "
-            "WHERE date LIKE ? AND status != 'Cancelled'",
-            (prefix,),
-        ).fetchone()["s"]
-        placeholders = ",".join("?" * len(_GUEST_UNPAID_STATUSES))
-        revenue_guest = con.execute(
-            f"SELECT COALESCE(SUM(price), 0) AS s FROM guest_orders "
-            f"WHERE created_at LIKE ? AND status NOT IN ({placeholders})",
-            (prefix, *_GUEST_UNPAID_STATUSES),
-        ).fetchone()["s"]
-        revenue_today = (revenue_reg or 0) + (revenue_guest or 0)
+        placeholders = ",".join("?" * len(_REVENUE_EXCLUDED_STATUSES))
+        revenue_today = con.execute(
+            f"SELECT COALESCE(SUM(price), 0) AS s FROM orders "
+            f"WHERE date LIKE ? AND status NOT IN ({placeholders})",
+            (prefix, *_REVENUE_EXCLUDED_STATUSES),
+        ).fetchone()["s"] or 0
 
         open_threads = con.execute(
             """

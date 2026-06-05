@@ -38,18 +38,12 @@ function NavLink({ label, active, onClick, icon }) {
   );
 }
 
-function scrollToSection(id) {
-  const el = document.getElementById(id);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
 function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggleTheme, onToggleAdminMode, onNavigate, onLogout }) {
   const [menuOpen, setMenuOpen] = useHeaderState(false);
   const [userDropOpen, setUserDropOpen] = useHeaderState(false);
   const dropRef = useHeaderRef(null);
 
-  const isApp = !['landing', 'login', 'register', 'login-tg', 'auth'].includes(route);
-  const isLanding = route === 'landing';
+  const isApp = !['login', 'register', 'login-tg', 'auth'].includes(route);
 
   // Close dropdown on outside click
   useHeaderEffect(() => {
@@ -75,7 +69,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
         {/* Logo */}
         <div
           className="header__logo"
-          onClick={() => onNavigate(user ? 'cabinet' : 'landing')}
+          onClick={() => onNavigate(user ? 'cabinet' : 'order-new')}
         >
           <div className="header__logo-mark" style={{ fontWeight: 900, fontSize: '0.75rem', letterSpacing: '-0.02em' }}>PB</div>
           <span className="header__logo-name">{brandName}</span>
@@ -101,15 +95,6 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
             >
               + Заказать ПФ
             </button>
-          </nav>
-        )}
-
-        {/* Landing nav links — desktop */}
-        {isLanding && (
-          <nav className="desktop-only" style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 20 }}>
-            <NavLink label="Услуги" active={false} onClick={() => scrollToSection('services')} />
-            <NavLink label="FAQ" active={false} onClick={() => scrollToSection('faq')} />
-            <NavLink label="Контакты" active={false} onClick={() => scrollToSection('contacts')} />
           </nav>
         )}
 

@@ -144,12 +144,12 @@ async def user_call_show_by_status(call: types.CallbackQuery, state: FSMContext,
     if action == 'completed':
         orders = []
         for order in user_orders_all(user_id):
-            if order['status'] == 'Completed':
+            if order['status'] == 'done':
                 orders.append(order)
     elif action == 'posted':
         orders = []
         for order in user_orders_all(user_id):
-            if order['status'] == 'Posted':
+            if order['status'] == 'paid':
                 orders.append(order)
     try:
         orders_array = listord_array(orders)

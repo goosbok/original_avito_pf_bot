@@ -81,3 +81,42 @@ class BotCantReachUser(ServiceError):
 
 class EmailSendError(ServiceError):
     """SMTP send failed."""
+
+
+class AccountMergeConflict(ServiceError):
+    """Phone-provider is already linked to a different user with non-empty
+    provider set (full account, not phone-only).
+
+    Raised by `identity.link_phone_provider()` when a phone number is occupied
+    by an established user — caller must direct the actor to support for manual
+    merge instead of silently overwriting.
+    """
+
+    def __init__(self, existing_user_id: int, target_user_id: int, phone: str) -> None:
+        super().__init__(
+            f"phone {phone} занят user_id={existing_user_id}, "
+            f"нельзя привязать к user_id={target_user_id}"
+        )
+        self.existing_user_id = existing_user_id
+        self.target_user_id = target_user_id
+        self.phone = phone
+
+
+class OrderNotFound(ServiceError):
+    """Order with the requested id does not exist (or belongs to another user
+    in scoped lookups)."""
+
+
+class OrderStatusConflict(ServiceError):
+    """Attempted state transition is illegal for the order's current status.
+
+    Examples: paying an already-paid order, cancelling a done order, etc.
+    Callers translate to HTTP 409 / a user-facing nudge.
+    """
+
+
+class PaymentExpired(ServiceError):
+    """Attempted to pay an `unpaid` order whose `payment_expires_at` has passed.
+
+    Caller should refuse the payment and prompt the actor to create a new order.
+    """

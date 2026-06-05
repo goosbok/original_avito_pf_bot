@@ -38,6 +38,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
   const [resetNew, setResetNew] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetDone, setResetDone] = useState(false);
+  const [loginTab, setLoginTab] = useState('email'); // 'email' | 'phone' — used in default login screen
 
   useEffect(() => {
     if (tgId) sessionStorage.setItem('auth_tg_phone', tgId);
@@ -316,7 +317,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             Войти через Email
           </span>
           {' · '}
-          <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
+          <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
         </div>
       </div>
     </div>
@@ -450,34 +451,71 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     </div>
   );
 
-  // Default: Email login
+  // Default: Email login (with tab switcher to phone-SMS)
   return (
     <div className="auth-wrap">
       <div className="card auth-card">
         <div className="auth-card__logo">{logoMark}</div>
         <h2 className="auth-card__title">Добро пожаловать</h2>
         <p className="auth-card__sub">Войдите в личный кабинет</p>
-        <div className="auth-form">
-          {error && <div className="alert alert--error">{error}</div>}
-          <button className="btn btn--secondary btn--lg btn--full" onClick={() => setMode('login-tg')}>
-            Войти через Telegram
-          </button>
-          <div className="auth-divider"><span>или через email</span></div>
-          <div className="form-field">
-            <label className="form-label">Email</label>
-            <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-          </div>
-          <div className="form-field">
-            <label className="form-label">Пароль</label>
-            <input
-              className="input" type="password" placeholder="Ваш пароль"
-              value={password} onChange={e => setPassword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleEmailLogin()}
-            />
-          </div>
-          <button className="btn btn--primary btn--lg btn--full" onClick={handleEmailLogin} disabled={loading}>
-            {loading ? 'Вход...' : 'Войти →'}
-          </button>
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
+          <button
+            onClick={() => { setLoginTab('email'); setError(''); }}
+            style={{
+              flex: 1, padding: '10px 0', background: 'none', border: 'none',
+              cursor: 'pointer', fontWeight: loginTab === 'email' ? 700 : 500,
+              color: loginTab === 'email' ? 'var(--primary)' : 'var(--text-2)',
+              borderBottom: loginTab === 'email' ? '2px solid var(--primary)' : '2px solid transparent',
+              fontSize: '0.875rem',
+            }}
+          >Email</button>
+          <button
+            onClick={() => { setLoginTab('phone'); setError(''); }}
+            style={{
+              flex: 1, padding: '10px 0', background: 'none', border: 'none',
+              cursor: 'pointer', fontWeight: loginTab === 'phone' ? 700 : 500,
+              color: loginTab === 'phone' ? 'var(--primary)' : 'var(--text-2)',
+              borderBottom: loginTab === 'phone' ? '2px solid var(--primary)' : '2px solid transparent',
+              fontSize: '0.875rem',
+            }}
+          >По телефону</button>
+        </div>
+
+        {loginTab === 'phone' ? (
+          <>
+            <PhoneLogin onSuccess={(jwt) => onLogin(jwt)} />
+            <div className="auth-links" style={{ marginTop: 16 }}>
+              <span onClick={() => setMode('login-tg')} style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 600 }}>
+                Войти через Telegram
+              </span>
+              {' · '}
+              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="auth-form">
+              {error && <div className="alert alert--error">{error}</div>}
+              <button className="btn btn--secondary btn--lg btn--full" onClick={() => setMode('login-tg')}>
+                Войти через Telegram
+              </button>
+              <div className="auth-divider"><span>или через email</span></div>
+              <div className="form-field">
+                <label className="form-label">Email</label>
+                <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+              </div>
+              <div className="form-field">
+                <label className="form-label">Пароль</label>
+                <input
+                  className="input" type="password" placeholder="Ваш пароль"
+                  value={password} onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleEmailLogin()}
+                />
+              </div>
+              <button className="btn btn--primary btn--lg btn--full" onClick={handleEmailLogin} disabled={loading}>
+                {loading ? 'Вход...' : 'Войти →'}
+              </button>
               <div style={{ textAlign: 'center', marginTop: 4 }}>
                 <button className="btn btn--ghost btn--sm"
                   onClick={() => onNavigate('forgot')}
@@ -485,16 +523,18 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                   Забыл пароль?
                 </button>
               </div>
-        </div>
-        <div className="auth-links">
-          Нет аккаунта?{' '}
-          <span
-            onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('register'); }}
-            style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
-          >Зарегистрироваться</span>
-          {' · '}
-          <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
-        </div>
+            </div>
+            <div className="auth-links">
+              Нет аккаунта?{' '}
+              <span
+                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('register'); }}
+                style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
+              >Зарегистрироваться</span>
+              {' · '}
+              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

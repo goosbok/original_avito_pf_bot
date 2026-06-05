@@ -2,10 +2,13 @@
 const { useState: useOrdersState, useEffect: useOrdersEffect } = React;
 
 const STATUS_FILTERS = [
-  { key: 'all',       label: 'Все' },
-  { key: 'Posted',    label: 'В работе' },
-  { key: 'Completed', label: 'Завершённые' },
-  { key: 'Cancelled', label: 'Отменённые' },
+  { key: 'all',            label: 'Все' },
+  { key: 'unpaid',         label: 'Ожидают оплаты' },
+  { key: 'paid',           label: 'В работе' },
+  { key: 'done',           label: 'Выполненные' },
+  { key: 'failed',         label: 'Ошибка' },
+  { key: 'payment_failed', label: 'Не оплачены' },
+  { key: 'cancelled',      label: 'Отменённые' },
 ];
 
 const PAGE_SIZE = 20;

@@ -1,6 +1,8 @@
 """Pydantic-схемы для запросов и ответов веб-API."""
 from __future__ import annotations
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
@@ -148,10 +150,14 @@ class PFPriceResponse(BaseModel):
 
 
 class PFOrderRequest(BaseModel):
-    links: list[str] = Field(min_length=1)
-    days: int = Field(gt=0)
-    fix_count: int = Field(ge=5)
-    contacts: bool
+    """Запрос на создание unpaid PF-заказа. phone обязателен для гостей."""
+    links: list[str] = Field(..., min_length=1, max_length=20)
+    days: int = Field(..., ge=1, le=90)
+    fix_count: int = Field(..., ge=1, le=200)
+    contacts: bool = False
+    agreed_privacy: bool
+    agreed_offer: bool
+    phone: Optional[str] = None
 
     @field_validator("links")
     @classmethod
@@ -164,40 +170,47 @@ class PFOrderRequest(BaseModel):
 
 class PFOrderResponse(BaseModel):
     order_id: int
-    total_price: int
+    price: int
+    available_methods: list[Literal["balance", "yookassa"]]
+
+
+class OrderPayRequest(BaseModel):
+    method: Literal["balance", "yookassa"]
+
+
+class OrderPayBalanceResponse(BaseModel):
+    status: Literal["paid"]
+    order_id: int
+
+
+class OrderPayYookassaResponse(BaseModel):
+    confirmation_url: str
+    expires_at: str  # ISO timestamp
+
+
+class OrderPaymentStatusResponse(BaseModel):
+    status: Literal["unpaid", "paid", "payment_failed", "done", "failed", "cancelled"]
+    order_id: int
+    time_remaining_seconds: Optional[int] = None
+
+
+class OrderDetailResponse(BaseModel):
+    """Narrow response for GET /api/orders/pf/{id}.
+
+    UNAUTHENTICATED endpoint (YooKassa redirects guests back here without a session),
+    so the protection is the *whitelist*: only non-sensitive fields are exposed.
+
+    EXCLUDED on purpose: phone, payment_id, user_id, user_name.
+    """
+    order_id: int
     status: str
-
-
-class PaymentAvailableResponse(BaseModel):
-    available: bool
-
-
-class GuestPFOrderRequest(BaseModel):
-    links: list[str] = Field(min_length=1)
-    days: int = Field(gt=0)
-    fix_count: int = Field(ge=5)
+    price: int
+    position_name: str
+    links: str
     contacts: bool
-    phone: str = Field(min_length=5, max_length=32)
-    agreed_privacy: bool
-    agreed_offer: bool
-
-    @field_validator("links")
-    @classmethod
-    def links_must_be_avito(cls, v: list[str]) -> list[str]:
-        for link in v:
-            if not _re.search(r'avito\.ru', link):
-                raise ValueError(f"invalid avito link: {link}")
-        return v
-
-
-class GuestPFOrderResponse(BaseModel):
-    guest_order_id: int
-    payment_url: str
-
-
-class GuestOrderStatusResponse(BaseModel):
-    status: str   # "pending" | "paid" | "failed"
-    order_id: int | None = None
+    date: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_expires_at: Optional[str] = None
 
 
 class OrderItem(BaseModel):
@@ -291,7 +304,7 @@ class AdminOrderListResponse(BaseModel):
     page_size: int
 
 
-_ORDER_STATUSES = ("Posted", "Completed", "Cancelled", "Pending")
+_ORDER_STATUSES = ("unpaid", "paid", "done", "failed", "payment_failed", "cancelled")
 
 
 class AdminOrderStatusChange(BaseModel):

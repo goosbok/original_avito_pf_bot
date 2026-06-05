@@ -234,7 +234,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                     user_id=user['id'],
                     price=data['total_price'],
                     position_name=f"{data['days']}/{data['fix']}",
-                    status="Posted",
+                    status="paid",
                     links=str(data['links']),
                     contacts=data['contact'],
                     user_name=user['user_name'],

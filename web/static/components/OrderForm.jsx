@@ -404,7 +404,7 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                   {[
                     { label: 'Просмотров в день', val: fixCount },
                     { label: 'Количество дней', val: daysNum || '—' },
-                    { label: 'Объявлений', val: Math.max(urlCount, 1) },
+                    { label: 'Объявлений', val: urlCount },
                     { label: 'Цена за просмотр', val: `${pricePerUnit} ₽` },
                   ].map((row, i, arr) => (
                     <div key={i}>

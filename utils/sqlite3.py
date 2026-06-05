@@ -1018,22 +1018,8 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             5,
         ),
-        (
-            "guest_orders",
-            "CREATE TABLE IF NOT EXISTS guest_orders("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "phone TEXT NOT NULL,"
-            "links TEXT NOT NULL,"
-            "days INTEGER NOT NULL,"
-            "fix_count INTEGER NOT NULL,"
-            "contacts INTEGER NOT NULL DEFAULT 0,"
-            "price INTEGER NOT NULL,"
-            "price_per_unit INTEGER NOT NULL,"
-            "payment_id TEXT,"
-            "status TEXT NOT NULL DEFAULT 'pending_payment',"
-            "created_at TEXT NOT NULL)",
-            11,
-        ),
+        # guest_orders таблица намеренно удалена из схемы — миграция в apply_phase2_migrations
+        # дропает её для legacy-БД, новые БД её не создают (логика объединена с orders).
         (
             "notifications",
             "CREATE TABLE IF NOT EXISTS notifications("
@@ -1116,6 +1102,64 @@ def apply_phase2_migrations():
         if 'channel' not in existing_otp:
             con.execute("ALTER TABLE otp_codes ADD COLUMN channel TEXT NOT NULL DEFAULT 'telegram'")
             print("otp_codes.channel added (default='telegram')")
+
+        # === order status renaming (Posted/Completed/Cancelled/Pending -> new) ===
+        status_map = {
+            "Posted": "paid",
+            "Completed": "done",
+            "Cancelled": "cancelled",
+            "Pending": "payment_failed",
+        }
+        for old, new in status_map.items():
+            cur = con.execute("UPDATE orders SET status = ? WHERE status = ?", (new, old))
+            if cur.rowcount:
+                print(f"orders.status: {old} -> {new} ({cur.rowcount} rows)")
+
+        # === migrate guest_orders -> orders, then drop ===
+        tables = {row['name'] for row in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()}
+        if 'guest_orders' in tables:
+            guest_rows = con.execute("SELECT * FROM guest_orders").fetchall()
+            for row in guest_rows:
+                phone = row["phone"]
+                ap = con.execute(
+                    "SELECT user_id FROM auth_providers "
+                    "WHERE provider='phone' AND identifier=?",
+                    (phone,),
+                ).fetchone()
+                if ap:
+                    user_id = ap["user_id"]
+                else:
+                    cur = con.execute(
+                        "INSERT INTO users(balance, user_name, first_name) "
+                        "VALUES (0, NULL, NULL)"
+                    )
+                    user_id = cur.lastrowid
+                    verified = 1 if row["status"] == "paid" else 0
+                    con.execute(
+                        "INSERT INTO auth_providers(user_id, provider, identifier, "
+                        "created_at, verified) VALUES (?, 'phone', ?, ?, ?)",
+                        (user_id, phone, row["created_at"], verified),
+                    )
+                new_status = {
+                    "paid": "paid",
+                    "pending_payment": "payment_failed",
+                    "failed": "payment_failed",
+                }.get(row["status"], "payment_failed")
+                con.execute(
+                    "INSERT INTO orders(user_id, price, position_name, status, "
+                    "links, contacts, user_name, payment_method, payment_id, phone) "
+                    "VALUES (?, ?, ?, ?, ?, ?, NULL, 'yookassa', ?, ?)",
+                    (
+                        user_id, row["price"],
+                        f"{row['days']}/{row['fix_count']}",
+                        new_status, row["links"], row["contacts"],
+                        row["payment_id"], phone,
+                    ),
+                )
+            con.execute("DROP TABLE guest_orders")
+            print(f"guest_orders migrated ({len(guest_rows)} rows) and dropped")
 
         con.commit()
 

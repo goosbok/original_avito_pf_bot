@@ -226,7 +226,7 @@ def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
             "amount": {"value": f"{price:.2f}", "currency": "RUB"},
             "confirmation": {"type": "redirect", "return_url": return_url},
             "capture": True,
-            "description": f"PF order #{order_id}",
+            "description": f"Заказ #{order_id}",
             "metadata": {"order_id": str(order_id)},
         })
     except Exception as exc:

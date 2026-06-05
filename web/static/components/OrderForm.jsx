@@ -4,7 +4,11 @@ const { useState: useOrderState, useEffect: useOrderEffect } = React;
 
 function parseAvitoUrls(text) {
   if (!text) return [];
-  const normalized = text.replace(/(?<=\S)[\r\n]+(?=\S)/g, '');
+  // Переводы строк → пробелы. Так \S+ regex останавливается на границе строки,
+  // и две отдельные ссылки в столбик не склеятся в один матч.
+  // (Раньше нормализация СТИРАЛА \n между \S → два URL склеивались в один,
+  //  split('?')[0] оставлял только первый.)
+  const normalized = text.replace(/[\r\n]+/g, ' ');
   const raw = normalized.match(/https?:\/\/(?:www\.)?avito\.ru\/\S+/g) || [];
   const seen = new Set();
   return raw

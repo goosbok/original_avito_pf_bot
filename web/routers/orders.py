@@ -172,14 +172,15 @@ async def pay(
         return OrderPayBalanceResponse(status="paid", order_id=order_id)
 
     if body.method == "yookassa":
-        # return_url должен вести на фронтенд (SPA), а не на /api/* JSON-эндпоинт.
-        # Берём scheme+host из текущего запроса и добавляем ?order_id=<N> —
-        # app.jsx при загрузке распарсит этот параметр и сразу откроет OrderDetail.
+        # return_url ведёт на backend /api/orders/pf/{id}/return — он пробивает
+        # статус через YooKassa (mark_paid / mark_payment_failed) и редиректит
+        # на фронт с маркером результата. Фронт уже сам решает куда дальше
+        # (order-detail на успех, orders/order-new на отмену).
         try:
             base = f"{request.url.scheme}://{request.url.netloc}"
-            return_url = f"{base}/?order_id={order_id}"
+            return_url = f"{base}/api/orders/pf/{order_id}/return"
         except Exception:
-            return_url = f"/?order_id={order_id}"
+            return_url = f"/api/orders/pf/{order_id}/return"
         try:
             # yookassa SDK делает sync HTTP — пускаем в thread pool, чтобы
             # не блокировать asyncio event loop на 5-15 секунд.
@@ -271,4 +272,64 @@ async def payment_status(order_id: int) -> OrderPaymentStatusResponse:
         status="unpaid",
         order_id=order_id,
         time_remaining_seconds=rem,
+    )
+
+
+@router.get("/pf/{order_id}/return")
+async def yookassa_return(order_id: int, request: Request):
+    """Return-URL для YooKassa redirect.
+
+    YooKassa дёргает этот URL и на успех, и на отмену. Мы:
+    1. Пробиваем актуальный статус через YooKassa API.
+    2. mark_paid / mark_payment_failed соответственно.
+    3. 302 redirect на фронт с маркером `?yookassa_return={paid|failed|unknown}&order_id=<N>`.
+       Фронт сам решит куда дальше (success → order-detail, failed → orders/order-new).
+
+    Backend не знает залогинен ли юзер (JWT в localStorage, не в куках) — это
+    решение делегируется фронту.
+    """
+    from fastapi.responses import RedirectResponse
+
+    base = f"{request.url.scheme}://{request.url.netloc}"
+
+    try:
+        order = svc.get_order(order_id)
+    except OrderNotFound:
+        # Заказа нет — ведём на форму создания (фронт сам разрулит на cabinet
+        # если юзер залогинен).
+        return RedirectResponse(url=f"{base}/", status_code=302)
+
+    status_val = str(order["status"] or "")
+    result = "unknown"
+
+    if status_val == "unpaid" and order["payment_method"] == "yookassa" and order["payment_id"]:
+        try:
+            from data.config import SECRET_KEY, SHOP_ID
+            from yookassa import Configuration, Payment
+
+            def _probe(payment_id):
+                Configuration.account_id = SHOP_ID
+                Configuration.secret_key = SECRET_KEY
+                return Payment.find_one(payment_id)
+
+            p = await asyncio.to_thread(_probe, order["payment_id"])
+            if p.status == "succeeded":
+                svc.mark_paid(order_id)
+                result = "paid"
+            elif p.status == "canceled":
+                svc.mark_payment_failed(order_id)
+                result = "failed"
+            else:  # pending / waiting_for_capture — пока не знаем
+                result = "unknown"
+        except Exception:
+            logger.exception("yookassa probe in /return failed for order %s", order_id)
+            result = "unknown"
+    elif status_val == "paid":
+        result = "paid"
+    elif status_val in ("payment_failed", "cancelled", "failed"):
+        result = "failed"
+
+    return RedirectResponse(
+        url=f"{base}/?yookassa_return={result}&order_id={order_id}",
+        status_code=302,
     )

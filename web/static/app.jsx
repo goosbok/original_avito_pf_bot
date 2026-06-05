@@ -11,19 +11,32 @@ const TWEAK_DEFAULTS = {
 function App() {
   const _resetToken = new URLSearchParams(window.location.search).get('token');
   const _isResetRoute = window.location.pathname === '/reset-password' && !!_resetToken;
-  // YooKassa return_url добавляет ?order_id=N — после возврата открываем OrderDetail.
+  // YooKassa redirect → /api/orders/pf/{id}/return → этот URL.
+  // ?yookassa_return=paid|failed|unknown + ?order_id=N
+  const _qs = new URLSearchParams(window.location.search);
+  const _yookassaResult = _qs.get('yookassa_return');  // 'paid'|'failed'|'unknown'|null
   const _returnOrderId = (() => {
-    const raw = new URLSearchParams(window.location.search).get('order_id');
+    const raw = _qs.get('order_id');
     const n = raw ? parseInt(raw, 10) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
+  // Решение начального route:
+  // - yookassa_return=paid → order-detail (показать оплаченный заказ + таймер ушёл)
+  // - yookassa_return=failed без логина → order-new (пусть переоформит)
+  // - yookassa_return=failed с логином → orders (история заказов)
+  // - yookassa_return=unknown / просто ?order_id=N → order-detail (там polling)
+  // Логин ещё не восстановлен — для failed-случая откладываем решение
+  // до loaderssession-restore useEffect ниже.
+  const _initialRoute = (() => {
+    if (_isResetRoute) return 'auth';
+    if (_yookassaResult === 'paid') return 'order-detail';
+    if (_yookassaResult === 'failed') return 'order-new';  // переопределим если залогинен
+    if (_returnOrderId) return 'order-detail';
+    return 'order-new';
+  })();
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
-  // Default route for unauthenticated visitors is the new universal order form.
-  // ?order_id=N (yookassa return) → сразу order-detail.
-  const [route, setRoute] = useState(
-    _returnOrderId ? 'order-detail' : (_isResetRoute ? 'auth' : 'order-new')
-  );
+  const [route, setRoute] = useState(_initialRoute);
   const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
   const [user, setUser] = useState(null);
@@ -108,20 +121,30 @@ function App() {
           is_admin: !!data.is_admin,
         });
         setBalance(data.balance);
-        // Не перебиваем order-detail (yookassa return) — оставляем на нём.
-        if (!_returnOrderId) setRoute('cabinet');
+        // Route override на старте:
+        // - yookassa_return=failed + залогинен → orders (история);
+        //   незалогиненный остаётся на order-new (как _initialRoute уже выставил).
+        // - yookassa_return=paid → order-detail (не перебиваем).
+        // - просто ?order_id=N → order-detail (не перебиваем).
+        // - иначе обычно cabinet.
+        if (_yookassaResult === 'failed') {
+          setRoute('orders');
+        } else if (!_yookassaResult && !_returnOrderId) {
+          setRoute('cabinet');
+        }
       }
     }).catch(() => {
       localStorage.removeItem('access_token');
     }).finally(() => setAppLoading(false));
   }, []);
 
-  // Чистим ?order_id= из URL после первой загрузки — чтобы refresh не сбрасывал
-  // навигацию и URL выглядел опрятно.
+  // Чистим query (?yookassa_return, ?order_id) из URL после первой загрузки —
+  // чтобы refresh не сбрасывал навигацию и URL выглядел опрятно.
   useEffect(() => {
-    if (_returnOrderId && window.history && window.history.replaceState) {
+    if ((_yookassaResult || _returnOrderId) && window.history && window.history.replaceState) {
       const url = new URL(window.location.href);
       url.searchParams.delete('order_id');
+      url.searchParams.delete('yookassa_return');
       window.history.replaceState({}, '', url.toString());
     }
   }, []);

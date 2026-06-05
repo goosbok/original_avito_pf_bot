@@ -236,6 +236,62 @@ DROP TABLE guest_orders;
 6. Дальше — обычный flow (6.1 или 6.2)
 ```
 
+### 6.5 Account merge при привязке телефона к другому providers
+
+**Проблема.** Если порядок такой: гость сделал быстрый заказ → создался `phone-only-user` + `auth_providers(phone, +79..., verified=0)`. Затем тот же человек регистрируется через Telegram → шарит контакт в TG-боте → `link_provider(tg_user_id, 'phone', '+79...')` падает на `UNIQUE(provider, identifier)`. TG-юзер не получит свой заказ.
+
+Обратный порядок (сначала TG, потом быстрый заказ) работает автоматически — `find_or_create_user_by_phone` находит существующего и привязывает заказ.
+
+**Решение.** В `services/identity.py::link_provider` (и обёртка `link_phone_provider`) резолвим коллизию:
+
+```python
+def link_phone_provider(target_user_id: int, phone: str, *, set_verified: bool = False) -> None:
+    existing = SELECT * FROM auth_providers WHERE provider='phone' AND identifier=phone
+    if existing is None:
+        INSERT auth_providers(user_id=target_user_id, provider='phone',
+                              identifier=phone, verified=int(set_verified))
+        return
+    if existing.user_id == target_user_id:
+        if set_verified and not existing.verified:
+            UPDATE auth_providers SET verified=1 WHERE id=existing.id
+        return
+    # Коллизия: phone привязан к другому user_id.
+    other_user = users[existing.user_id]
+    if _is_phone_only_user(other_user):
+        # other был создан только быстрым заказом → переносим всё к target
+        merge_phone_only_into(other_user_id=other_user.id, target_user_id=target_user_id,
+                              set_verified=set_verified)
+    else:
+        # other — полноценный аккаунт (имеет TG/email/etc). Это редкий конфликт.
+        raise AccountMergeConflict(other.id, target_user_id, phone)
+
+def _is_phone_only_user(user) -> bool:
+    """True если у user единственный provider — phone и он verified=0."""
+    rows = SELECT provider, verified FROM auth_providers WHERE user_id=user.id
+    return len(rows) == 1 and rows[0].provider == 'phone' and rows[0].verified == 0
+
+def merge_phone_only_into(other_user_id, target_user_id, set_verified):
+    BEGIN TRANSACTION
+    UPDATE orders         SET user_id=target_user_id WHERE user_id=other_user_id
+    UPDATE refills        SET user_id=target_user_id WHERE user_id=other_user_id   -- если есть
+    UPDATE notifications  SET user_id=target_user_id WHERE user_id=other_user_id   -- если есть
+    UPDATE auth_providers SET user_id=target_user_id,
+                              verified=1 if set_verified else verified
+                          WHERE provider='phone' AND user_id=other_user_id
+    -- balance phone-only-юзера: обычно 0 (он не пополнял), но на всякий случай переносим
+    UPDATE users SET balance = balance + (SELECT balance FROM users WHERE id=other_user_id)
+                  WHERE id=target_user_id
+    DELETE FROM users WHERE id=other_user_id
+    COMMIT
+```
+
+**Когда вызывается:**
+
+- `handlers/connect.py` — при шеринге контакта в TG-боте. Вызов: `link_phone_provider(tg_user_id, phone, set_verified=True)` (Telegram сам верифицировал номер).
+- `POST /api/auth/phone/verify` — после успешного SMS-OTP. Если юзер уже залогинен (например, через email) и подтверждает номер — `link_phone_provider(session.user_id, phone, set_verified=True)` с возможным merge.
+
+**AccountMergeConflict.** Редкий кейс: два полноценных аккаунта (TG + email-юзер с тем же номером, например). Текущее решение — логируем + админу алёрт, юзеру 409. Автоматический мердж двух полных аккаунтов рискован (потеря балансов, путаница), требует ручного разрешения. В out-of-scope: UI для админа "слить аккаунты".
+
 ## 7. Frontend изменения
 
 ### 7.1 Удаляемые компоненты
@@ -374,6 +430,7 @@ Per принятому решению — никакой pre-validation. Вне�
 1. Миграция схемы БД (новые колонки в `orders`, `verified` в `auth_providers`, обобщение `otp_codes`, миграция данных из `guest_orders` + drop, миграция статусов `Posted/Completed/Cancelled/Pending` → `paid/done/cancelled/payment_failed` в существующих записях).
 2. Переименование старых статусов на новые во всех модулях кода: `services/orders.py`, `services/notifications.py`, `handlers/pf_order.py`, `handlers/profile.py`, `handlers/reviews.py`, `handlers/admin_orders.py`, `handlers/admin_reviews.py`, `web/schemas.py`, `web/static/components/Orders.jsx`, `web/static/components/AdminOrders.jsx`, `utils/googlesheets.py`, `scripts/seed_load_test_orders.py`.
 3. `services/sms.py` (gateway interface + StubGateway) и обобщённый `services/otp.py` под `channel`/`destination`.
+3a. `services/identity.py`: `link_phone_provider` с резолвом коллизии + `_is_phone_only_user` + `merge_phone_only_into`. Обновление `handlers/connect.py` для вызова новой функции при TG-шеринге контакта.
 4. `services/orders.py`: новые операции `create_unpaid`, `pay_with_balance`, `pay_with_yookassa`, `mark_paid`, `mark_payment_failed`. Удаление `create_pf_order` (старый "сразу с баланса").
 5. `services/payment_expiry.py` + регистрация asyncio task на FastAPI startup (`web/main.py`).
 6. `web/routers/orders.py`: новые эндпоинты (`POST /api/orders/pf`, `POST /api/orders/pf/{id}/pay`, `GET /api/orders/pf/{id}/payment-status`).
@@ -389,7 +446,7 @@ Per принятому решению — никакой pre-validation. Вне�
 **Unit tests:**
 - `tests/services/test_orders_new_flow.py` — `create_unpaid`, `pay_with_balance` (с проверкой атомарности), `mark_payment_failed` (с моком юкассы), TTL вычисление.
 - `tests/services/test_otp_unified.py` — issue/verify для channel='sms' и channel='telegram', rate-limits, expiry.
-- `tests/services/test_identity_phone.py` — `find_or_create_user_by_phone` — три кейса (новый, существующий phone, существующий TG-юзер с phone).
+- `tests/services/test_identity_phone.py` — `find_or_create_user_by_phone` — три кейса (новый, существующий phone, существующий TG-юзер с phone). Плюс `link_phone_provider` с резолвом коллизии: (а) phone-only-merge с переносом заказов и баланса, (б) `AccountMergeConflict` для двух полных аккаунтов, (в) идемпотентный re-link того же phone к тому же user.
 
 **Integration tests (FastAPI TestClient):**
 - `tests/web/test_order_pf_flow.py` — полный цикл: create unpaid → pay balance → done.

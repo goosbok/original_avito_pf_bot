@@ -22,7 +22,7 @@ from aiogram.types import (
 
 from data.loader import dp
 from services import identity
-from services.exceptions import ProviderAlreadyLinked
+from services.exceptions import AccountMergeConflict
 
 logger = logging.getLogger(__name__)
 
@@ -81,21 +81,26 @@ async def on_contact(message: Message, state: FSMContext, user_id: int) -> None:
         )
         return
 
+    # Telegram-shared контакт = подтверждённый владелец номера → verified=True.
+    # link_phone_provider сам резолвит коллизию: если phone привязан к phone-only
+    # юзеру (от быстрого заказа), его orders/refills/notifications/balance
+    # автоматически мерджатся в текущего user'а. Конфликт (AccountMergeConflict)
+    # бросается только если phone уже принадлежит полноценному чужому аккаунту.
     try:
-        identity.link_provider(user_id, "phone", phone, credential_hash=None)
-    except ProviderAlreadyLinked as exc:
-        logger.info(
-            "phone %s already linked to user %s (current user %s)",
+        identity.link_phone_provider(user_id, phone, set_verified=True)
+    except AccountMergeConflict as exc:
+        logger.warning(
+            "phone-merge conflict: phone=%s already on user_id=%s (current user_id=%s)",
             phone, exc.existing_user_id, user_id,
         )
         await message.answer(
-            "❌ Этот номер уже привязан к другому аккаунту. "
-            "Если это вы — войдите по нему и отвяжите его в личном кабинете.",
+            "⚠️ Этот номер уже привязан к другому аккаунту. "
+            "Свяжитесь с поддержкой для слияния — мы поможем переехать.",
             reply_markup=ReplyKeyboardRemove(),
         )
         return
     except Exception:
-        logger.exception("link_provider(phone) failed for user %s", user_id)
+        logger.exception("link_phone_provider(%s) failed for user %s", phone, user_id)
         await message.answer(
             "⚠️ Не удалось сохранить номер. Попробуйте позже.",
             reply_markup=ReplyKeyboardRemove(),

@@ -11,7 +11,11 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from services.db import connect
-from services.exceptions import ProviderAlreadyLinked, UserNotFound
+from services.exceptions import (
+    AccountMergeConflict,
+    ProviderAlreadyLinked,
+    UserNotFound,
+)
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,156 @@ def get_or_create_user_by_telegram(
     new_id = _create_user(user_name=user_name, first_name=first_name, ref_id=ref_id)
     link_provider(new_id, "telegram", str(tg_id))
     return new_id
+
+
+def find_or_create_user_by_phone(phone: str, *, verified: bool = False) -> int:
+    """Вернуть user_id, к которому привязан phone-provider.
+
+    Если phone-провайдер не привязан — создать нового user'а и привязать phone
+    (verified=0 по умолчанию: значит "введён в форме, ещё не подтверждён"; передавайте
+    verified=True после успешной SMS-OTP-верификации).
+
+    Не используется для merge-сценариев — для них есть `link_phone_provider`.
+    """
+    with connect() as con:
+        row = con.execute(
+            "SELECT user_id FROM auth_providers "
+            "WHERE provider='phone' AND identifier=?",
+            (phone,),
+        ).fetchone()
+        if row:
+            return int(row["user_id"])
+        cur = con.execute(
+            "INSERT INTO users(user_name, first_name, balance, reg_date) "
+            "VALUES (NULL, NULL, 0, ?)",
+            (_now_iso(),),
+        )
+        new_user_id = int(cur.lastrowid)
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (?, 'phone', ?, ?, ?)",
+            (new_user_id, phone, _now_iso(), 1 if verified else 0),
+        )
+        con.commit()
+        return new_user_id
+
+
+def _is_phone_only_user(con, user_id: int) -> bool:
+    """User считается phone-only, если у него ровно один provider — 'phone' с
+    verified=0. То есть запись, созданная в `find_or_create_user_by_phone` для
+    быстрого заказа, и больше ничего к нему не привязано. Такого user'а можно
+    безопасно мерджить в полноценный аккаунт без потери смысла.
+    """
+    rows = con.execute(
+        "SELECT provider, verified FROM auth_providers WHERE user_id=?",
+        (user_id,),
+    ).fetchall()
+    return (
+        len(rows) == 1
+        and rows[0]["provider"] == "phone"
+        and int(rows[0]["verified"] or 0) == 0
+    )
+
+
+def _merge_phone_only_into(
+    con, *, source_user_id: int, target_user_id: int, set_verified: bool
+) -> None:
+    """Перенести orders/refills/notifications/balance с phone-only-source на
+    реальный target. phone-provider пере-привязывается. Source-user удаляется.
+
+    Вспомогательные таблицы (refills, notifications) переносим под try — если
+    их в схеме нет (например, разные деплои / тесты), молча пропускаем.
+    """
+    con.execute(
+        "UPDATE orders SET user_id=? WHERE user_id=?",
+        (target_user_id, source_user_id),
+    )
+    try:
+        con.execute(
+            "UPDATE refills SET user_id=? WHERE user_id=?",
+            (target_user_id, source_user_id),
+        )
+    except Exception:
+        pass
+    try:
+        con.execute(
+            "UPDATE notifications SET user_id=? WHERE user_id=?",
+            (target_user_id, source_user_id),
+        )
+    except Exception:
+        pass
+    # phone-provider source → target, выставляем verified
+    con.execute(
+        "UPDATE auth_providers SET user_id=?, verified=? "
+        "WHERE provider='phone' AND user_id=?",
+        (target_user_id, 1 if set_verified else 0, source_user_id),
+    )
+    # Баланс source приклеиваем к target
+    src_row = con.execute(
+        "SELECT balance FROM users WHERE id=?", (source_user_id,)
+    ).fetchone()
+    if src_row:
+        con.execute(
+            "UPDATE users SET balance = balance + ? WHERE id=?",
+            (int(src_row["balance"] or 0), target_user_id),
+        )
+    # Удаляем source
+    con.execute("DELETE FROM users WHERE id=?", (source_user_id,))
+
+
+def link_phone_provider(
+    target_user_id: int,
+    phone: str,
+    *,
+    set_verified: bool = False,
+) -> None:
+    """Привязать phone к target_user_id, резолвя коллизию по UNIQUE(provider,identifier).
+
+    Правила:
+    - phone не привязан → INSERT.
+    - phone уже у target_user_id → no-op (опционально проставить verified=1).
+    - phone у другого user'а, который **phone-only** (verified=0, единственный
+      provider) → мерджим того user'а в target (orders/refills/notifications/balance).
+    - В остальных случаях (другой user полноценный или phone у него verified=1)
+      → `AccountMergeConflict`.
+    """
+    with connect() as con:
+        existing = con.execute(
+            "SELECT id, user_id, verified FROM auth_providers "
+            "WHERE provider='phone' AND identifier=?",
+            (phone,),
+        ).fetchone()
+
+        if existing is None:
+            con.execute(
+                "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+                "VALUES (?, 'phone', ?, ?, ?)",
+                (target_user_id, phone, _now_iso(), 1 if set_verified else 0),
+            )
+            con.commit()
+            return
+
+        if int(existing["user_id"]) == target_user_id:
+            if set_verified and not int(existing["verified"] or 0):
+                con.execute(
+                    "UPDATE auth_providers SET verified=1 WHERE id=?",
+                    (existing["id"],),
+                )
+                con.commit()
+            return
+
+        other_user_id = int(existing["user_id"])
+        if _is_phone_only_user(con, other_user_id):
+            _merge_phone_only_into(
+                con,
+                source_user_id=other_user_id,
+                target_user_id=target_user_id,
+                set_verified=set_verified,
+            )
+            con.commit()
+            return
+
+        raise AccountMergeConflict(other_user_id, target_user_id, phone)
 
 
 def get_or_create_user_by_email(

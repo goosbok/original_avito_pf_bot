@@ -49,7 +49,8 @@ async def request_code(body: RequestCodeBody) -> dict:
         raise HTTPException(
             status_code=429,
             detail=f"Слишком частые запросы. Подождите {exc.retry_after_seconds} сек.",
-        )
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     try:
         sms.get_gateway().send_code(phone, code)
     except Exception:

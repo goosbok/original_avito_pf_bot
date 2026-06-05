@@ -16,6 +16,7 @@ import httpx
 from services import identity, otp
 from services.db import connect
 from services.exceptions import BotCantReachUser, OTPInvalid
+from utils.phones import normalize_phone
 
 
 # Telegram's official minimum is 5, but we relax to 1 to support short test usernames
@@ -24,37 +25,6 @@ _USERNAME_RE = re.compile(r"^@?([A-Za-z0-9_]{1,32})$")
 
 # Strip whitespace, parentheses, dashes from user-entered phone numbers.
 _PHONE_STRIP_RE = re.compile(r"[\s()\-]+")
-
-
-def _normalize_phone(raw: str) -> str | None:
-    """Return E.164-ish phone (+digits) if the input looks like a phone, else None.
-
-    Rules:
-    - Strip whitespace, parentheses, dashes.
-    - If starts with '+' and the rest is all digits → keep as-is.
-    - If 11 digits starting with '8' → replace leading '8' with '+7' (RU).
-    - If 11 digits starting with '7' → prepend '+'.
-    - If 10–15 digits → prepend '+' (already international without the plus).
-    - Otherwise: None (not a phone).
-    """
-    s = _PHONE_STRIP_RE.sub("", raw)
-    if not s:
-        return None
-    if s.startswith("+"):
-        rest = s[1:]
-        if rest.isdigit() and 10 <= len(rest) <= 15:
-            return "+" + rest
-        return None
-    if not s.isdigit():
-        return None
-    # All digits at this point.
-    if len(s) == 11 and s.startswith("8"):
-        return "+7" + s[1:]
-    if len(s) == 11 and s.startswith("7"):
-        return "+" + s
-    if 10 <= len(s) <= 15:
-        return "+" + s
-    return None
 
 
 def _looks_like_phone(identifier: str) -> bool:
@@ -80,7 +50,7 @@ def resolve_telegram_id(identifier: str) -> int:
     # Phone path: check first so that numeric phones like 89001234567 / 79001234567
     # don't get treated as Telegram numeric IDs.
     if _looks_like_phone(identifier):
-        phone = _normalize_phone(identifier)
+        phone = normalize_phone(identifier)
         if phone is None:
             raise OTPInvalid(f"unknown identifier format: {identifier!r}")
         with connect() as con:

@@ -1,6 +1,8 @@
 """Pydantic-схемы для запросов и ответов веб-API."""
 from __future__ import annotations
 
+from typing import Literal, Optional
+
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
@@ -148,10 +150,14 @@ class PFPriceResponse(BaseModel):
 
 
 class PFOrderRequest(BaseModel):
-    links: list[str] = Field(min_length=1)
-    days: int = Field(gt=0)
-    fix_count: int = Field(ge=5)
-    contacts: bool
+    """Запрос на создание unpaid PF-заказа. phone обязателен для гостей."""
+    links: list[str] = Field(..., min_length=1, max_length=20)
+    days: int = Field(..., ge=1, le=90)
+    fix_count: int = Field(..., ge=1, le=200)
+    contacts: bool = False
+    agreed_privacy: bool
+    agreed_offer: bool
+    phone: Optional[str] = None
 
     @field_validator("links")
     @classmethod
@@ -164,8 +170,28 @@ class PFOrderRequest(BaseModel):
 
 class PFOrderResponse(BaseModel):
     order_id: int
-    total_price: int
-    status: str
+    price: int
+    available_methods: list[Literal["balance", "yookassa"]]
+
+
+class OrderPayRequest(BaseModel):
+    method: Literal["balance", "yookassa"]
+
+
+class OrderPayBalanceResponse(BaseModel):
+    status: Literal["paid"]
+    order_id: int
+
+
+class OrderPayYookassaResponse(BaseModel):
+    confirmation_url: str
+    expires_at: str  # ISO timestamp
+
+
+class OrderPaymentStatusResponse(BaseModel):
+    status: Literal["unpaid", "paid", "payment_failed", "done", "failed", "cancelled"]
+    order_id: int
+    time_remaining_seconds: Optional[int] = None
 
 
 class PaymentAvailableResponse(BaseModel):

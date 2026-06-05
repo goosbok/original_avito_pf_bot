@@ -13,16 +13,11 @@
 
 Дальше — terminal статусы: `done` (накрутка выполнена), `failed` (накрутка
 не выполнена), `cancelled` (отменён до или после оплаты).
-
-`create_pf_order` / `PFOrderResult` оставлены как deprecated shim для
-обратной совместимости с `web/routers/orders.py` — Task 11 рефакторит роутер
-под новые эндпоинты, тогда их можно будет убрать.
 """
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from services.db import connect
@@ -35,9 +30,7 @@ from services.exceptions import (
     UserNotFound,
 )
 from utils.sqlite3 import (
-    add_order,
     get_price,
-    get_users_last_order,
     user_orders_count,
     user_orders_paginated,
 )
@@ -52,14 +45,6 @@ logger = logging.getLogger(__name__)
 TTL_NO_METHOD_MINUTES = 60
 TTL_YOOKASSA_MINUTES = 10
 TTL_BALANCE_MINUTES = 30
-
-
-@dataclass
-class PFOrderResult:
-    """DEPRECATED. Возвращается из устаревшего `create_pf_order`. Удалится в Task 11."""
-    order_id: int
-    total_price: int
-    status: str
 
 
 def _now() -> datetime:
@@ -311,39 +296,3 @@ def list_orders(user_id: int, page: int = 1, page_size: int = 20) -> tuple[list[
     items = user_orders_paginated(user_id, limit=page_size, offset=offset)
     total = user_orders_count(user_id)
     return items, total
-
-
-# === DEPRECATED: старый «одношаговый» flow ===
-
-
-def create_pf_order(
-    user_id: int,
-    links: list[str],
-    days: int,
-    fix_count: int,
-    contacts: bool,
-) -> PFOrderResult:
-    """DEPRECATED — оставлено для обратной совместимости c web/routers/orders.py
-    до Task 11 (где роутер переезжает на новый flow). Эта функция: создаёт unpaid,
-    оплачивает с баланса (как раньше), возвращает PFOrderResult.
-
-    Сохраняет старую семантику: одно действие → либо paid, либо ошибка.
-    """
-    with connect() as con:
-        row = con.execute(
-            "SELECT id, user_name FROM users WHERE id = ?", (user_id,),
-        ).fetchone()
-    if row is None:
-        raise UserNotFound(f"user_id={user_id}")
-
-    order_id = create_unpaid(
-        user_id=user_id, links=links, days=days, fix_count=fix_count,
-        contacts=contacts, phone=None,
-    )
-    pay_with_balance(order_id=order_id, user_id=user_id)
-    order = get_order(order_id)
-    return PFOrderResult(
-        order_id=order_id,
-        total_price=int(order["price"]),
-        status="paid",
-    )

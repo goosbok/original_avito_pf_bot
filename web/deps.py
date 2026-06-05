@@ -61,3 +61,24 @@ async def current_caller(
 async def require_user(caller: CurrentCaller = Depends(current_caller)) -> int:
     """Convenience: возвращает только user_id, для роутеров, которым source неважен."""
     return caller.user_id
+
+
+async def get_current_user_optional(
+    authorization: str | None = Header(None),
+) -> Optional[int]:
+    """Опциональная авторизация: вернёт user_id или None.
+
+    Используется на эндпоинтах, доступных и гостям, и залогиненным
+    (тот же путь решает, гость ли это и нужен ли phone).
+
+    Намеренно не поддерживает X-API-Key — гостевые сценарии всегда web/JWT.
+    """
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None
+    token = authorization[7:].strip()
+    if not token:
+        return None
+    try:
+        return decode_jwt(token)
+    except jwt.InvalidTokenError:
+        return None

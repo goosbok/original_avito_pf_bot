@@ -9,7 +9,6 @@ GET  /api/orders/pf/{id}/payment-status— polling статуса (probes YooKas
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -32,6 +31,7 @@ from services.payment_probe import is_yookassa_enabled
 from utils.phones import normalize_phone
 from web.deps import get_current_user_optional, require_user
 from web.schemas import (
+    OrderDetailResponse,
     OrderItem,
     OrderListResponse,
     OrderPayBalanceResponse,
@@ -55,7 +55,7 @@ def _available_methods(user_id: Optional[int], price: int) -> list[str]:
     Авторизованный — balance (если хватает) и yookassa (если включён).
     """
     methods: list[str] = []
-    if user_id is not None and method_enabled("balance"):
+    if user_id is not None:
         try:
             if get_balance(user_id) >= price:
                 methods.append("balance")
@@ -158,12 +158,16 @@ async def pay(
             raise HTTPException(403, "balance доступен только владельцу заказа")
         try:
             svc.pay_with_balance(order_id=order_id, user_id=user_id)
+        except OrderNotFound:
+            raise HTTPException(404, "order not found")
+        except UserNotFound:
+            raise HTTPException(404, "user not found")
         except InsufficientBalance:
             raise HTTPException(400, "Недостаточно средств на балансе")
         except OrderStatusConflict as exc:
             raise HTTPException(409, str(exc))
-        except PaymentExpired as exc:
-            raise HTTPException(409, str(exc))
+        except PaymentExpired:
+            raise HTTPException(409, "Срок оплаты истёк")
         return OrderPayBalanceResponse(status="paid", order_id=order_id)
 
     if body.method == "yookassa":
@@ -173,10 +177,14 @@ async def pay(
             return_url = f"/api/orders/pf/{order_id}"
         try:
             confirm_url, _ = svc.pay_with_yookassa(order_id=order_id, return_url=return_url)
+        except OrderNotFound:
+            raise HTTPException(404, "order not found")
+        except UserNotFound:
+            raise HTTPException(404, "user not found")
         except OrderStatusConflict as exc:
             raise HTTPException(409, str(exc))
-        except PaymentExpired as exc:
-            raise HTTPException(409, str(exc))
+        except PaymentExpired:
+            raise HTTPException(409, "Срок оплаты истёк")
         except PaymentError as exc:
             raise HTTPException(502, f"Ошибка платёжной системы: {exc}")
         order = svc.get_order(order_id)
@@ -188,12 +196,27 @@ async def pay(
     raise HTTPException(400, f"unknown method: {body.method}")
 
 
-@router.get("/pf/{order_id}", name="get_order_detail")
-async def get_order_detail(order_id: int):
+@router.get("/pf/{order_id}", name="get_order_detail", response_model=OrderDetailResponse)
+async def get_order_detail(order_id: int) -> OrderDetailResponse:
+    """Карточка заказа. Эндпоинт ПУБЛИЧНЫЙ (используется как return_url YooKassa
+    для гостей без сессии), поэтому отдаёт строгий whitelist — без phone,
+    payment_id, user_id, user_name.
+    """
     try:
-        return svc.get_order(order_id)
+        order = svc.get_order(order_id)
     except OrderNotFound:
         raise HTTPException(404, "order not found")
+    return OrderDetailResponse(
+        order_id=int(order["increment"]),
+        status=str(order["status"] or ""),
+        price=int(order["price"] or 0),
+        position_name=str(order["position_name"] or ""),
+        links=str(order["links"] or ""),
+        contacts=bool(order["contacts"]),
+        date=str(order["date"]) if order["date"] else None,
+        payment_method=str(order["payment_method"]) if order["payment_method"] else None,
+        payment_expires_at=str(order["payment_expires_at"]) if order["payment_expires_at"] else None,
+    )
 
 
 @router.get("/pf/{order_id}/payment-status", response_model=OrderPaymentStatusResponse)

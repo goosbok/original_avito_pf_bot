@@ -194,6 +194,25 @@ class OrderPaymentStatusResponse(BaseModel):
     time_remaining_seconds: Optional[int] = None
 
 
+class OrderDetailResponse(BaseModel):
+    """Narrow response for GET /api/orders/pf/{id}.
+
+    UNAUTHENTICATED endpoint (YooKassa redirects guests back here without a session),
+    so the protection is the *whitelist*: only non-sensitive fields are exposed.
+
+    EXCLUDED on purpose: phone, payment_id, user_id, user_name.
+    """
+    order_id: int
+    status: str
+    price: int
+    position_name: str
+    links: str
+    contacts: bool
+    date: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_expires_at: Optional[str] = None
+
+
 class PaymentAvailableResponse(BaseModel):
     available: bool
 

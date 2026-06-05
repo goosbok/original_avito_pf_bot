@@ -5,9 +5,32 @@ Routers подключаются ниже по мере добавления (в
 """
 from __future__ import annotations
 
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
-app = FastAPI(title="Avito PF Bot Web", version="0.1.0")
+from services.payment_expiry import run_expiry_loop
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Старт/стоп фоновых задач приложения."""
+    expiry_task = asyncio.create_task(run_expiry_loop())
+    try:
+        yield
+    finally:
+        expiry_task.cancel()
+        try:
+            await expiry_task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
+
+
+app = FastAPI(title="Avito PF Bot Web", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/api/health")

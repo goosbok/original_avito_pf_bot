@@ -50,6 +50,9 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   // Wizard state
   const [step, setStep] = useOrderState(1);
   const [loading, setLoading] = useOrderState(false);
+  // ref-guard от двойного сабмита: setLoading(true) применяется на следующем
+  // рендере, а быстрый dbl-click успевает выстрелить второй submitToBackend.
+  const submittingRef = React.useRef(false);
   const [error, setError] = useOrderState('');
   const [pricePerUnit, setPricePerUnit] = useOrderState(6);
 
@@ -81,6 +84,8 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   const removeLink = url => setLinks(prev => prev.filter(u => u !== url));
 
   const submitToBackend = async (phoneArg) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true); setError('');
     try {
       const data = await api.post('/api/orders/pf', {
@@ -98,6 +103,7 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
       setError(e.message || 'Не удалось создать заказ');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -135,6 +141,8 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
 
   const handlePay = async (method) => {
     if (!createdOrder) return;
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setLoading(true); setError('');
     try {
       const data = await api.post(`/api/orders/pf/${createdOrder.order_id}/pay`, { method });
@@ -153,6 +161,7 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
       else setError(e.message || 'Ошибка оплаты');
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

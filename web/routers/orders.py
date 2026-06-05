@@ -9,6 +9,7 @@ GET  /api/orders/pf/{id}/payment-status— polling статуса (probes YooKas
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -171,12 +172,20 @@ async def pay(
         return OrderPayBalanceResponse(status="paid", order_id=order_id)
 
     if body.method == "yookassa":
+        # return_url должен вести на фронтенд (SPA), а не на /api/* JSON-эндпоинт.
+        # Берём scheme+host из текущего запроса и добавляем ?order_id=<N> —
+        # app.jsx при загрузке распарсит этот параметр и сразу откроет OrderDetail.
         try:
-            return_url = str(request.url_for("get_order_detail", order_id=order_id))
+            base = f"{request.url.scheme}://{request.url.netloc}"
+            return_url = f"{base}/?order_id={order_id}"
         except Exception:
-            return_url = f"/api/orders/pf/{order_id}"
+            return_url = f"/?order_id={order_id}"
         try:
-            confirm_url, _ = svc.pay_with_yookassa(order_id=order_id, return_url=return_url)
+            # yookassa SDK делает sync HTTP — пускаем в thread pool, чтобы
+            # не блокировать asyncio event loop на 5-15 секунд.
+            confirm_url, _ = await asyncio.to_thread(
+                svc.pay_with_yookassa, order_id=order_id, return_url=return_url
+            )
         except OrderNotFound:
             raise HTTPException(404, "order not found")
         except UserNotFound:
@@ -236,9 +245,12 @@ async def payment_status(order_id: int) -> OrderPaymentStatusResponse:
             from data.config import SECRET_KEY, SHOP_ID
             from yookassa import Configuration, Payment
 
-            Configuration.account_id = SHOP_ID
-            Configuration.secret_key = SECRET_KEY
-            p = Payment.find_one(order["payment_id"])
+            def _probe(payment_id):
+                Configuration.account_id = SHOP_ID
+                Configuration.secret_key = SECRET_KEY
+                return Payment.find_one(payment_id)
+
+            p = await asyncio.to_thread(_probe, order["payment_id"])
             if p.status == "succeeded":
                 svc.mark_paid(order_id)
                 return OrderPaymentStatusResponse(status="paid", order_id=order_id)

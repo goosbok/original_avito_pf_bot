@@ -11,17 +11,26 @@ const TWEAK_DEFAULTS = {
 function App() {
   const _resetToken = new URLSearchParams(window.location.search).get('token');
   const _isResetRoute = window.location.pathname === '/reset-password' && !!_resetToken;
+  // YooKassa return_url добавляет ?order_id=N — после возврата открываем OrderDetail.
+  const _returnOrderId = (() => {
+    const raw = new URLSearchParams(window.location.search).get('order_id');
+    const n = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   // Default route for unauthenticated visitors is the new universal order form.
-  const [route, setRoute] = useState(_isResetRoute ? 'auth' : 'order-new');
+  // ?order_id=N (yookassa return) → сразу order-detail.
+  const [route, setRoute] = useState(
+    _returnOrderId ? 'order-detail' : (_isResetRoute ? 'auth' : 'order-new')
+  );
   const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [detailOrderId, setDetailOrderId] = useState(null);
+  const [detailOrderId, setDetailOrderId] = useState(_returnOrderId);
   const [prefilledOrder, setPrefilledOrder] = useState(() => {
     try {
       const raw = sessionStorage.getItem('order_prefill');
@@ -99,11 +108,22 @@ function App() {
           is_admin: !!data.is_admin,
         });
         setBalance(data.balance);
-        setRoute('cabinet');
+        // Не перебиваем order-detail (yookassa return) — оставляем на нём.
+        if (!_returnOrderId) setRoute('cabinet');
       }
     }).catch(() => {
       localStorage.removeItem('access_token');
     }).finally(() => setAppLoading(false));
+  }, []);
+
+  // Чистим ?order_id= из URL после первой загрузки — чтобы refresh не сбрасывал
+  // навигацию и URL выглядел опрятно.
+  useEffect(() => {
+    if (_returnOrderId && window.history && window.history.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('order_id');
+      window.history.replaceState({}, '', url.toString());
+    }
   }, []);
 
   const refreshBalance = () => {

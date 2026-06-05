@@ -317,7 +317,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             Войти через Email
           </span>
           {' · '}
-          <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
+          <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
         </div>
       </div>
     </div>
@@ -490,7 +490,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 Войти через Telegram
               </span>
               {' · '}
-              <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
+              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
             </div>
           </>
         ) : (
@@ -531,7 +531,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
               >Зарегистрироваться</span>
               {' · '}
-              <span onClick={() => onNavigate('landing')} style={{ cursor: 'pointer' }}>На главную</span>
+              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
             </div>
           </>
         )}

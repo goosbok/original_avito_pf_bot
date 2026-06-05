@@ -11,22 +11,17 @@ const TWEAK_DEFAULTS = {
 function App() {
   const _resetToken = new URLSearchParams(window.location.search).get('token');
   const _isResetRoute = window.location.pathname === '/reset-password' && !!_resetToken;
-  const _guestOrderId = new URLSearchParams(window.location.search).get('guest_order_id');
-  const _isGuestReturn = !!_guestOrderId;
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   // Default route for unauthenticated visitors is the new universal order form.
-  // Guest returning from YooKassa (?guest_order_id=N) goes straight to order-detail.
-  // Legacy 'landing' route still exists (rendered by LandingPage) — Task 15 will remove it.
-  const [route, setRoute] = useState(_isGuestReturn ? 'order-detail' : (_isResetRoute ? 'auth' : 'order-new'));
+  const [route, setRoute] = useState(_isResetRoute ? 'auth' : 'order-new');
   const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
-  const [guestOrderId] = useState(_guestOrderId);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
-  const [detailOrderId, setDetailOrderId] = useState(_isGuestReturn ? Number(_guestOrderId) : null);
+  const [detailOrderId, setDetailOrderId] = useState(null);
   const [prefilledOrder, setPrefilledOrder] = useState(() => {
     try {
       const raw = sessionStorage.getItem('order_prefill');
@@ -229,7 +224,6 @@ function App() {
       }
     }
     switch (route) {
-      case 'landing':  return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
       case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} resetToken={resetToken} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
       // 'order-new' is the new unified form. 'order-pf' kept as alias for legacy callsites.
@@ -241,10 +235,6 @@ function App() {
                  onNavigate={handleNavigate}
                  onOrderPlaced={handleOrderPlaced}
                />;
-      case 'guest-order-pf':      return <GuestOrderForm onNavigate={handleNavigate} />;
-      // Backwards-compat: GuestOrderSuccess will be deleted in Task 15. Until then,
-      // a guest returning from YooKassa (?guest_order_id=N) lands on order-detail.
-      case 'guest-order-success': return <OrderDetailPage orderId={detailOrderId || Number(guestOrderId)} user={user} onNavigate={handleNavigate} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
       case 'notifications': return <NotificationsPage onNavigate={handleNavigate} />;
       case 'order-detail': return <OrderDetailPage

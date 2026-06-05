@@ -1,5 +1,5 @@
 // AddedLinksList — render the "Добавленные объявления" list shared by
-// OrderForm and GuestOrderForm. Renders nothing when the list is empty.
+// OrderForm steps. Renders nothing when the list is empty.
 function AddedLinksList({ links, onRemove }) {
   if (!links || links.length === 0) return null;
   return (

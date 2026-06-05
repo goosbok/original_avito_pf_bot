@@ -282,7 +282,7 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
     <div className="page-wrap">
       <div className="order-page">
         <div className="container" style={{ maxWidth: 900 }}>
-          <button className="order-back" onClick={() => onNavigate(user ? 'cabinet' : 'landing')}>← Назад</button>
+          <button className="order-back" onClick={() => onNavigate(user ? 'cabinet' : 'order-new')}>← Назад</button>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Авито ПФ</h1>

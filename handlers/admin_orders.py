@@ -77,7 +77,7 @@ async def orders_man(call: types.CallbackQuery, state: FSMContext):
     posted_cnt = 0
     for order in orders:
         total_payed += int(order['price'])
-        if order['status'] == 'Completed':
+        if order['status'] == 'done':
             completed_cnt += 1
         else:
             posted_cnt += 1
@@ -222,12 +222,20 @@ async def order_work_start(message: types.Message, state: FSMContext):
     pos = order['position_name'].split('/')
     days_suff = get_days_suffix(pos[0])
     pos_name = f"{pos[0]} {days_suff} / {pos[1]} ПФ"
-    if order['status'] == 'Posted':
-        status = 'Размещён'
-    elif order['status'] == 'Completed':
-        status = 'Выполнен'
-    else:
+    if order['status'] == 'paid':
         status = 'В работе'
+    elif order['status'] == 'done':
+        status = 'Выполнен'
+    elif order['status'] == 'failed':
+        status = 'Ошибка накрутки'
+    elif order['status'] == 'payment_failed':
+        status = 'Не оплачен'
+    elif order['status'] == 'cancelled':
+        status = 'Отменён'
+    elif order['status'] == 'unpaid':
+        status = 'Ожидает оплаты'
+    else:
+        status = order['status']
     if order['contacts']:
         cont = '✅Да'
     else:
@@ -262,7 +270,7 @@ async def order_finish(message: types.Message, state: FSMContext):
         await state.finish()
         return
     old_status = str(order1.get('status') or '')
-    edit_order(status="Completed", order=order)
+    edit_order(status="done", order=order)
 
     from services.notifications import notify_order_status_changed
     await notify_order_status_changed(
@@ -270,7 +278,7 @@ async def order_finish(message: types.Message, state: FSMContext):
         kind="order",
         order_id=int(order),
         old_status=old_status,
-        new_status="Completed",
+        new_status="done",
     )
 
     await bot.send_message(chat_id=message.from_user.id, text="✅ Успешно")
@@ -314,9 +322,9 @@ async def admin_call_orders_by_status(call: types.CallbackQuery, state: FSMConte
         logger.debug("could not delete message")
     action = call.data.split('_')[1]
     if action == "completed":
-        sort_orders = all_orders_by_status('Completed')
+        sort_orders = all_orders_by_status('done')
     elif action == "posted":
-        sort_orders = all_orders_by_status('Posted')
+        sort_orders = all_orders_by_status('paid')
     else:
         await call.message.answer("⚠️ Неизвестное действие.", reply_markup=admin_back_kb('orders_man'))
         return

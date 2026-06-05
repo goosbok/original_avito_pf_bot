@@ -1,7 +1,7 @@
 // AdminOrders — admin view of all orders with status edit.
 const { useState: useAdmOState, useEffect: useAdmOEffect } = React;
 
-const ADMIN_STATUSES = ['Posted', 'Pending', 'Completed', 'Cancelled'];
+const ADMIN_STATUSES = ['unpaid', 'paid', 'done', 'failed', 'payment_failed', 'cancelled'];
 
 function AdminOrders({ onNavigate }) {
   const [statusFilter, setStatusFilter] = useAdmOState('all');

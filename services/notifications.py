@@ -11,9 +11,11 @@ import sqlite3
 logger = logging.getLogger(__name__)
 
 _TEMPLATES: dict[tuple[str, str], str] = {
-    ("order", "Posted"):    "📌 Заказ №{order_id} размещён.",
-    ("order", "Completed"): "✅ Заказ №{order_id} выполнен.",
-    ("order", "Cancelled"): "❌ Заказ №{order_id} отменён.",
+    ("order", "paid"):           "📌 Заказ №{order_id} оплачен и принят в работу.",
+    ("order", "done"):           "✅ Заказ №{order_id} выполнен.",
+    ("order", "failed"):         "❌ Заказ №{order_id} не выполнен. Свяжитесь с поддержкой.",
+    ("order", "payment_failed"): "⏱ Заказ №{order_id} не оплачен в срок.",
+    ("order", "cancelled"):      "🚫 Заказ №{order_id} отменён.",
     ("order_review", "Completed"):
         "🎉 Заказ №{order_id} на отзыв ({service}) выполнен.",
     ("order_delreview", "Completed"):

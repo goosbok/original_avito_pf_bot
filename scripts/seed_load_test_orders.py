@@ -24,7 +24,7 @@ from utils.dates import now_iso  # noqa: E402
 MARKER = "LOAD_TEST_3K"
 DB_PATH = os.getenv("DATABASE_PATH", "/app/storage/database.db")
 
-STATUS_CYCLE = ("Posted", "Completed", "Pending")
+STATUS_CYCLE = ("paid", "done", "payment_failed")
 POSITION_CYCLE = ("3 дня/200ПФ", "7 дней/500ПФ", "14 дней/1000ПФ")
 
 

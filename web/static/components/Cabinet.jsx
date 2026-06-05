@@ -14,8 +14,22 @@ const SERVICES = [
 const PRESETS = [500, 1000, 2000];
 
 function StatusBadge({ status }) {
-  const map = { Posted: 'posted', Completed: 'completed', Cancelled: 'cancelled', Pending: 'pending' };
-  const labels = { Posted: 'В работе', Completed: 'Завершён', Cancelled: 'Отменён', Pending: 'Ожидание' };
+  const map = {
+    unpaid: 'pending',
+    paid: 'posted',
+    done: 'completed',
+    failed: 'cancelled',
+    payment_failed: 'muted',
+    cancelled: 'muted',
+  };
+  const labels = {
+    unpaid: 'Ожидает оплаты',
+    paid: 'В работе',
+    done: 'Выполнен',
+    failed: 'Ошибка накрутки',
+    payment_failed: 'Не оплачен',
+    cancelled: 'Отменён',
+  };
   return <span className={`badge badge--${map[status] || 'muted'}`}>{labels[status] || status}</span>;
 }
 

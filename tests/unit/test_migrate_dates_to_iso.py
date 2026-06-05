@@ -15,7 +15,7 @@ def _insert_order(db: Path, date_value: str | None) -> int:
     with sqlite3.connect(db) as con:
         cur = con.execute(
             "INSERT INTO orders (user_id, price, position_name, status, links, date, contacts, user_name) "
-            "VALUES (1, 100, '7/30', 'Posted', '[]', ?, 0, 'test')",
+            "VALUES (1, 100, '7/30', 'paid', '[]', ?, 0, 'test')",
             (date_value,),
         )
         con.commit()

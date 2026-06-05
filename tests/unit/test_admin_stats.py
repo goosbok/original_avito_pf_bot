@@ -27,7 +27,7 @@ def _seed(tmp_db: Path):
         )
         con.execute(
             f"INSERT INTO orders(user_id, price, position_name, status, links, date, contacts, user_name) "
-            f"VALUES (10, 1260, '7/30', 'Posted', '', '{today} 10:00:00', 0, 'alice')"
+            f"VALUES (10, 1260, '7/30', 'paid', '', '{today} 10:00:00', 0, 'alice')"
         )
         con.execute(
             "INSERT INTO support_messages(user_id, direction, text, created_at) "

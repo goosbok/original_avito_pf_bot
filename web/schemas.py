@@ -291,7 +291,7 @@ class AdminOrderListResponse(BaseModel):
     page_size: int
 
 
-_ORDER_STATUSES = ("Posted", "Completed", "Cancelled", "Pending")
+_ORDER_STATUSES = ("unpaid", "paid", "done", "failed", "payment_failed", "cancelled")
 
 
 class AdminOrderStatusChange(BaseModel):

@@ -156,6 +156,20 @@ def _write_tab(tab_title, sheet_id, columns, column_widths):
     return f"https://docs.google.com/spreadsheets/d/{GSHEETS_TARGET_SHEET_ID}/edit#gid={sheet_id}"
 
 
+_ORDER_STATUS_RU = {
+    'unpaid': 'Ожидает оплаты',
+    'paid': 'В работе',
+    'done': 'Выполнен',
+    'failed': 'Ошибка накрутки',
+    'payment_failed': 'Не оплачен',
+    'cancelled': 'Отменён',
+}
+
+
+def _order_status_ru(status):
+    return _ORDER_STATUS_RU.get(status, status)
+
+
 def get_user_str(user):
     if user and user['user_name']:
         return user['user_name']
@@ -220,10 +234,7 @@ def create_sheet():
                 contacts.append('Да' if order['contacts'] else 'Нет')
                 position.append(order['position_name'])
                 prices.append(order['price'])
-                status.append(
-                    'Размещён' if order['status'] == 'Posted'
-                    else ('Выполнен' if order['status'] == 'Completed' else order['status'])
-                )
+                status.append(_order_status_ru(order['status']))
                 dates.append(format_display(order['date']))
         db_offset += DB_BATCH_SIZE
 
@@ -287,10 +298,7 @@ def create_orders_report(user_id):
             contacts.append('Да' if order['contacts'] else 'Нет')
             position_name.append(order['position_name'])
             prices.append(order['price'])
-            status.append(
-                'Размещён' if order['status'] == 'Posted'
-                else ('Выполнен' if order['status'] == 'Completed' else order['status'])
-            )
+            status.append(_order_status_ru(order['status']))
             reg_date.append(format_display(order['date']))
         db_offset += DB_BATCH_SIZE
 

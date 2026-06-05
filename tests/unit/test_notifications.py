@@ -6,19 +6,31 @@ import asyncio
 import pytest
 
 
-def test_build_text_order_posted():
+def test_build_text_order_paid():
     from services.notifications import _build_text
-    assert _build_text("order", "Posted", order_id=5) == "📌 Заказ №5 размещён."
+    assert _build_text("order", "paid", order_id=5) == "📌 Заказ №5 оплачен и принят в работу."
 
 
-def test_build_text_order_completed():
+def test_build_text_order_done():
     from services.notifications import _build_text
-    assert _build_text("order", "Completed", order_id=42) == "✅ Заказ №42 выполнен."
+    assert _build_text("order", "done", order_id=42) == "✅ Заказ №42 выполнен."
+
+
+def test_build_text_order_failed():
+    from services.notifications import _build_text
+    assert _build_text("order", "failed", order_id=7) == (
+        "❌ Заказ №7 не выполнен. Свяжитесь с поддержкой."
+    )
+
+
+def test_build_text_order_payment_failed():
+    from services.notifications import _build_text
+    assert _build_text("order", "payment_failed", order_id=8) == "⏱ Заказ №8 не оплачен в срок."
 
 
 def test_build_text_order_cancelled():
     from services.notifications import _build_text
-    assert _build_text("order", "Cancelled", order_id=7) == "❌ Заказ №7 отменён."
+    assert _build_text("order", "cancelled", order_id=9) == "🚫 Заказ №9 отменён."
 
 
 def test_build_text_order_review_completed():
@@ -38,7 +50,7 @@ def test_build_text_order_delreview_completed():
 def test_build_text_unknown_status_returns_none():
     from services.notifications import _build_text
     assert _build_text("order", "Pending", order_id=1) is None
-    assert _build_text("order", "In progress", order_id=1) is None
+    assert _build_text("order", "in_progress", order_id=1) is None
 
 
 def test_build_text_unknown_kind_returns_none():
@@ -52,7 +64,7 @@ def test_build_text_review_with_cancelled_not_supported():
 
 
 def _insert_notification(tmp_db, *, user_id: int, kind: str = "order",
-                        order_id: int = 1, new_status: str = "Completed",
+                        order_id: int = 1, new_status: str = "done",
                         text: str = "test", read_at: str | None = None) -> int:
     import sqlite3
     with sqlite3.connect(tmp_db) as con:
@@ -152,7 +164,7 @@ def test_notify_noop_when_same_status(tmp_db, monkeypatch):
 
     asyncio.run(notifications.notify_order_status_changed(
         user_id=10, kind="order", order_id=1,
-        old_status="Completed", new_status="Completed",
+        old_status="done", new_status="done",
     ))
     assert notifications.unread_count(user_id=10) == 0
     assert sent == []
@@ -168,7 +180,7 @@ def test_notify_skips_status_outside_whitelist(tmp_db, monkeypatch):
 
     asyncio.run(notifications.notify_order_status_changed(
         user_id=10, kind="order", order_id=1,
-        old_status="Posted", new_status="Pending",
+        old_status="paid", new_status="in_progress",
     ))
     assert notifications.unread_count(user_id=10) == 0
     assert sent == []
@@ -186,14 +198,14 @@ def test_notify_inserts_row_and_pushes_tg(tmp_db, monkeypatch):
 
     asyncio.run(notifications.notify_order_status_changed(
         user_id=10, kind="order", order_id=42,
-        old_status="Pending", new_status="Completed",
+        old_status="paid", new_status="done",
     ))
 
     rows = notifications.list_notifications(user_id=10)
     assert len(rows) == 1
     assert rows[0]["text"] == "✅ Заказ №42 выполнен."
     assert rows[0]["kind"] == "order"
-    assert rows[0]["new_status"] == "Completed"
+    assert rows[0]["new_status"] == "done"
     assert rows[0]["order_id"] == 42
     assert sent == [{"tg_id": 555, "text": "✅ Заказ №42 выполнен."}]
 
@@ -232,7 +244,7 @@ def test_notify_no_tg_id_still_writes_row(tmp_db, monkeypatch):
 
     asyncio.run(notifications.notify_order_status_changed(
         user_id=10, kind="order", order_id=1,
-        old_status="Pending", new_status="Posted",
+        old_status="unpaid", new_status="paid",
     ))
 
     assert notifications.unread_count(user_id=10) == 1
@@ -253,7 +265,7 @@ def test_notify_tg_failure_swallowed_row_persists(tmp_db, monkeypatch, caplog):
 
     asyncio.run(notifications.notify_order_status_changed(
         user_id=10, kind="order", order_id=1,
-        old_status="Pending", new_status="Posted",
+        old_status="unpaid", new_status="paid",
     ))
 
     assert notifications.unread_count(user_id=10) == 1

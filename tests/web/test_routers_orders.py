@@ -73,7 +73,7 @@ def test_create_pf_order_success(authed_with_balance, monkeypatch):
     body = r.json()
     assert body["order_id"] > 0
     assert body["total_price"] == 1 * 5 * 3 * 1
-    assert body["status"] == "Posted"
+    assert body["status"] == "paid"
 
 
 def test_create_pf_order_insufficient_balance(authed, monkeypatch):

@@ -24,7 +24,7 @@ def _seed(tmp_db: Path):
 def _seed_notif(tmp_db: Path, **kwargs):
     defaults = {
         "user_id": 10, "kind": "order", "order_id": 1,
-        "new_status": "Completed", "text": "test", "read_at": None,
+        "new_status": "done", "text": "test", "read_at": None,
     }
     defaults.update(kwargs)
     with sqlite3.connect(tmp_db) as con:

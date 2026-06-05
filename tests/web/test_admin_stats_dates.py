@@ -38,7 +38,7 @@ def test_admin_stats_counts_today_order(tmp_db: Path):
     from utils.sqlite3 import add_order
 
     add_order(
-        user_id=1, price=500, position_name="7/30", status="Posted",
+        user_id=1, price=500, position_name="7/30", status="paid",
         links="[]", contacts=False, user_name="admin",
     )
 

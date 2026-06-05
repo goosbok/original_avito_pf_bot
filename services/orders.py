@@ -63,14 +63,14 @@ def create_pf_order(
         user_id=user_id,
         price=total,
         position_name=f"{days}/{fix_count}",
-        status="Posted",
+        status="paid",
         links=str(links),
         contacts=contacts,
         user_name=row["user_name"],
     )
 
     order = get_users_last_order(user_id)
-    return PFOrderResult(order_id=order["increment"], total_price=total, status="Posted")
+    return PFOrderResult(order_id=order["increment"], total_price=total, status="paid")
 
 
 def list_orders(user_id: int, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:

@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from services.payment_expiry import run_expiry_loop
+from utils.sqlite3 import create_db
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Старт/стоп фоновых задач приложения."""
+    # Создаём таблицы и применяем миграции при старте API.
+    # На проде api стартует вместе с ботом через __main__.py, но standalone
+    # uvicorn (docker compose) тоже должен уметь инициализировать БД.
+    await asyncio.get_event_loop().run_in_executor(None, create_db)
     expiry_task = asyncio.create_task(run_expiry_loop())
     try:
         yield

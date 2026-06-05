@@ -863,6 +863,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "payment_expires_at TIMESTAMP,"
             "payment_id TEXT,"
             "phone TEXT,"
+            "start_date TEXT,"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
             9,
         ),
@@ -1086,6 +1087,9 @@ def apply_phase2_migrations():
         if 'phone' not in existing_orders:
             con.execute("ALTER TABLE orders ADD COLUMN phone TEXT")
             print("orders.phone added")
+        if 'start_date' not in existing_orders:
+            con.execute("ALTER TABLE orders ADD COLUMN start_date TEXT")
+            print("orders.start_date added")
 
         # === auth_providers.verified ===
         existing_ap = {row['name'] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}

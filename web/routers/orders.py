@@ -127,6 +127,7 @@ async def create_pf(
         fix_count=body.fix_count,
         contacts=body.contacts,
         phone=phone,
+        start_date=body.start_date,
     )
     order = svc.get_order(order_id)
     # Доступные методы — с точки зрения АКТОРА: гость никогда не платит балансом,
@@ -316,14 +317,19 @@ async def yookassa_return(order_id: int, request: Request):
             if p.status == "succeeded":
                 svc.mark_paid(order_id)
                 result = "paid"
-            elif p.status == "canceled":
+            else:
+                # canceled / pending / waiting_for_capture — пользователь вернулся
+                # на сайт без оплаты. Считаем заказ неоплаченным. mark_payment_failed
+                # сам отменит платёж через YooKassa API (best-effort).
                 svc.mark_payment_failed(order_id)
                 result = "failed"
-            else:  # pending / waiting_for_capture — пока не знаем
-                result = "unknown"
         except Exception:
+            # YooKassa API недоступна — не знаем точно, ставим failed по умолчанию
+            # (юзер вернулся → значит платёж не прошёл; expiry-job всё равно бы
+            # пометил позже).
             logger.exception("yookassa probe in /return failed for order %s", order_id)
-            result = "unknown"
+            svc.mark_payment_failed(order_id)
+            result = "failed"
     elif status_val == "paid":
         result = "paid"
     elif status_val in ("payment_failed", "cancelled", "failed"):

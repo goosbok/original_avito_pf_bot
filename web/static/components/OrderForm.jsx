@@ -44,8 +44,12 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
     return 7;
   });
   const [contacts, setContacts] = useOrderState(() => !!prefilledFrom?.contacts);
-  const [agreedPrivacy, setAgreedPrivacy] = useOrderState(false);
-  const [agreedOffer, setAgreedOffer] = useOrderState(false);
+  // start_date: ISO "YYYY-MM-DD". По умолчанию = сегодня (Москва).
+  const _todayISO = () => {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  };
+  const [startDate, setStartDate] = useOrderState(() => prefilledFrom?.start_date || _todayISO());
 
   // Wizard state
   const [step, setStep] = useOrderState(1);
@@ -93,9 +97,10 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
         days: parseInt(days, 10),
         fix_count: fixCount,
         contacts,
-        agreed_privacy: true,
+        agreed_privacy: true,  // приняты автоматически — текст внизу формы
         agreed_offer: true,
         phone: phoneArg || null,
+        start_date: startDate || null,
       });
       setCreatedOrder(data);
       setStep(3);
@@ -110,7 +115,6 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   const handleNextFromStep1 = () => {
     if (urlCount === 0) return setError('Добавьте хотя бы одну ссылку на объявление');
     if (!daysNum || daysNum < 1) return setError('Укажите количество дней (от 1)');
-    if (!agreedPrivacy || !agreedOffer) return setError('Необходимо принять Политику и Оферту');
     setError('');
     if (user) {
       submitToBackend(null);
@@ -291,8 +295,6 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
     <div className="page-wrap">
       <div className="order-page">
         <div className="container" style={{ maxWidth: 900 }}>
-          <button className="order-back" onClick={() => onNavigate(user ? 'cabinet' : 'order-new')}>← Назад</button>
-
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Авито ПФ</h1>
             <span style={{ fontSize: '0.875rem', color: 'var(--text-3)' }}>
@@ -361,27 +363,26 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                   hint="Рекомендуем 15–50 для начала"
                 />
                 <div style={{ height: 1, background: 'var(--border)' }} />
+                <SliderField
+                  label="Количество дней"
+                  min={1} max={90} step={1} suffix=" дн."
+                  value={daysNum || 1} onChange={setDays}
+                  hint="Лучше крутить непрерывно от 7 дней"
+                />
+                <div style={{ height: 1, background: 'var(--border)' }} />
                 <div className="form-field">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
-                    <label className="form-label" style={{ margin: 0 }}>Количество дней</label>
-                    <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.05rem' }}>
-                      {days || '—'}{days ? ' дн.' : ''}
-                    </span>
+                    <label className="form-label" style={{ margin: 0 }}>Дата старта</label>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>можно с сегодня</span>
                   </div>
                   <input
-                    type="number"
+                    type="date"
                     className="input"
-                    min={1} max={90}
-                    value={days}
-                    placeholder="Например, 7"
-                    onChange={e => {
-                      const v = e.target.value;
-                      if (v === '') return setDays('');
-                      let n = Number(v); if (n < 1) n = 1; if (n > 90) n = 90;
-                      setDays(n);
-                    }}
+                    value={startDate}
+                    min={_todayISO()}
+                    onChange={e => setStartDate(e.target.value)}
                   />
-                  <div className="form-hint">Лучше крутить непрерывно от 7 дней</div>
+                  <div className="form-hint">Когда начать показы — исполнитель стартует в этот день</div>
                 </div>
                 <div style={{ height: 1, background: 'var(--border)' }} />
                 <div className="toggle-row" onClick={() => setContacts(v => !v)} style={{ userSelect: 'none', cursor: 'pointer' }}>
@@ -417,28 +418,6 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                 </div>
               </div>
 
-              {/* Agreements */}
-              <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
-                  <input type="checkbox" checked={agreedPrivacy} onChange={e => setAgreedPrivacy(e.target.checked)} style={{ marginTop: 3 }} />
-                  <span>
-                    Я согласен с{' '}
-                    <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
-                      Политикой конфиденциальности
-                    </a>
-                  </span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
-                  <input type="checkbox" checked={agreedOffer} onChange={e => setAgreedOffer(e.target.checked)} style={{ marginTop: 3 }} />
-                  <span>
-                    Я согласен с{' '}
-                    <a href="/offer" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
-                      Публичной офертой
-                    </a>
-                  </span>
-                </label>
-              </div>
-
               <button
                 className="btn btn--primary btn--lg btn--full desktop-only"
                 onClick={handleNextFromStep1}
@@ -447,6 +426,18 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
               >
                 {loading ? 'Создаём заказ...' : (user ? 'Создать заказ →' : 'Далее →')}
               </button>
+
+              {/* Согласия — мелким текстом под кнопкой */}
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', lineHeight: 1.5, textAlign: 'center' }}>
+                Продолжая, вы соглашаетесь с{' '}
+                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-3)', textDecoration: 'underline' }}>
+                  Политикой конфиденциальности
+                </a>
+                {' '}и{' '}
+                <a href="/offer" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-3)', textDecoration: 'underline' }}>
+                  Публичной офертой
+                </a>
+              </div>
             </div>
           </div>
         </div>

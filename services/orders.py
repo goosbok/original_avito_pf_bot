@@ -75,11 +75,15 @@ def create_unpaid(
     fix_count: int,
     contacts: bool,
     phone: str | None,
+    start_date: str | None = None,
 ) -> int:
     """Создать заказ со status='unpaid'. payment_method/payment_id ещё NULL.
 
     payment_expires_at выставляется на TTL_NO_METHOD_MINUTES вперёд — если юзер
     не выберет способ за этот срок, expiry-job переведёт его в payment_failed.
+
+    start_date — ISO дата "YYYY-MM-DD" когда юзер хочет начать накрутку.
+    None → исполнитель начинает сразу после оплаты.
 
     Returns: order_id (== orders.increment).
     """
@@ -89,12 +93,13 @@ def create_unpaid(
         cur = con.execute(
             "INSERT INTO orders("
             "  user_id, price, position_name, status, links, contacts, "
-            "  user_name, payment_method, payment_expires_at, payment_id, phone, date"
-            ") VALUES (?, ?, ?, 'unpaid', ?, ?, NULL, NULL, ?, NULL, ?, ?)",
+            "  user_name, payment_method, payment_expires_at, payment_id, "
+            "  phone, start_date, date"
+            ") VALUES (?, ?, ?, 'unpaid', ?, ?, NULL, NULL, ?, NULL, ?, ?, ?)",
             (
                 user_id, price, f"{days}/{fix_count}",
                 json.dumps(links), int(contacts),
-                expires_at, phone, _now_iso(),
+                expires_at, phone, start_date, _now_iso(),
             ),
         )
         con.commit()

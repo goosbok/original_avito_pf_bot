@@ -158,6 +158,7 @@ class PFOrderRequest(BaseModel):
     agreed_privacy: bool
     agreed_offer: bool
     phone: Optional[str] = None
+    start_date: Optional[str] = None  # ISO "YYYY-MM-DD"; default = today
 
     @field_validator("links")
     @classmethod

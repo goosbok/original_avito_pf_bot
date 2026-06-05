@@ -15,7 +15,10 @@ function App() {
   const _isGuestReturn = !!_guestOrderId;
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
-  const [route, setRoute] = useState(_isGuestReturn ? 'guest-order-success' : (_isResetRoute ? 'auth' : 'landing'));
+  // Default route for unauthenticated visitors is the new universal order form.
+  // Guest returning from YooKassa (?guest_order_id=N) goes straight to order-detail.
+  // Legacy 'landing' route still exists (rendered by LandingPage) — Task 15 will remove it.
+  const [route, setRoute] = useState(_isGuestReturn ? 'order-detail' : (_isResetRoute ? 'auth' : 'order-new'));
   const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
   const [guestOrderId] = useState(_guestOrderId);
@@ -23,6 +26,17 @@ function App() {
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [detailOrderId, setDetailOrderId] = useState(_isGuestReturn ? Number(_guestOrderId) : null);
+  const [prefilledOrder, setPrefilledOrder] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem('order_prefill');
+      if (!raw) return null;
+      sessionStorage.removeItem('order_prefill');
+      return JSON.parse(raw);
+    } catch (_) {
+      return null;
+    }
+  });
   const [botConfig, setBotConfig] = useState(null);
   const [adminMode, setAdminMode] = useState(
     () => localStorage.getItem('admin_mode') === '1'
@@ -117,7 +131,18 @@ function App() {
         is_admin: !!data.is_admin,
       });
       setBalance(data.balance);
-      setRoute('cabinet');
+      // If user had a pending order prefill (stored before "Войти" in OrderForm step 2),
+      // return them to order-new to finish creating the order. Otherwise → cabinet.
+      let target = 'cabinet';
+      try {
+        const raw = sessionStorage.getItem('order_prefill');
+        if (raw) {
+          sessionStorage.removeItem('order_prefill');
+          setPrefilledOrder(JSON.parse(raw));
+          target = 'order-new';
+        }
+      } catch (_) {}
+      setRoute(target);
     }).catch(() => {
       localStorage.removeItem('access_token');
     });
@@ -127,11 +152,13 @@ function App() {
     localStorage.removeItem('access_token');
     setUser(null);
     setBalance(0);
-    setRoute('landing');
+    setRoute('order-new');
   };
 
   const handleNavigate = (target, payload) => {
-    if (['cabinet', 'order-pf', 'orders', 'profile', 'order-detail', 'notifications'].includes(target) && !user) {
+    // Auth-gated routes. 'order-new' / 'order-pf' / 'order-detail' are PUBLIC now
+    // (guest can create unpaid orders and view payment status without a session).
+    if (['cabinet', 'orders', 'profile', 'notifications'].includes(target) && !user) {
       setAuthMode('login');
       setRoute('auth');
       return;
@@ -141,8 +168,29 @@ function App() {
       setRoute('auth');
       return;
     }
+    if (target === 'order-new') {
+      // Pick up prefill set just before navigation (e.g. "Войти" from OrderForm step 2,
+      // or "Повторить заказ" from OrderDetail). Clear after read.
+      try {
+        const raw = sessionStorage.getItem('order_prefill');
+        if (raw) {
+          sessionStorage.removeItem('order_prefill');
+          setPrefilledOrder(JSON.parse(raw));
+        }
+      } catch (_) {}
+    }
     if (target === 'order-detail') {
-      setSelectedOrder(payload || null);
+      // Accept either a full order object (legacy callsites) or { order_id }.
+      if (payload && (payload.order_id != null || payload.increment != null)) {
+        setSelectedOrder(payload);
+        setDetailOrderId(payload.order_id != null ? payload.order_id : payload.increment);
+      } else if (typeof payload === 'number') {
+        setSelectedOrder(null);
+        setDetailOrderId(payload);
+      } else {
+        setSelectedOrder(payload || null);
+        setDetailOrderId(null);
+      }
     }
     setRoute(target);
   };
@@ -184,14 +232,34 @@ function App() {
       case 'landing':  return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
       case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} resetToken={resetToken} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
-      case 'order-pf': return <OrderFormPage balance={balance} onNavigate={handleNavigate} onOrderPlaced={handleOrderPlaced} />;
+      // 'order-new' is the new unified form. 'order-pf' kept as alias for legacy callsites.
+      case 'order-new':
+      case 'order-pf':
+        return <OrderFormPage
+                 user={user} balance={balance}
+                 prefilledFrom={prefilledOrder}
+                 onNavigate={handleNavigate}
+                 onOrderPlaced={handleOrderPlaced}
+               />;
       case 'guest-order-pf':      return <GuestOrderForm onNavigate={handleNavigate} />;
-      case 'guest-order-success': return <GuestOrderSuccess guestOrderId={guestOrderId} onNavigate={handleNavigate} />;
+      // Backwards-compat: GuestOrderSuccess will be deleted in Task 15. Until then,
+      // a guest returning from YooKassa (?guest_order_id=N) lands on order-detail.
+      case 'guest-order-success': return <OrderDetailPage orderId={detailOrderId || Number(guestOrderId)} user={user} onNavigate={handleNavigate} />;
       case 'orders':   return <OrdersPage onNavigate={handleNavigate} />;
       case 'notifications': return <NotificationsPage onNavigate={handleNavigate} />;
-      case 'order-detail': return <OrderDetailPage order={selectedOrder} onNavigate={handleNavigate} />;
+      case 'order-detail': return <OrderDetailPage
+                                    order={selectedOrder}
+                                    orderId={detailOrderId}
+                                    user={user}
+                                    onNavigate={handleNavigate}
+                                  />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;
-      default:         return <LandingPage onNavigate={handleNavigate} brandName={tweaks.brandName} />;
+      default:         return <OrderFormPage
+                                user={user} balance={balance}
+                                prefilledFrom={prefilledOrder}
+                                onNavigate={handleNavigate}
+                                onOrderPlaced={handleOrderPlaced}
+                              />;
     }
   };
 

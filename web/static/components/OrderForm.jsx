@@ -1,4 +1,5 @@
-// PF Order Form — two-column layout with real API
+// PF Order Form — 3-step wizard (params → auth choice → payment picker)
+// Used both for authenticated users (skip step 2) and guests.
 const { useState: useOrderState, useEffect: useOrderEffect } = React;
 
 function parseAvitoUrls(text) {
@@ -31,20 +32,33 @@ function SliderField({ label, min, max, step, value, onChange, suffix = '', hint
   );
 }
 
-function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
+function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced }) {
+  // Step 1 fields
   const [inputText, setInputText] = useOrderState('');
-  const [links, setLinks] = useOrderState([]);
-  const [views, setViews] = useOrderState(30);  // maps to fix_count in API
-  const [days, setDays] = useOrderState(7);
-  const [contacts, setContacts] = useOrderState(false);
-  const [startDate, setStartDate] = useOrderState(() => {
-    const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0];
+  const [links, setLinks] = useOrderState(() => Array.isArray(prefilledFrom?.links) ? prefilledFrom.links : []);
+  // fixCount = views per day
+  const [fixCount, setFixCount] = useOrderState(() => Number(prefilledFrom?.fix_count) || 30);
+  // For prefilled flow days is deliberately blank per plan
+  const [days, setDays] = useOrderState(() => {
+    if (prefilledFrom) return prefilledFrom.days != null ? Number(prefilledFrom.days) : '';
+    return 7;
   });
-  const [pricePerUnit, setPricePerUnit] = useOrderState(6);
+  const [contacts, setContacts] = useOrderState(() => !!prefilledFrom?.contacts);
+  const [agreedPrivacy, setAgreedPrivacy] = useOrderState(false);
+  const [agreedOffer, setAgreedOffer] = useOrderState(false);
+
+  // Wizard state
+  const [step, setStep] = useOrderState(1);
   const [loading, setLoading] = useOrderState(false);
   const [error, setError] = useOrderState('');
-  const [submitted, setSubmitted] = useOrderState(false);
-  const [submittedPrice, setSubmittedPrice] = useOrderState(0);
+  const [pricePerUnit, setPricePerUnit] = useOrderState(6);
+
+  // Step 2 state (guest auth choice)
+  const [showPhoneInput, setShowPhoneInput] = useOrderState(false);
+  const [guestPhone, setGuestPhone] = useOrderState('');
+
+  // Step 3 state
+  const [createdOrder, setCreatedOrder] = useOrderState(null); // { order_id, price, available_methods }
 
   useOrderEffect(() => {
     api.get('/api/orders/pf/price').then(data => {
@@ -53,7 +67,8 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
   }, []);
 
   const urlCount = links.length;
-  const totalPrice = urlCount > 0 ? views * days * urlCount * pricePerUnit : 0;
+  const daysNum = parseInt(days, 10) || 0;
+  const totalPrice = urlCount > 0 ? fixCount * daysNum * urlCount * pricePerUnit : 0;
 
   const handleInputChange = e => {
     const val = e.target.value;
@@ -65,46 +80,209 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
 
   const removeLink = url => setLinks(prev => prev.filter(u => u !== url));
 
-  const handleSubmit = async () => {
-    if (urlCount === 0) return setError('Вставьте хотя бы одну ссылку на объявление');
-    if (totalPrice > balance) return setError(`Недостаточно средств. Нужно ${totalPrice.toLocaleString('ru-RU')} ₽, на балансе ${balance.toLocaleString('ru-RU')} ₽`);
-    setError(''); setLoading(true);
+  const submitToBackend = async (phoneArg) => {
+    setLoading(true); setError('');
     try {
-      await api.post('/api/orders/pf', {
+      const data = await api.post('/api/orders/pf', {
         links,
-        days,
-        fix_count: views,
-        contacts
+        days: parseInt(days, 10),
+        fix_count: fixCount,
+        contacts,
+        agreed_privacy: true,
+        agreed_offer: true,
+        phone: phoneArg || null,
       });
-      setSubmittedPrice(totalPrice);
-      setSubmitted(true);
-      onOrderPlaced && onOrderPlaced(totalPrice);
-      setTimeout(() => onNavigate('cabinet'), 2200);
+      setCreatedOrder(data);
+      setStep(3);
     } catch (e) {
-      if (e.status === 402) setError(e.message || 'Недостаточно средств');
-      else setError(e.message || 'Ошибка создания заказа');
-    } finally { setLoading(false); }
+      setError(e.message || 'Не удалось создать заказ');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (submitted) return (
-    <div className="page-wrap" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <div style={{ textAlign: 'center', padding: 40, maxWidth: 400 }}>
-        <div style={{ fontSize: '3rem', marginBottom: 16 }}>✅</div>
-        <h2 style={{ marginBottom: 8 }}>Заказ принят!</h2>
-        <p style={{ color: 'var(--text-2)', marginBottom: 6 }}>Списано <strong style={{ color: 'var(--primary)' }}>{submittedPrice.toLocaleString('ru-RU')} ₽</strong></p>
-        <p style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Возвращаем в кабинет...</p>
-      </div>
-    </div>
-  );
+  const handleNextFromStep1 = () => {
+    if (urlCount === 0) return setError('Добавьте хотя бы одну ссылку на объявление');
+    if (!daysNum || daysNum < 1) return setError('Укажите количество дней (от 1)');
+    if (!agreedPrivacy || !agreedOffer) return setError('Необходимо принять Политику и Оферту');
+    setError('');
+    if (user) {
+      submitToBackend(null);
+    } else {
+      setStep(2);
+    }
+  };
 
+  const handleGoToAuth = () => {
+    try {
+      sessionStorage.setItem('order_prefill', JSON.stringify({
+        links,
+        days: daysNum || null,
+        fix_count: fixCount,
+        contacts,
+      }));
+    } catch (_) {}
+    onNavigate('auth');
+  };
+
+  const handleGuestSubmit = () => {
+    if (!guestPhone || guestPhone.replace(/\D/g, '').length < 10) {
+      return setError('Введите корректный номер телефона');
+    }
+    setError('');
+    submitToBackend(guestPhone);
+  };
+
+  const handlePay = async (method) => {
+    if (!createdOrder) return;
+    setLoading(true); setError('');
+    try {
+      const data = await api.post(`/api/orders/pf/${createdOrder.order_id}/pay`, { method });
+      if (method === 'balance') {
+        onOrderPlaced && onOrderPlaced(createdOrder.price);
+        onNavigate('order-detail', { order_id: createdOrder.order_id });
+      } else if (method === 'yookassa') {
+        if (data && data.confirmation_url) {
+          window.location.href = data.confirmation_url;
+        } else {
+          setError('Не удалось получить ссылку оплаты');
+        }
+      }
+    } catch (e) {
+      if (e.status === 400) setError(e.message || 'Недостаточно средств');
+      else setError(e.message || 'Ошибка оплаты');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ----- Step 3: payment picker -----
+  if (step === 3 && createdOrder) {
+    const methods = createdOrder.available_methods || [];
+    return (
+      <div className="page-wrap">
+        <div className="container" style={{ maxWidth: 560, padding: '28px 20px 80px' }}>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 6 }}>Заказ создан</h1>
+          <p style={{ color: 'var(--text-2)', marginBottom: 18 }}>
+            Заказ <strong>#{createdOrder.order_id}</strong> · сумма к оплате{' '}
+            <strong style={{ color: 'var(--primary)' }}>{createdOrder.price.toLocaleString('ru-RU')} ₽</strong>
+          </p>
+          {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+          <div className="card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: 4 }}>
+              Выберите способ оплаты
+            </div>
+            {methods.includes('balance') && (
+              <button
+                className="btn btn--primary btn--lg btn--full"
+                onClick={() => handlePay('balance')}
+                disabled={loading}
+              >
+                {loading ? 'Оплачиваем...' : 'Оплатить с баланса'}
+              </button>
+            )}
+            {methods.includes('yookassa') && (
+              <button
+                className="btn btn--secondary btn--lg btn--full"
+                onClick={() => handlePay('yookassa')}
+                disabled={loading}
+              >
+                {loading ? 'Перенаправляем...' : 'Оплатить картой (ЮKassa)'}
+              </button>
+            )}
+            {methods.length === 0 && (
+              <div className="alert alert--error">Нет доступных способов оплаты</div>
+            )}
+          </div>
+          <div style={{ marginTop: 14, textAlign: 'center' }}>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => onNavigate('order-detail', { order_id: createdOrder.order_id })}
+            >
+              Перейти к заказу
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----- Step 2: guest auth choice -----
+  if (step === 2) {
+    return (
+      <div className="page-wrap">
+        <div className="container" style={{ maxWidth: 560, padding: '28px 20px 80px' }}>
+          <button className="order-back" onClick={() => { setError(''); setStep(1); }}>← Назад к параметрам</button>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 6 }}>Как оформить заказ?</h1>
+          <p style={{ color: 'var(--text-2)', marginBottom: 18 }}>
+            Сумма: <strong style={{ color: 'var(--primary)' }}>{totalPrice.toLocaleString('ru-RU')} ₽</strong>
+          </p>
+          {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+          <div className="card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {!showPhoneInput ? (
+              <>
+                <button
+                  className="btn btn--primary btn--lg btn--full"
+                  onClick={() => { setError(''); setShowPhoneInput(true); }}
+                  disabled={loading}
+                >
+                  Быстрый заказ по телефону
+                </button>
+                <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-3)' }}>или</div>
+                <button
+                  className="btn btn--secondary btn--lg btn--full"
+                  onClick={handleGoToAuth}
+                  disabled={loading}
+                >
+                  У меня есть аккаунт — войти
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="form-field">
+                  <label className="form-label">Номер телефона</label>
+                  <input
+                    className="input"
+                    type="tel"
+                    inputMode="tel"
+                    placeholder="+7 900 123-45-67"
+                    value={guestPhone}
+                    onChange={e => setGuestPhone(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleGuestSubmit()}
+                    autoFocus
+                  />
+                  <div className="form-hint">На этот номер привяжем заказ — потом сможете войти по SMS</div>
+                </div>
+                <button
+                  className="btn btn--primary btn--lg btn--full"
+                  onClick={handleGuestSubmit}
+                  disabled={loading}
+                >
+                  {loading ? 'Создаём заказ...' : 'Создать заказ'}
+                </button>
+                <button
+                  className="btn btn--ghost btn--sm btn--full"
+                  onClick={() => { setShowPhoneInput(false); setError(''); }}
+                  disabled={loading}
+                >
+                  ← Назад к выбору
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ----- Step 1: parameters -----
   const noUrlsWarning = inputText.length > 5 && parseAvitoUrls(inputText).length === 0 && urlCount === 0;
 
   return (
     <div className="page-wrap">
       <div className="order-page">
         <div className="container" style={{ maxWidth: 900 }}>
-
-          <button className="order-back" onClick={() => onNavigate('cabinet')}>← Назад в кабинет</button>
+          <button className="order-back" onClick={() => onNavigate(user ? 'cabinet' : 'landing')}>← Назад</button>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Авито ПФ</h1>
@@ -116,7 +294,6 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
           {error && <div className="alert alert--error" style={{ marginBottom: 16 }}>{error}</div>}
 
           <div className="order-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20, alignItems: 'start' }}>
-
             {/* LEFT */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="card" style={{ padding: '14px 18px', borderLeft: '3px solid var(--primary)' }}>
@@ -170,27 +347,32 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
               <div className="card" style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 18 }}>
                 <SliderField
                   label="Просмотров в день"
-                  min={5} max={500} step={5}
-                  value={views} onChange={setViews}
+                  min={1} max={200} step={1}
+                  value={fixCount} onChange={setFixCount}
                   hint="Рекомендуем 15–50 для начала"
                 />
                 <div style={{ height: 1, background: 'var(--border)' }} />
-                <SliderField
-                  label="Количество дней"
-                  min={1} max={30} step={1}
-                  value={days} onChange={setDays} suffix=" дн."
-                  hint="Лучше крутить непрерывно от 7 дней"
-                />
-                <div style={{ height: 1, background: 'var(--border)' }} />
                 <div className="form-field">
-                  <label className="form-label">Дата начала</label>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                    <label className="form-label" style={{ margin: 0 }}>Количество дней</label>
+                    <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: '1.05rem' }}>
+                      {days || '—'}{days ? ' дн.' : ''}
+                    </span>
+                  </div>
                   <input
-                    type="date" className="input"
-                    value={startDate}
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={e => setStartDate(e.target.value)}
+                    type="number"
+                    className="input"
+                    min={1} max={90}
+                    value={days}
+                    placeholder="Например, 7"
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (v === '') return setDays('');
+                      let n = Number(v); if (n < 1) n = 1; if (n > 90) n = 90;
+                      setDays(n);
+                    }}
                   />
-                  <div className="form-hint">Запуск на следующий день или до 04:00 МСК — сегодня</div>
+                  <div className="form-hint">Лучше крутить непрерывно от 7 дней</div>
                 </div>
                 <div style={{ height: 1, background: 'var(--border)' }} />
                 <div className="toggle-row" onClick={() => setContacts(v => !v)} style={{ userSelect: 'none', cursor: 'pointer' }}>
@@ -210,10 +392,10 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
                 </div>
                 <div style={{ padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[
-                    { label: 'Просмотров в день', val: views },
-                    { label: 'Количество дней',   val: days },
-                    { label: 'Объявлений',         val: Math.max(urlCount, 1) },
-                    { label: 'Цена за просмотр',  val: `${pricePerUnit} ₽` },
+                    { label: 'Просмотров в день', val: fixCount },
+                    { label: 'Количество дней', val: daysNum || '—' },
+                    { label: 'Объявлений', val: Math.max(urlCount, 1) },
+                    { label: 'Цена за просмотр', val: `${pricePerUnit} ₽` },
                   ].map((row, i, arr) => (
                     <div key={i}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -224,23 +406,37 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
                     </div>
                   ))}
                 </div>
-                <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: totalPrice > balance ? 'rgba(220,53,69,0.05)' : 'var(--surface-2)' }}>
-                  <span style={{ fontSize: '0.8rem', color: totalPrice > balance ? 'var(--status-cancel-text)' : 'var(--text-3)' }}>
-                    {totalPrice > balance ? '⚠ Недостаточно средств' : 'Остаток на балансе'}
+              </div>
+
+              {/* Agreements */}
+              <div className="card" style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+                  <input type="checkbox" checked={agreedPrivacy} onChange={e => setAgreedPrivacy(e.target.checked)} style={{ marginTop: 3 }} />
+                  <span>
+                    Я согласен с{' '}
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+                      Политикой конфиденциальности
+                    </a>
                   </span>
-                  <span style={{ fontSize: '0.875rem', fontWeight: 700, color: totalPrice > balance ? 'var(--status-cancel-text)' : 'var(--text-2)' }}>
-                    {Math.max(0, balance - totalPrice).toLocaleString('ru-RU')} ₽
+                </label>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', fontSize: '0.8125rem', color: 'var(--text-2)' }}>
+                  <input type="checkbox" checked={agreedOffer} onChange={e => setAgreedOffer(e.target.checked)} style={{ marginTop: 3 }} />
+                  <span>
+                    Я согласен с{' '}
+                    <a href="/offer" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)' }}>
+                      Публичной офертой
+                    </a>
                   </span>
-                </div>
+                </label>
               </div>
 
               <button
                 className="btn btn--primary btn--lg btn--full desktop-only"
-                onClick={handleSubmit}
+                onClick={handleNextFromStep1}
                 disabled={loading || urlCount === 0}
                 style={{ fontSize: '0.9375rem' }}
               >
-                {loading ? 'Размещаем заказ...' : 'Разместить заказ'}
+                {loading ? 'Создаём заказ...' : (user ? 'Создать заказ →' : 'Далее →')}
               </button>
             </div>
           </div>
@@ -252,8 +448,8 @@ function OrderFormPage({ balance, onNavigate, onOrderPlaced }) {
             <span style={{ fontSize: '0.875rem', color: 'var(--text-2)' }}>Итого:</span>
             <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)' }}>{totalPrice.toLocaleString('ru-RU')} ₽</span>
           </div>
-          <button className="btn btn--primary btn--lg btn--full" onClick={handleSubmit} disabled={loading || urlCount === 0}>
-            {loading ? 'Размещаем...' : 'Разместить заказ'}
+          <button className="btn btn--primary btn--lg btn--full" onClick={handleNextFromStep1} disabled={loading || urlCount === 0}>
+            {loading ? 'Создаём...' : (user ? 'Создать заказ' : 'Далее')}
           </button>
         </div>
       </div>

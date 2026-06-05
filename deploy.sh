@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# deploy.sh — полный редеплой на production
+#
+# Использование:
+#   ./deploy.sh            — pull + rebuild api+bot + up + copy landing
+#   ./deploy.sh --landing  — только обновить лендинг (без ребилда)
+#   ./deploy.sh --api      — pull + rebuild api + up (без bot)
+#
+# Запускать на сервере: ssh root@185.106.93.71 "cd /root/projects/original_avito_pf_bot && ./deploy.sh"
+
+set -euo pipefail
+
+LANDING_SRC="web/landing/index.html"
+LANDING_DST="/var/www/pf-bot-landing/index.html"
+SERVER="root@185.106.93.71"
+PROJECT_DIR="/root/projects/original_avito_pf_bot"
+
+# ──────────────────────────────────────────
+# Если запущен локально — прокидываем на сервер
+# ──────────────────────────────────────────
+if [[ "$(hostname)" != "vm"* ]] && ! [[ -f /.dockerenv ]]; then
+  echo "→ Connecting to $SERVER..."
+  ssh "$SERVER" "cd $PROJECT_DIR && bash deploy.sh $*"
+  exit $?
+fi
+
+# ──────────────────────────────────────────
+# Дальше — на сервере
+# ──────────────────────────────────────────
+MODE="${1:-full}"
+
+step() { echo ""; echo "▶ $*"; }
+
+# --- Только лендинг ---
+if [[ "$MODE" == "--landing" ]]; then
+  step "Pulling latest code..."
+  git pull origin dev --ff-only
+  step "Copying landing HTML..."
+  cp "$LANDING_SRC" "$LANDING_DST"
+  echo "✅ Landing updated."
+  exit 0
+fi
+
+# --- Только api ---
+if [[ "$MODE" == "--api" ]]; then
+  step "Pulling latest code..."
+  git pull origin dev --ff-only
+  step "Building api..."
+  docker compose build api
+  step "Restarting api..."
+  docker compose up -d api
+  step "Copying landing HTML..."
+  cp "$LANDING_SRC" "$LANDING_DST"
+  echo ""
+  docker compose ps api
+  echo "✅ API redeployed."
+  exit 0
+fi
+
+# --- Full deploy (default) ---
+step "Pulling latest code..."
+git pull origin dev --ff-only
+
+step "Building images (api + bot)..."
+docker compose build api bot
+
+step "Restarting containers..."
+docker compose up -d
+
+step "Copying landing HTML..."
+cp "$LANDING_SRC" "$LANDING_DST"
+
+step "Waiting for api to start..."
+sleep 4
+
+step "Status:"
+docker compose ps
+
+step "Smoke check (api health)..."
+HEALTH=$(curl -sf http://127.0.0.1:8000/api/health || echo "FAILED")
+if [[ "$HEALTH" == *"ok"* ]]; then
+  echo "✅ API healthy: $HEALTH"
+else
+  echo "❌ API health check failed: $HEALTH"
+  echo "   → Check logs: docker compose logs --tail=30 api"
+  exit 1
+fi
+
+echo ""
+echo "✅ Deploy complete."

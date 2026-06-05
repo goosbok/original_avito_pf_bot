@@ -284,6 +284,7 @@ function App() {
                                     order={selectedOrder}
                                     orderId={detailOrderId}
                                     user={user}
+                                    balance={balance}
                                     onNavigate={handleNavigate}
                                   />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;

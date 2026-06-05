@@ -132,7 +132,7 @@ function formatMmSs(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function OrderDetailPage({ order: payload, orderId: orderIdProp, user, onNavigate }) {
+function OrderDetailPage({ order: payload, orderId: orderIdProp, user, balance, onNavigate }) {
   // Accept either { order_id, ... } payload from old callsites OR orderId prop.
   const orderId = orderIdProp != null
     ? orderIdProp
@@ -141,6 +141,9 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, onNavigat
   const [order, setOrder] = useODState(() => (payload && payload.status) ? payload : null);
   const [timeRemaining, setTimeRemaining] = useODState(null);
   const [loadError, setLoadError] = useODState(null);
+  const [payLoading, setPayLoading] = useODState(false);
+  const [payError, setPayError] = useODState('');
+  const payRef = useODRef(false);
   const pollTimerRef = useODRef(null);
   const mountedRef = useODRef(true);
 
@@ -268,6 +271,36 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, onNavigat
     else onNavigate('order-new');
   };
 
+  // Pay actions for unpaid orders. available_methods не возвращается GET /pf/{id} —
+  // вычисляем здесь: yookassa всегда, balance только если залогинен и хватает денег.
+  const balanceAvailable = !!user && Number(balance || 0) >= Number(order.price || 0);
+  const handlePay = async (method) => {
+    if (payRef.current) return;
+    payRef.current = true;
+    setPayLoading(true); setPayError('');
+    try {
+      const data = await api.post(`/api/orders/pf/${orderId}/pay`, { method });
+      if (method === 'yookassa') {
+        if (data && data.confirmation_url) {
+          window.location.href = data.confirmation_url;
+        } else {
+          setPayError('Не удалось получить ссылку оплаты');
+        }
+      } else {
+        // balance — backend перевёл в paid, перечитаем заказ.
+        const fresh = await api.get(`/api/orders/pf/${orderId}`);
+        if (fresh && !fresh.__unauthorized && fresh.order_id) setOrder(fresh);
+      }
+    } catch (e) {
+      if (e.status === 400) setPayError(e.message || 'Недостаточно средств');
+      else if (e.status === 409) setPayError(e.message || 'Срок оплаты истёк или статус изменён');
+      else setPayError(e.message || 'Ошибка оплаты');
+    } finally {
+      setPayLoading(false);
+      payRef.current = false;
+    }
+  };
+
   return (
     <div className="page-wrap">
       <div className="container" style={{ padding: '28px 20px 80px', maxWidth: 760 }}>
@@ -300,6 +333,28 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, onNavigat
           {isUnpaid && timeRemaining != null && timeRemaining > 0 && (
             <div className="alert alert--info" style={{ marginBottom: 12 }}>
               ⏳ Осталось на оплату: <strong>{formatMmSs(timeRemaining)}</strong>
+            </div>
+          )}
+
+          {isUnpaid && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
+              {payError && <div className="alert alert--error">{payError}</div>}
+              {balanceAvailable && (
+                <button
+                  className="btn btn--primary btn--full"
+                  onClick={() => handlePay('balance')}
+                  disabled={payLoading}
+                >
+                  {payLoading ? 'Оплачиваем...' : `Оплатить с баланса (${Number(balance).toLocaleString('ru-RU')} ₽)`}
+                </button>
+              )}
+              <button
+                className={`btn ${balanceAvailable ? 'btn--secondary' : 'btn--primary'} btn--full`}
+                onClick={() => handlePay('yookassa')}
+                disabled={payLoading}
+              >
+                {payLoading ? 'Перенаправляем...' : 'Оплатить картой (ЮKassa)'}
+              </button>
             </div>
           )}
 

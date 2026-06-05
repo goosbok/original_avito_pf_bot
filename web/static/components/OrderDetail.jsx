@@ -244,6 +244,9 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, balance, 
   const DetailComponent = SERVICE_DETAIL_RENDERERS[serviceType] || GenericDetail;
   const isUnpaid = order.status === 'unpaid';
   const isTerminal = TERMINAL_STATUSES.includes(order.status);
+  // "Повторить заказ" доступно для любого ушедшего из unpaid статуса —
+  // в работе (paid), выполнен (done), неудача, отменён и т.д.
+  const canRepeat = !isUnpaid;
 
   const handleContactSupport = () => {
     const text = `У меня возникли проблемы с заказом #${order.order_id}`;
@@ -358,7 +361,7 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, balance, 
             </div>
           )}
 
-          {isTerminal && (
+          {canRepeat && (
             <button className="btn btn--primary btn--full" onClick={handleRepeat} style={{ marginBottom: 10 }}>
               Повторить заказ
             </button>

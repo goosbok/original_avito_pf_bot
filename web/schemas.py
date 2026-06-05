@@ -213,38 +213,6 @@ class OrderDetailResponse(BaseModel):
     payment_expires_at: Optional[str] = None
 
 
-class PaymentAvailableResponse(BaseModel):
-    available: bool
-
-
-class GuestPFOrderRequest(BaseModel):
-    links: list[str] = Field(min_length=1)
-    days: int = Field(gt=0)
-    fix_count: int = Field(ge=5)
-    contacts: bool
-    phone: str = Field(min_length=5, max_length=32)
-    agreed_privacy: bool
-    agreed_offer: bool
-
-    @field_validator("links")
-    @classmethod
-    def links_must_be_avito(cls, v: list[str]) -> list[str]:
-        for link in v:
-            if not _re.search(r'avito\.ru', link):
-                raise ValueError(f"invalid avito link: {link}")
-        return v
-
-
-class GuestPFOrderResponse(BaseModel):
-    guest_order_id: int
-    payment_url: str
-
-
-class GuestOrderStatusResponse(BaseModel):
-    status: str   # "pending" | "paid" | "failed"
-    order_id: int | None = None
-
-
 class OrderItem(BaseModel):
     order_id: int
     price: int

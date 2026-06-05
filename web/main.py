@@ -71,10 +71,6 @@ from web.routers.config import router as config_router  # noqa: E402
 
 app.include_router(config_router)
 
-from web.routers.guest_orders import router as guest_orders_router  # noqa: E402
-
-app.include_router(guest_orders_router)
-
 from web.routers.admin_users import router as admin_users_router  # noqa: E402
 
 app.include_router(admin_users_router)

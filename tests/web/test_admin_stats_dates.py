@@ -52,20 +52,26 @@ def test_admin_stats_counts_today_order(tmp_db: Path):
 
 
 def test_admin_stats_counts_today_guest_order(tmp_db: Path):
-    """Гостевой заказ со статусом 'paid' должен учитываться в revenue_today."""
+    """Гостевой заказ со статусом 'paid' должен учитываться в revenue_today.
+
+    После Task 2 миграции guest_orders больше нет — гости пишутся прямо
+    в orders с payment_method='yookassa' и phone=<E.164>. Сидим именно так.
+    """
     _setup_admin_user(tmp_db)
-    from services.guest_orders import create_guest_order
 
-    # Создаём гостевой заказ (начально со статусом 'pending_payment')
-    order_id = create_guest_order(
-        phone="79991234567", links=["https://www.avito.ru/item/123"],
-        days=7, fix_count=30, contacts=False,
-        price=500, price_per_unit=6,
-    )
-
-    # Обновляем статус на 'paid' чтобы он учитывался в revenue
+    today_iso = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(tmp_db) as con:
-        con.execute("UPDATE guest_orders SET status = 'paid' WHERE id = ?", (order_id,))
+        con.execute(
+            "INSERT INTO orders "
+            "(user_id, price, position_name, status, links, date, contacts, "
+            "user_name, payment_method, phone) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                1, 500, "7/30", "paid",
+                '["https://www.avito.ru/item/123"]', today_iso, 0,
+                "guest", "yookassa", "+79991234567",
+            ),
+        )
         con.commit()
 
     from web.main import app

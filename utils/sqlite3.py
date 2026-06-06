@@ -65,10 +65,6 @@ _STRING_DEFAULTS: dict[str, str] = {
     "btn_all_completed": "✅ Выполненные",
     "btn_all_posted": "✍️ Размещённые",
     "btn_avito_cases": "🔗 Кейсы Авито",
-    "btn_seo_howto": "❓ Как работает",
-    "btn_seo_why": "💡 Зачем нужно",
-    "btn_seo_result": "📊 Результат",
-    "btn_seo_order": "🚀 Заказать",
     "btn_rules": "🔰 Правила пользования ботом",
     "btn_support": "🧑‍💻 Тех поддержка",
     "btn_qna": "📲 FAQ / Кейсы",
@@ -184,15 +180,6 @@ _STRING_DEFAULTS: dict[str, str] = {
     "str_review_confirm": "✅ Заказ #{} принят! Свяжитесь с менеджером: {}",
     "str_new_review_admin_report": "⭐ Новый заказ отзывов #{}\n💰 {} ₽\n👤 {}\n📍 {}\n📊 {}\n📅 {}\n🔗 {}",
     "str_delete_review": "🗑 Удаление негативного отзыва Авито.\nСтоимость: <b>{}</b> ₽.\nВставьте ссылку на отзыв:",
-    "str_seo_main": "🔍 <b>SEO-буст</b>\n\nПовышение позиций в поиске Авито.",
-    "str_seo_howto": "❓ SEO-буст — это продвижение объявлений в топ поиска Авито.",
-    "str_seo_why": "💡 SEO-буст увеличивает видимость объявлений и приток клиентов.",
-    "str_seo_result": "📊 Результат заметен в течение 7-14 дней.",
-    "str_seo_order_start": "🚀 SEO-буст: <b>{}</b> ₽/мес. Выберите срок:",
-    "str_seo_enter_link": "🔗 Введите ссылку на объявление (срок: {} {}):",
-    "str_seo_order": "📋 SEO-буст {} {} для:\n{}\nСумма: <b>{}</b> ₽. Подтвердить?",
-    "str_seo_order_confirm": "✅ SEO-заказ #{} принят! Менеджер: {}",
-    "str_seo_admin_msg": "🔍 SEO-заказ #{}\n📅 {} мес.\n💰 {} ₽\n👤 {}\n📊 {}\n📅 {}\n🔗 {}",
 }
 
 # Defaults for the `settings` table — used when row is missing or value is empty.

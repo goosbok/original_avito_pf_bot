@@ -17,8 +17,6 @@ from utils.sqlite3 import (
     get_user_all_refills, all_refills,
     get_string, get_setting,
     get_report_exclude,
-    all_orders_reviews, all_orders_delreviews,
-    user_orders_all_delreviews,
 )
 from utils.dates import format_display
 from utils.other import (
@@ -502,28 +500,6 @@ async def gen_magic_report(user_id):
             if int(order['user_id']) == int(user_id):
                 total_user_orders += 1
         report['general'] += f"\n📖 Оставил <b>{total_user_orders}</b> заказов\n"
-
-        reviews = all_orders_reviews()
-        reviews_paid = 0
-        total_user_reviews = 0
-        for order in reviews:
-            if int(order['user_id']) == int(user_id):
-                total_user_reviews += 1
-                reviews_paid += int(order['price'])
-        report['general'] += f"\n📖 Отзывы: <b>{total_user_reviews}</b> заказов ({reviews_paid} руб.)\n"
-
-        delreviews = user_orders_all_delreviews(user_id)
-
-        del_reviews_cnt = 0
-        del_reviews_paid = 0
-
-        if delreviews:
-            for order in delreviews:
-                if order['service'] == 'avito':
-                    del_reviews_cnt += 1
-                    del_reviews_paid += int(order['price'])
-
-        report['general'] += f"\n📖 Удаление отзыва с авито: <b>{del_reviews_cnt} ({del_reviews_paid} руб.)</b> заказов"
 
         users_list = []
         referals_count = 0

@@ -39,10 +39,10 @@
 - `keyboards/users_menu.py:38-49` — hash-блок «btn_reviews» и «btn_seo_boost»
 - **Действие:** удалить эти блоки. Самостоятельная подсистема — Wave B7 трогает связанные хандлеры.
 
-### A4. Два мёртвых callback-хандлера
-- `handlers/commands.py:115-126` — `@dp.callback_query_handler(text_startswith="qna_avito", ...)` — Q&A callback_data строится динамически из БД (`qna['parametr']`), префикса `qna_avito` ни одна клавиатура не отправляет.
-- `handlers/admin_orders.py:422` — `@dp.callback_query_handler(text="to_general_user_report", ...)` — строка используется как `page`-параметр маршрутизации, но в `callback_data=` нигде не пишется.
-- **Действие:** удалить оба `@dp` блока вместе с телами функций. Импорты пересмотреть.
+### A4. Один мёртвый callback-хандлер: `qna_avito`
+- `handlers/commands.py:115-126` — `@dp.callback_query_handler(text_startswith="qna_avito", ...)` — Q&A callback_data строится динамически из БД (`qna['parametr']`), префикса `qna_avito` ни одна клавиатура не отправляет (грeп `callback_data.*qna_avito` пуст).
+- **Действие:** удалить `@dp` блок + тело функции `user_call_qna_avito`. Импорты `qna_avito_kb`, `get_all_qna_avito` в шапке `commands.py` оставить — `qna_avito_kb()` используется в другом хандлере (commands.py:94).
+- **Не трогаем:** ~~`to_general_user_report`~~ — оказался живой. Триггерится через `callback_data=page` в `magic_general_kb` ([keyboards/inline_keyboards.py:1358](keyboards/inline_keyboards.py:1358)), где `page='to_general_user_report'` устанавливается в 5 местах `admin_orders.py`.
 
 ### A5. Legacy-alias `'order-pf'` в SPA
 - [web/static/app.jsx:272](web/static/app.jsx:272) — `'order-pf'` оставлен как алиас на `'order-new'` (комментарий: «kept as alias for legacy callsites»).
@@ -50,16 +50,10 @@
 - Внешних ссылок на `/order-pf` не выявлено.
 - **Действие:** убрать алиас + ветку legacy-callsites. Все вызовы должны передавать `{order_id}`.
 
-### A6. Неиспользуемые функции в `utils/other_functions.py`
-Грепом подтверждено: импортируются извне только `get_user_string_without_first_name`, `get_days_suffix`, `format_decimal`. Удаляем:
-- `str2dict`
-- `link_cleaner`
-- `str2bool`
-- `declension_*` (все варианты)
-- `decline_order`
-- `conv_delta`
-- `split_messages`
-- `get_referals_count`
+### A6. Дубль `str2dict` в `utils/other_functions.py`
+- Функция `str2dict` определена **дважды**: line 15 и line 36 (повторное `def` перетирает первое определение).
+- Все остальные функции в файле (`format_decimal`, `get_admins`, `link_cleaner`, `str2bool`, `get_days_suffix`, `declension_months`, `declension_review`, `decline_order`, `split_messages`, `get_referals_count`) **имеют 3–59 внешних вызовов** — предыдущий скан ошибся, в спеке исправлено.
+- **Действие:** удалить второе определение `str2dict` (line 36 и его тело). Сравнить тела двух определений; если они отличаются, разобраться какое из них «правильное» (по callsite'ам), оставить его.
 
 ## Wave B — средний риск (целые фича-вешалки бота)
 
@@ -153,12 +147,11 @@ const SERVICES = [
 - В `handlers/__init__.py` нет `seo`, `reviews`. Файлов `handlers/seo.py`, `handlers/reviews.py` нет.
 - В `handlers/pf_order.py` нет хандлеров `yandex_pf`, `review_bonus`.
 - В `handlers/commands.py` нет хандлера `qna_avito` (text_startswith).
-- В `handlers/admin_orders.py` нет хандлера `to_general_user_report`.
 - В `web/routers/auth_email.py` нет POST `/register` (только `/register-request` и `/register-verify`).
 - В `web/static/app.jsx` нет `'order-pf'`-роута и legacy callsite handling.
 - В `web/static/components/Cabinet.jsx` `SERVICES` содержит ровно один элемент (`pf`).
 - В `keyboards/inline_keyboards.py` и `keyboards/users_menu.py` нет закомментированных кнопочных блоков и нет `seo_boost_kb`.
-- В `utils/other_functions.py` остались только три используемые функции (`get_user_string_without_first_name`, `get_days_suffix`, `format_decimal`).
+- В `utils/other_functions.py` остался один `def str2dict` (дубль удалён).
 - В `design.py` нет перечисленных в B7 строковых констант.
 - `docker exec api pytest` — зелёные.
 - Бот стартует без `ImportError`.

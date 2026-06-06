@@ -35,18 +35,6 @@ def get_menu_kb():
             callback_data='tarifs:pf'
         )
     )
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_reviews'),
-    #         callback_data="reviews"
-    #     )
-    # ),
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_seo_boost'),
-    #         callback_data="seo_boost"
-    #     )
-    # )
     keyboard.add(
         InlineKeyboardButton(
             text=get_string('btn_profile'),

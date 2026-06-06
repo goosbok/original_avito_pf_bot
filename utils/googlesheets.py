@@ -10,7 +10,6 @@ email'у с правом Editor, и бот переписывает содерж
     create_sheet()              → "Все заказы"
     create_orders_report()      → "Заказы по юзеру"
     create_refills_report()     → "Пополнения по юзеру"
-    create_reviews_report()     → "Отзывы"
 
 Если какая-то вкладка отсутствует — она создаётся (addSheet).
 """
@@ -362,67 +361,6 @@ def create_refills_report(user_id):
         column_widths,
     )
     logger.info("gsheets: '%s' updated, %d rows, scope=%s", TAB_USER_REFILLS, len(no) - 1, scope_ids)
-    return url
-
-
-def create_reviews_report(orders):
-    """Список отзывов, лист 'Отзывы'."""
-    _init()
-    _require_target()
-    sheet_id = _get_or_create_tab(TAB_REVIEWS)
-
-    users = all_users()
-    excludes = get_report_exclude()
-
-    no = ['№']
-    ids = ['id']
-    logins = ['username']
-    ru_services = ['Сервис']
-    links = ['Ссылка']
-    prices = ['Итого']
-    status = ['Статус']
-    reg_date = ['Дата']
-
-    for order in orders:
-        if str(order['user_id']) in excludes:
-            continue
-        no.append(order['id'])
-        ids.append(order['user_id'])
-        prices.append(str(order['price']))
-        ru_services.append(services[order['service']])
-        reg_date.append(format_display(order['date']))
-        if order['status'] == 'Posted':
-            status.append('Размещён')
-        elif order['status'] == 'Completed':
-            status.append('Выполнен')
-        else:
-            status.append(order['status'])
-        links.append(
-            order['link'].replace("'", "").replace(", ", "").replace("\n", "")
-                         .replace("\\", "").replace("\"", "")
-        )
-        login = ''
-        for user in users:
-            if int(order['user_id']) == int(user['id']):
-                login = get_user_str(user)
-                break
-        logins.append(login)
-
-    column_widths = [
-        (0, 1, 40),
-        (1, 3, 100),
-        (3, 4, 140),
-        (4, 5, 500),
-        (5, 6, 140),
-        (6, 7, 140),
-        (7, 8, 140),
-    ]
-    url = _write_tab(
-        TAB_REVIEWS, sheet_id,
-        [no, ids, logins, ru_services, links, prices, status, reg_date],
-        column_widths,
-    )
-    logger.info("gsheets: '%s' updated, %d rows", TAB_REVIEWS, len(no) - 1)
     return url
 
 

@@ -223,33 +223,6 @@ def order_text(order: dict):
         print(e)
         return "заказ не найден"
 
-def reviews_array(orders: list[dict]):
-    orders_array = []
-    for order in orders:
-        info = get_user(id=order['user_id'])
-        msg = (f"🐼 ID заказа: {order['id']}\n"
-               f"💳 Цена: {order['price']}\n"
-               f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-               f"⚙️ Сервис: {order['service']}\n"
-               f"🔰 Статус: {order['status']}\n"
-               f"🗓 Дата: {order['date']}")
-        orders_array.append(msg)
-    return orders_array
-
-def del_reviews_array(orders: list[dict]):
-    orders_array = []
-    for order in orders:
-        info = get_user(id=order['user_id'])
-        msg = (f"🐼 ID заказа: {order['increment']}\n"
-               f"💳 Цена: {order['price']}\n"
-               f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-               f"⚙️ Сервис: {order['service']}\n"
-               f"🔗 Ссылка на профиль: {order['link']}\n"
-               f"🔰 Статус: {order['status']}\n"
-               f"🗓 Дата: {order['date']}")
-        orders_array.append(msg)
-    return orders_array
-
 str_select_payment_method = "💳 Пополнение на <b>{}</b>₽\n\nВыберите способ оплаты:"
 
 str_manual_payment = (

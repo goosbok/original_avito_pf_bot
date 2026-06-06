@@ -175,7 +175,6 @@ _SETTING_DEFAULTS: dict[str, str] = {
     "payment_work": "true",
     "min_amount": "100",
     "manager_nick": "support",
-    "nick_manager_reviews": "support",
     "channel_link": "https://t.me/pf_avito_top",
     "egg_sticker": "",
 }
@@ -579,101 +578,6 @@ def user_orders_all(user_id):
         con.row_factory = dict_factory
         return con.execute("SELECT * FROM orders WHERE user_id = ?", (user_id,)).fetchall()
 
-#############################################################################################
-###############################            Отзывы             ###############################
-#############################################################################################
-
-# Добавление покупки
-def add_order_reviews(user_id, price, service, link, status):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        con.execute("INSERT INTO reviews "
-                    "(user_id, price, service, link, status, date) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    [user_id, price, service, link, status, get_date()])
-        con.commit()
-
-# Получение последнего заказа данного пользователя
-def get_users_last_order_reviews(user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM reviews WHERE user_id = ? ORDER BY increment DESC LIMIT 1", (user_id,)).fetchone()
-
-# Получение заказа на отзывы
-def get_order_reviews(id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM reviews WHERE increment = ?", (id,)).fetchone()
-
-# Редактирование заказа
-def edit_order_reviews(status, order):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        sql = "UPDATE reviews SET status = ? WHERE increment = ?"
-        con.execute(sql, (status,order))
-        con.commit()
-
-# Получение всех заказов
-def all_orders_reviews():
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        sql = "SELECT * FROM reviews"
-        return con.execute(sql).fetchall()
-
-
-# Все заказы пользователя
-def user_orders_all_reviews(user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM reviews WHERE user_id = ?", (user_id,)).fetchall()
-
-###############################################################################################
-###############################    Удаление негативного отзыва   ##############################
-###############################################################################################
-
-# Добавление покупки
-def add_order_delreview(user_id, price, service, link, status):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        con.execute("INSERT INTO delreviews "
-                    "(user_id, price, service, link, status, date) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    [user_id, price, service, link, status, get_date()])
-        con.commit()
-
-# Получение последнего заказа данного пользователя
-def get_users_last_order_delreviews(user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM delreviews WHERE user_id = ? ORDER BY increment DESC LIMIT 1", (user_id,)).fetchone()
-
-# Получение заказа на отзывы
-def get_order_delreviews(id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM delreviews WHERE increment = ?", (id,)).fetchone()
-
-# Редактирование заказа
-def edit_order_delreviews(status, order):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        sql = "UPDATE delreviews SET status = ? WHERE increment = ?"
-        con.execute(sql, (status,order))
-        con.commit()
-
-# Получение всех заказов
-def all_orders_delreviews():
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        sql = "SELECT * FROM delreviews"
-        return con.execute(sql).fetchall()
-
-
-# Все заказы пользователя
-def user_orders_all_delreviews(user_id):
-    with sqlite3.connect(path_db) as con:
-        con.row_factory = dict_factory
-        return con.execute("SELECT * FROM delreviews WHERE user_id = ?", (user_id,)).fetchall()
 
 #############################################################################################
 ###############################          SEO BOOST            ###############################
@@ -853,32 +757,6 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             5,
         ),
         (
-            "reviews",
-            "CREATE TABLE reviews ("
-            "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "user_id INTEGER NOT NULL, "
-            "price INTEGER, "
-            "service TEXT, "
-            "link TEXT, "
-            "status TEXT, "
-            "date TIMESTAMP, "
-            "FOREIGN KEY (user_id) REFERENCES users(id))",
-            7,
-        ),
-        (
-            "delreviews",
-            "CREATE TABLE delreviews ("
-            "increment INTEGER PRIMARY KEY AUTOINCREMENT, "
-            "user_id INTEGER NOT NULL, "
-            "price INTEGER, "
-            "service TEXT, "
-            "link TEXT, "
-            "status TEXT, "
-            "date TIMESTAMP, "
-            "FOREIGN KEY (user_id) REFERENCES users(id))",
-            7,
-        ),
-        (
             "settings",
             "CREATE TABLE IF NOT EXISTS settings("
             "parametr TEXT PRIMARY KEY,"
@@ -1040,10 +918,6 @@ def apply_phase2_migrations():
         if 'payment_id' not in existing_refills:
             con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
             print("refills.payment_id added")
-        existing_reviews = {row['name'] for row in con.execute("PRAGMA table_info(reviews)").fetchall()}
-        if 'link' not in existing_reviews:
-            con.execute("ALTER TABLE reviews ADD COLUMN link TEXT")
-            print("reviews.link added")
         existing_orders = {row['name'] for row in con.execute("PRAGMA table_info(orders)").fetchall()}
         if 'user_name' not in existing_orders:
             con.execute("ALTER TABLE orders ADD COLUMN user_name TEXT")

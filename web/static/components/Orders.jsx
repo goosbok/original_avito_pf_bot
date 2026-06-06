@@ -84,7 +84,7 @@ function OrdersPage({ onNavigate }) {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
             <h2>История заказов</h2>
-            <button className="btn btn--primary btn--sm" onClick={() => onNavigate('order-pf')}>
+            <button className="btn btn--primary btn--sm" onClick={() => onNavigate('order-new')}>
               + Новый заказ
             </button>
           </div>

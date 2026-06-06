@@ -194,7 +194,7 @@ function App() {
   };
 
   const handleNavigate = (target, payload) => {
-    // Auth-gated routes. 'order-new' / 'order-pf' / 'order-detail' are PUBLIC now
+    // Auth-gated routes. 'order-new' / 'order-detail' are PUBLIC now
     // (guest can create unpaid orders and view payment status without a session).
     if (['cabinet', 'orders', 'profile', 'notifications'].includes(target) && !user) {
       setAuthMode('login');
@@ -269,9 +269,7 @@ function App() {
     switch (route) {
       case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} resetToken={resetToken} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
-      // 'order-new' is the new unified form. 'order-pf' kept as alias for legacy callsites.
       case 'order-new':
-      case 'order-pf':
         return <OrderFormPage
                  user={user} balance={balance}
                  prefilledFrom={prefilledOrder}

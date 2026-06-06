@@ -90,7 +90,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
             <div style={{ width: 1, height: 18, background: 'var(--border)', margin: '0 6px' }} />
             <button
               className="btn btn--primary btn--sm"
-              onClick={() => onNavigate('order-pf')}
+              onClick={() => onNavigate('order-new')}
               style={{ padding: '5px 14px', fontSize: '0.8125rem' }}
             >
               + Заказать ПФ
@@ -280,7 +280,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                     { label: 'Кабинет',     route: 'cabinet' },
                     { label: 'Мои заказы',  route: 'orders' },
                     { label: 'Профиль',     route: 'profile' },
-                    { label: 'Заказать ПФ', route: 'order-pf' },
+                    { label: 'Заказать ПФ', route: 'order-new' },
                   ].map(item => (
                     <button
                       key={item.route}

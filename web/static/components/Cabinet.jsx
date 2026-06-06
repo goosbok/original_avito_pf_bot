@@ -3,7 +3,7 @@
 const { useState: useCabinetState, useEffect: useCabinetEffect } = React;
 
 const SERVICES = [
-  { id: 'pf',      abbr: 'ПФ',  name: 'Авито ПФ',    desc: 'Просмотры, лайки, контакты для объявлений', price: 'от 6 ₽/ПФ', available: true,  route: 'order-pf' },
+  { id: 'pf',      abbr: 'ПФ',  name: 'Авито ПФ',    desc: 'Просмотры, лайки, контакты для объявлений', price: 'от 6 ₽/ПФ', available: true,  route: 'order-new' },
   { id: 'reviews', abbr: 'ОТЗ', name: 'Отзывы',       desc: 'Накрутка / удаление: Авито, ВК, Яндекс, 2ГИС, Google', price: 'по тарифу', available: true,  route: null },
   { id: 'ypf',     abbr: 'ЯПФ', name: 'Яндекс ПФ',   desc: 'Поведенческие факторы для Яндекс', price: null, badge: 'В разработке', available: false, route: null },
   { id: 'seo',     abbr: 'SEO', name: 'SEO-буст',     desc: 'Ссылочное продвижение и рост позиций', price: null, badge: 'Скоро', available: false, route: null },

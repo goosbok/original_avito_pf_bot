@@ -5,7 +5,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
   const [mode, setMode] = useState(initialMode || 'login');
 
   // Keep internal mode in sync when parent navigates between auth sub-modes
-  // (login → register, register → login-tg, etc.). Without this, useState's
+  // (login → register, register → login with TG open, etc.). Without this, useState's
   // lazy init means clicks on header "Войти" / "Регистрация" do nothing when
   // we're already on the auth route.
   useEffect(() => { setMode(initialMode || 'login'); }, [initialMode]);
@@ -38,7 +38,21 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
   const [resetNew, setResetNew] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetDone, setResetDone] = useState(false);
-  const [loginTab, setLoginTab] = useState('email'); // 'email' | 'phone' — used in default login screen
+  const [activeMethod, setActiveMethod] = useState(null); // null | 'tg' | 'email' | 'sms'
+
+  function pickMethod(method) {
+    setError('');
+    setSuccess('');
+    if (activeMethod === method) {
+      // tap on the same method → collapse
+      setActiveMethod(null);
+      if (method === 'tg') { setOtpSent(false); setOtpCode(''); setNeedsConnect(false); }
+      return;
+    }
+    // switching methods — reset state of the previously-active TG step machine
+    if (activeMethod === 'tg') { setOtpSent(false); setOtpCode(''); setNeedsConnect(false); }
+    setActiveMethod(method);
+  }
 
   useEffect(() => {
     if (tgId) sessionStorage.setItem('auth_tg_phone', tgId);
@@ -246,83 +260,6 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     </div>
   );
 
-  if (mode === 'login-tg') return (
-    <div className="auth-wrap">
-      <div className="card auth-card">
-        <div className="auth-card__logo">{logoMark}</div>
-        <h2 className="auth-card__title">Вход через Telegram</h2>
-        <p className="auth-card__sub">Введите номер телефона — мы отправим код</p>
-        <div className="auth-form">
-          {error && <div className="alert alert--error">{error}</div>}
-          {needsConnect && (() => {
-            const botUrl = (botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect';
-            const botName = (botConfig && botConfig.bot_username) || 'AVITOPF_bot';
-            return (
-              <div className="alert alert--info">
-                <div style={{ fontWeight: 600, marginBottom: 8 }}>Номер не привязан к боту</div>
-                <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
-                  <li><a href={botUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600, textDecoration: 'underline' }}>Откройте @{botName} в Telegram</a></li>
-                  <li>Нажмите «Поделиться контактом»</li>
-                  <li>Вернитесь сюда и нажмите «Получить код»</li>
-                </ol>
-              </div>
-            );
-          })()}
-          {success && <div className="alert alert--success">{success}</div>}
-          {!otpSent ? (
-            <>
-              <div className="form-field">
-                <label className="form-label">Номер телефона</label>
-                <input
-                  className="input"
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="+7 900 123-45-67"
-                  value={tgId}
-                  onChange={e => setTgId(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
-                />
-              </div>
-              <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
-                {loading ? 'Отправка...' : 'Получить код в Telegram'}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="form-field">
-                <label className="form-label">6-значный код из Telegram</label>
-                <input
-                  className="input"
-                  placeholder="123456"
-                  value={otpCode}
-                  maxLength={6}
-                  onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                  onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
-                  style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
-                  autoFocus
-                />
-                <div className="form-hint">Код действителен 10 минут</div>
-              </div>
-              <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
-                {loading ? 'Проверка...' : 'Войти →'}
-              </button>
-              <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
-                ← Изменить номер
-              </button>
-            </>
-          )}
-        </div>
-        <div className="auth-links">
-          <span onClick={() => setMode('login')} style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 600 }}>
-            Войти через Email
-          </span>
-          {' · '}
-          <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
-        </div>
-      </div>
-    </div>
-  );
-
   if (mode === 'register') return (
     <div className="auth-wrap">
       <div className="card auth-card">
@@ -361,7 +298,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
               <div className="auth-divider"><span>или</span></div>
               <button
                 className="btn btn--ghost btn--full"
-                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('login-tg'); }}
+                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('login'); setActiveMethod('tg'); }}
               >
                 Войти через Telegram
               </button>
@@ -451,56 +388,97 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     </div>
   );
 
-  // Default: Email login (with tab switcher to phone-SMS)
+  // Default: accordion method picker (Telegram / Email / SMS)
   return (
     <div className="auth-wrap">
       <div className="card auth-card">
         <div className="auth-card__logo">{logoMark}</div>
-        <h2 className="auth-card__title">Добро пожаловать</h2>
-        <p className="auth-card__sub">Войдите в личный кабинет</p>
+        <h2 className="auth-card__title">Войти в кабинет</h2>
+        <p className="auth-card__sub">Выберите способ входа</p>
 
-        <div style={{ display: 'flex', gap: 8, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
-          <button
-            onClick={() => { setLoginTab('email'); setError(''); }}
-            style={{
-              flex: 1, padding: '10px 0', background: 'none', border: 'none',
-              cursor: 'pointer', fontWeight: loginTab === 'email' ? 700 : 500,
-              color: loginTab === 'email' ? 'var(--primary)' : 'var(--text-2)',
-              borderBottom: loginTab === 'email' ? '2px solid var(--primary)' : '2px solid transparent',
-              fontSize: '0.875rem',
-            }}
-          >Email</button>
-          <button
-            onClick={() => { setLoginTab('phone'); setError(''); }}
-            style={{
-              flex: 1, padding: '10px 0', background: 'none', border: 'none',
-              cursor: 'pointer', fontWeight: loginTab === 'phone' ? 700 : 500,
-              color: loginTab === 'phone' ? 'var(--primary)' : 'var(--text-2)',
-              borderBottom: loginTab === 'phone' ? '2px solid var(--primary)' : '2px solid transparent',
-              fontSize: '0.875rem',
-            }}
-          >По телефону</button>
-        </div>
+        {error && <div className="alert alert--error">{error}</div>}
+        {success && <div className="alert alert--success">{success}</div>}
 
-        {loginTab === 'phone' ? (
-          <>
-            <PhoneLogin onSuccess={(jwt) => onLogin(jwt)} />
-            <div className="auth-links" style={{ marginTop: 16 }}>
-              <span onClick={() => setMode('login-tg')} style={{ cursor: 'pointer', color: 'var(--primary)', fontWeight: 600 }}>
-                Войти через Telegram
-              </span>
-              {' · '}
-              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
+        <div className={`method-row${activeMethod ? ' has-active' : ''}`}>
+          {/* ── Telegram ─────────────────────────────────────────────────── */}
+          <button
+            type="button"
+            className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}
+            onClick={() => pickMethod('tg')}
+          >
+            <span className="method-btn__icon">✈</span>Войти через Telegram
+          </button>
+          {activeMethod === 'tg' && (
+            <div className="method-form">
+              {needsConnect && (() => {
+                const botUrl = (botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect';
+                const botName = (botConfig && botConfig.bot_username) || 'AVITOPF_bot';
+                return (
+                  <div className="alert alert--info">
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Номер не привязан к боту</div>
+                    <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+                      <li><a href={botUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600, textDecoration: 'underline' }}>Откройте @{botName} в Telegram</a></li>
+                      <li>Нажмите «Поделиться контактом»</li>
+                      <li>Вернитесь сюда и нажмите «Получить код»</li>
+                    </ol>
+                  </div>
+                );
+              })()}
+              {!otpSent ? (
+                <>
+                  <div className="form-field">
+                    <label className="form-label">Номер телефона</label>
+                    <input
+                      className="input"
+                      type="tel"
+                      inputMode="tel"
+                      placeholder="+7 900 123-45-67"
+                      value={tgId}
+                      onChange={e => setTgId(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
+                    />
+                  </div>
+                  <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
+                    {loading ? 'Отправка...' : 'Получить код в Telegram'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="form-field">
+                    <label className="form-label">6-значный код из Telegram</label>
+                    <input
+                      className="input"
+                      placeholder="123456"
+                      value={otpCode}
+                      maxLength={6}
+                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                      style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
+                      autoFocus
+                    />
+                    <div className="form-hint">Код действителен 10 минут</div>
+                  </div>
+                  <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
+                    {loading ? 'Проверка...' : 'Войти →'}
+                  </button>
+                  <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
+                    ← Изменить номер
+                  </button>
+                </>
+              )}
             </div>
-          </>
-        ) : (
-          <>
-            <div className="auth-form">
-              {error && <div className="alert alert--error">{error}</div>}
-              <button className="btn btn--secondary btn--lg btn--full" onClick={() => setMode('login-tg')}>
-                Войти через Telegram
-              </button>
-              <div className="auth-divider"><span>или через email</span></div>
+          )}
+
+          {/* ── Email ────────────────────────────────────────────────────── */}
+          <button
+            type="button"
+            className={`method-btn${activeMethod === 'email' ? ' active' : ''}`}
+            onClick={() => pickMethod('email')}
+          >
+            <span className="method-btn__icon">✉</span>Войти по Email
+          </button>
+          {activeMethod === 'email' && (
+            <div className="method-form">
               <div className="form-field">
                 <label className="form-label">Email</label>
                 <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
@@ -516,25 +494,36 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
               <button className="btn btn--primary btn--lg btn--full" onClick={handleEmailLogin} disabled={loading}>
                 {loading ? 'Вход...' : 'Войти →'}
               </button>
-              <div style={{ textAlign: 'center', marginTop: 4 }}>
-                <button className="btn btn--ghost btn--sm"
-                  onClick={() => onNavigate('forgot')}
-                  style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
+              <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85rem' }}>
+                <span onClick={() => setMode('forgot')} style={{ color: 'var(--primary)', cursor: 'pointer' }}>
                   Забыл пароль?
-                </button>
+                </span>
               </div>
             </div>
-            <div className="auth-links">
-              Нет аккаунта?{' '}
-              <span
-                onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('register'); }}
-                style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
-              >Зарегистрироваться</span>
-              {' · '}
-              <span onClick={() => onNavigate('order-new')} style={{ cursor: 'pointer' }}>На главную</span>
+          )}
+
+          {/* ── SMS ──────────────────────────────────────────────────────── */}
+          <button
+            type="button"
+            className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`}
+            onClick={() => pickMethod('sms')}
+          >
+            <span className="method-btn__icon">📱</span>Войти по SMS
+          </button>
+          {activeMethod === 'sms' && (
+            <div className="method-form">
+              <PhoneLogin onSuccess={(jwt) => onLogin(jwt)} />
             </div>
-          </>
-        )}
+          )}
+        </div>
+
+        <div className="auth-links">
+          Нет аккаунта?{' '}
+          <span
+            onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); setMode('register'); }}
+            style={{ color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}
+          >Зарегистрироваться</span>
+        </div>
       </div>
     </div>
   );

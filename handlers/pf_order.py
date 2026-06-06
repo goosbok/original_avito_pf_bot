@@ -61,16 +61,6 @@ async def tarif(call: CallbackQuery, state: FSMContext, user_id: int):
         logger.debug("could not delete message")
 
 
-@dp.callback_query_handler(text="yandex_pf", state='*')
-async def yandex_pf(call: CallbackQuery, state: FSMContext):
-    await call.message.answer("🧑🏻‍💻 Данная функция в разработке")
-
-
-@dp.callback_query_handler(text="review_bonus", state='*')
-async def call_review_bonus(call: CallbackQuery, state: FSMContext):
-    await call.message.answer("🧑🏻‍💻 Данная функция в разработке")
-
-
 @dp.callback_query_handler(text_startswith="pf:", state='*')
 async def pf(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("pf callback: tg_id=%s data=%s", call.from_user.id, call.data)

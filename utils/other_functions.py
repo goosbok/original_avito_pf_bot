@@ -33,11 +33,6 @@ def str2bool(value):
         return False
     return str(value).lower() in ("yes", "true", "1")
 
-def str2dict(str_value):
-    result_dict = ast.literal_eval(str_value)
-
-    return result_dict
-
 #Падежи для слова день
 def get_days_suffix(count):
     if 11 <= int(count) % 100 <= 14:

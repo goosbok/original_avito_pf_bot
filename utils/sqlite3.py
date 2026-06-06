@@ -168,18 +168,6 @@ _STRING_DEFAULTS: dict[str, str] = {
         "🔗 Ссылок: {}\n{}"
     ),
     "str_order_confirm": "✅ Заказ #{} размещён! Менеджер свяжется с вами.",
-    "str_review_start": "⭐ Выберите площадку для отзывов:",
-    "str_reviews_vk": "📝 Отзывы ВКонтакте:",
-    "str_reviews_yandex": "📝 Отзывы Яндекс:",
-    "str_reviews_avito": "📝 Отзывы Авито:",
-    "str_reviews_2gis": "📝 Отзывы 2ГИС:",
-    "str_reviews_flamp": "📝 Отзывы Фламп:",
-    "str_reviews_add_link": "🔗 Вставьте ссылку на вашу страницу:",
-    "str_review_bad_link": "❌ Ссылка не соответствует выбранной площадке.",
-    "str_review_order_confirm": "✅ {} отзывов для {} по {} ₽/шт. Итого: {} ₽. Подтвердить?",
-    "str_review_confirm": "✅ Заказ #{} принят! Свяжитесь с менеджером: {}",
-    "str_new_review_admin_report": "⭐ Новый заказ отзывов #{}\n💰 {} ₽\n👤 {}\n📍 {}\n📊 {}\n📅 {}\n🔗 {}",
-    "str_delete_review": "🗑 Удаление негативного отзыва Авито.\nСтоимость: <b>{}</b> ₽.\nВставьте ссылку на отзыв:",
 }
 
 # Defaults for the `settings` table — used when row is missing or value is empty.

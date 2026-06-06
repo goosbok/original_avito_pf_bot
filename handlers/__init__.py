@@ -1,6 +1,6 @@
 from . import (
     main_start,
-    profile, promocodes, pf_order, reviews, refill,
+    profile, promocodes, pf_order, refill,
     admin_base, admin_promos, admin_users, admin_broadcast,
     admin_orders, admin_reviews, admin_settings, admin_funnel,
     support_web,

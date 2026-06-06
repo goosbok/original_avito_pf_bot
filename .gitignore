@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .claude/
+.superpowers/
 data/database.db
 log.txt
 storage/

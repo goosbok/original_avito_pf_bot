@@ -18,6 +18,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     setNeedsConnect(false);
     setForgotEmail(''); setForgotSent(false);
     setResetNew(''); setResetConfirm(''); setResetDone(false);
+    setActiveMethod(null);
   }, [mode]);
 
   const [email, setEmail] = useState('');

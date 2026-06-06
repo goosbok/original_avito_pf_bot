@@ -25,63 +25,9 @@ def no_email(monkeypatch):
     monkeypatch.setattr(es, "send_email", lambda *a, **kw: None)
 
 
-def test_register_returns_jwt(client):
-    r = client.post("/api/auth/email/register", json={
-        "email": "alice@example.com",
-        "password": "password123",
-        "password_confirm": "password123",
-        "first_name": "Alice",
-    })
-    assert r.status_code == 201
-    body = r.json()
-    assert body["token_type"] == "bearer"
-    assert len(body["access_token"]) > 20
-
-
-def test_register_duplicate_email_409(client):
-    payload = {
-        "email": "dup@example.com",
-        "password": "password123",
-        "password_confirm": "password123",
-    }
-    client.post("/api/auth/email/register", json=payload).raise_for_status()
-    r = client.post("/api/auth/email/register", json=payload)
-    assert r.status_code == 409
-
-
-def test_register_invalid_email_422(client):
-    r = client.post("/api/auth/email/register", json={
-        "email": "not-an-email",
-        "password": "password123",
-        "password_confirm": "password123",
-    })
-    assert r.status_code == 422
-
-
-def test_register_short_password_422(client):
-    r = client.post("/api/auth/email/register", json={
-        "email": "a@b.com",
-        "password": "short",
-        "password_confirm": "short",
-    })
-    assert r.status_code == 422
-
-
-def test_register_password_mismatch_422(client):
-    r = client.post("/api/auth/email/register", json={
-        "email": "a@b.com",
-        "password": "password123",
-        "password_confirm": "different123",
-    })
-    assert r.status_code == 422
-
-
 def test_login_success(client):
-    client.post("/api/auth/email/register", json={
-        "email": "login@example.com",
-        "password": "password123",
-        "password_confirm": "password123",
-    }).raise_for_status()
+    from services import auth_email as _ae
+    _ae.register("login@example.com", "password123")
     r = client.post("/api/auth/email/login", json={
         "email": "login@example.com",
         "password": "password123",
@@ -91,11 +37,8 @@ def test_login_success(client):
 
 
 def test_login_wrong_password_401(client):
-    client.post("/api/auth/email/register", json={
-        "email": "user@example.com",
-        "password": "password123",
-        "password_confirm": "password123",
-    }).raise_for_status()
+    from services import auth_email as _ae
+    _ae.register("user@example.com", "password123")
     r = client.post("/api/auth/email/login", json={
         "email": "user@example.com",
         "password": "wrongpass",
@@ -125,11 +68,8 @@ def _register_and_get_reset_token(client, monkeypatch, email: str) -> str:
         es, "send_email",
         lambda to, subject, body, **kw: captured.update({"body": body}),
     )
-    client.post("/api/auth/email/register", json={
-        "email": email,
-        "password": "password123",
-        "password_confirm": "password123",
-    }).raise_for_status()
+    from services import auth_email as _ae
+    _ae.register(email, "password123")
     client.post("/api/auth/email/forgot-password", json={"email": email})
     m = _re.search(r"token=([^\s\n]+)", captured["body"])
     assert m, "no token in reset email"
@@ -147,11 +87,8 @@ def test_forgot_password_sends_email_for_known_address(client, monkeypatch):
     calls = []
     import services.email_sender as es
     monkeypatch.setattr(es, "send_email", lambda to, *a, **kw: calls.append(to))
-    client.post("/api/auth/email/register", json={
-        "email": "knownreset@example.com",
-        "password": "password123",
-        "password_confirm": "password123",
-    }).raise_for_status()
+    from services import auth_email as _ae
+    _ae.register("knownreset@example.com", "password123")
     r = client.post("/api/auth/email/forgot-password", json={"email": "knownreset@example.com"})
     assert r.status_code == 200
     assert calls == ["knownreset@example.com"]

@@ -32,21 +32,6 @@ router = APIRouter(prefix="/api/auth/email", tags=["auth"])
 router_auth = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: EmailRegisterRequest) -> TokenResponse:
-    """Register a new user with email and password (legacy: immediate registration).
-
-    Kept for backwards compatibility. New flow is /register-request → /register-verify.
-    """
-    try:
-        user_id = auth_email.register(body.email, body.password, first_name=body.first_name)
-    except EmailAlreadyRegistered as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (InvalidCredentials, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return TokenResponse(access_token=create_jwt(user_id))
-
-
 @router.post("/register-request", status_code=204, response_model=None)
 async def register_request_endpoint(body: EmailRegisterRequest) -> Response:
     """Step 1: send verification code to email.

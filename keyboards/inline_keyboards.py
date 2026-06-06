@@ -342,11 +342,7 @@ def admin():
                 callback_data="user_balance"
             )
         )
-        keyboard.row(
-            InlineKeyboardButton(
-                text="⭐️ Отзывы",
-                callback_data='reviews_man'
-            ),
+        keyboard.add(
             InlineKeyboardButton(
                 text="📖 Заказы",
                 callback_data='orders_man'

@@ -327,12 +327,15 @@ def count_pending_manual_links_due_today() -> int:
     return int(row["c"])
 
 
-def mark_all_manual_in_work(*, admin_id: int) -> int:
+def mark_all_manual_in_work(
+    *, admin_id: int
+) -> tuple[int, list[tuple[int, str, str]]]:
     """Bulk-перевод pending+manual ссылок (с due start_date) в in_work.
 
     Используется админ-кнопкой «Отправил все manual-ссылки» (Спек §5.2).
     Для каждой ссылки вычисляется deadline_at и пересчитывается status заказа.
-    Возвращает количество переведённых ссылок.
+    Возвращает (count, transitions) где transitions — список (order_id, old, new)
+    кортежей для заказов, чей status сменился (для notify юзеру).
     """
     with connect() as con:
         rows = con.execute(
@@ -343,10 +346,11 @@ def mark_all_manual_in_work(*, admin_id: int) -> int:
         ).fetchall()
         candidates = [(int(r["id"]), int(r["order_id"])) for r in rows]
     if not candidates:
-        return 0
+        return 0, []
 
     order_cache: dict[int, dict] = {}
     count = 0
+    transitions: list[tuple[int, str, str]] = []
     for link_id, order_id in candidates:
         if order_id not in order_cache:
             with connect() as con:
@@ -359,9 +363,12 @@ def mark_all_manual_in_work(*, admin_id: int) -> int:
         order = order_cache[order_id]
         deadline = compute_deadline(order)
         try:
-            mark_in_work(link_id, delivery_mode="manual",
-                         deadline_at=deadline)
+            result = mark_in_work(link_id, delivery_mode="manual",
+                                  deadline_at=deadline)
             count += 1
+            if result is not None:
+                old, new = result
+                transitions.append((order_id, old, new))
         except Exception:  # noqa: BLE001
             logger.exception(
                 "mark_all_manual_in_work: link %s failed (admin=%s)",
@@ -371,7 +378,7 @@ def mark_all_manual_in_work(*, admin_id: int) -> int:
         "mark_all_manual_in_work: %d links marked by admin=%s",
         count, admin_id,
     )
-    return count
+    return count, transitions
 
 
 def fail_remaining_links(

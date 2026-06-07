@@ -858,9 +858,29 @@ async def mark_manual_prompt(call: types.CallbackQuery, state: FSMContext):
 async def mark_manual_confirm(call: types.CallbackQuery, state: FSMContext):
     """Шаг 2: подтверждено — bulk-перевод."""
     admin_id = int(call.from_user.id)
-    n = mark_all_manual_in_work(admin_id=admin_id)
+    n, transitions = mark_all_manual_in_work(admin_id=admin_id)
+
+    # Notify users whose orders transitioned to a new status
+    for order_id, old, new in transitions:
+        order = get_order(order_id)
+        if order is None:
+            continue
+        try:
+            await notify_order_status_changed(
+                user_id=int(order["user_id"]),
+                kind="order",
+                order_id=int(order_id),
+                old_status=old,
+                new_status=new,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "mark_manual_confirm: notify failed for order %s", order_id
+            )
+
     await call.message.answer(
-        f"✅ Отмечено как отправленные: <b>{n}</b> ссылок.",
+        f"✅ Отмечено как отправленные: <b>{n}</b> ссылок.\n"
+        f"Заказов завершено: <b>{len(transitions)}</b>.",
         reply_markup=admin_back_kb('orders_man'),
     )
     await state.finish()

@@ -26,7 +26,7 @@ async def test_mark_manual_confirm_dispatches_and_replies(tmp_db):
     state = AsyncMock()
 
     with patch("handlers.admin_orders.mark_all_manual_in_work",
-               return_value=7) as mock:
+               return_value=(7, [])) as mock:
         await mark_manual_confirm(call, state)
 
     mock.assert_called_once_with(admin_id=42)
@@ -34,6 +34,33 @@ async def test_mark_manual_confirm_dispatches_and_replies(tmp_db):
     call.message.answer.assert_awaited()
     text = call.message.answer.await_args.args[0]
     assert "7" in text
+
+
+@pytest.mark.asyncio
+async def test_mark_manual_confirm_fires_notify_for_transitions():
+    from handlers.admin_orders import mark_manual_confirm
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.answer = AsyncMock()
+    call.message.delete = AsyncMock()
+    call.from_user.id = 42
+    state = AsyncMock()
+
+    with patch("handlers.admin_orders.mark_all_manual_in_work",
+               return_value=(3, [(101, "paid", "done")])), \
+         patch("handlers.admin_orders.get_order",
+               return_value={"increment": 101, "user_id": 999, "status": "done"}), \
+         patch("handlers.admin_orders.notify_order_status_changed",
+               new=AsyncMock()) as notif:
+        await mark_manual_confirm(call, state)
+
+    notif.assert_awaited_once()
+    kwargs = notif.call_args.kwargs
+    assert kwargs["order_id"] == 101
+    assert kwargs["user_id"] == 999
+    assert kwargs["old_status"] == "paid"
+    assert kwargs["new_status"] == "done"
 
 
 @pytest.mark.asyncio

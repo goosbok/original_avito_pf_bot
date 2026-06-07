@@ -39,8 +39,9 @@ def test_mark_all_manual_in_work_only_picks_manual_pending(tmp_db):
                     "delivery_mode='manual' WHERE id=?", (link_ids[3],))
         con.commit()
 
-    n = mark_all_manual_in_work(admin_id=42)
+    n, transitions = mark_all_manual_in_work(admin_id=42)
     assert n == 1
+    assert transitions == []
     statuses = {l["id"]: l["status"] for l in list_links(order_id)}
     assert statuses[link_ids[0]] == "in_work"
     assert statuses[link_ids[1]] == "pending"
@@ -68,8 +69,9 @@ def test_mark_all_manual_in_work_skips_future_start_date(tmp_db):
         con.execute("UPDATE order_links SET delivery_mode='manual' WHERE id=?",
                     (link_id,))
         con.commit()
-    n = mark_all_manual_in_work(admin_id=42)
+    n, transitions = mark_all_manual_in_work(admin_id=42)
     assert n == 0
+    assert transitions == []
     assert list_links(order_id)[0]["status"] == "pending"
 
 
@@ -84,7 +86,9 @@ def test_mark_all_manual_sets_deadline_at(tmp_db):
         con.execute("UPDATE order_links SET delivery_mode='manual' WHERE id=?",
                     (link_id,))
         con.commit()
-    mark_all_manual_in_work(admin_id=42)
+    n, transitions = mark_all_manual_in_work(admin_id=42)
+    assert n == 1
+    assert transitions == []
     link = list_links(order_id)[0]
     assert link["status"] == "in_work"
     assert link["deadline_at"] is not None
@@ -113,6 +117,52 @@ def test_fail_remaining_links_transitions_pending_and_in_work(tmp_db):
     assert statuses[link_ids[1]] == ("failed", "manual cancel")
     assert statuses[link_ids[2]] == ("done", None)
     assert transition == ("paid", "failed")
+
+
+def test_mark_all_manual_in_work_returns_transitions_for_completed_orders(tmp_db):
+    """bulk переводит pending→in_work, заказ остаётся paid — transitions пуст.
+
+    mark_in_work переводит ссылку в in_work, а не done, поэтому заказ не
+    завершается и transitions всегда пуст для этого метода. Тест проверяет
+    форму возвращаемого значения и бизнес-правило.
+    """
+    from services.order_links import mark_all_manual_in_work
+    order_id = _seed_paid_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=order_id, urls=["only-link"])
+        con.commit()
+    link_id = list_links(order_id)[0]["id"]
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE order_links SET delivery_mode='manual' WHERE id=?",
+                    (link_id,))
+        con.commit()
+
+    n, transitions = mark_all_manual_in_work(admin_id=42)
+    # mark_in_work переведёт ссылку в in_work, не done — заказ остаётся paid
+    assert n == 1
+    assert transitions == []  # бизнес-правило: in_work не завершает заказ
+
+
+def test_mark_all_manual_in_work_returns_tuple_with_partial_done(tmp_db):
+    """Заказ с одной done и одной pending+manual: после bulk одна в in_work.
+
+    Заказ не завершается (последняя ссылка теперь in_work), transitions пуст.
+    Тест также покрывает корректность return signature при mixed-состоянии.
+    """
+    from services.order_links import mark_all_manual_in_work
+    order_id = _seed_paid_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=order_id, urls=["a", "b"])
+        con.commit()
+    link_a, link_b = [l["id"] for l in list_links(order_id)]
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE order_links SET status='done' WHERE id=?", (link_a,))
+        con.execute("UPDATE order_links SET delivery_mode='manual' WHERE id=?",
+                    (link_b,))
+        con.commit()
+    n, transitions = mark_all_manual_in_work(admin_id=42)
+    assert n == 1
+    assert transitions == []  # одна done + одна теперь in_work → paid остаётся
 
 
 def test_fail_remaining_links_idempotent(tmp_db):

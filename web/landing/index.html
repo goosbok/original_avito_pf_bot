@@ -45,15 +45,37 @@ document.addEventListener('DOMContentLoaded', async function() {
   function setStatus(msg) { if (loading) loading.textContent = msg; }
 
   // Error sink persists across replaceWith since it's on window, not the DOM.
-  window.addEventListener('error', function(e) {
+  function appendErr(text) {
     var p = document.body || document.documentElement;
     var d = document.getElementById('__bundler_err') || p.appendChild(document.createElement('div'));
     d.id = '__bundler_err';
     d.style.cssText = 'position:fixed;bottom:12px;left:12px;right:12px;font:12px/1.4 ui-monospace,monospace;background:#2a1215;color:#ff8a80;padding:10px 14px;border-radius:8px;border:1px solid #5c2b2e;z-index:99999;white-space:pre-wrap;max-height:40vh;overflow:auto';
-    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') +
-      '[bundle] ' + (e.message || e.type) +
-      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '');
+    d.textContent = (d.textContent ? d.textContent + String.fromCharCode(10) : '') + text;
+  }
+  window.addEventListener('error', function(e) {
+    appendErr('[bundle] ' + (e.message || e.type) +
+      (e.filename ? ' (' + e.filename.slice(0, 60) + ':' + e.lineno + ')' : '') +
+      (e.error && e.error.stack ? String.fromCharCode(10) + e.error.stack : ''));
   }, true);
+  window.addEventListener('unhandledrejection', function(e) {
+    var r = e.reason;
+    appendErr('[promise] ' + (r && (r.stack || r.message) ? (r.stack || r.message) : String(r)));
+  });
+  // Зеркалим console.error в баннер: на мобиле DevTools нет, а window 'error'
+  // для Babel-скриптов браузер санитизирует в "Script error." — зато
+  // console.error несёт настоящий текст ошибки React/приложения.
+  var __origConsoleError = console.error.bind(console);
+  console.error = function() {
+    try {
+      var parts = [];
+      for (var i = 0; i < arguments.length; i++) {
+        var a = arguments[i];
+        parts.push(a && a.stack ? a.stack : String(a));
+      }
+      appendErr('[console] ' + parts.join(' '));
+    } catch (_e) {}
+    __origConsoleError.apply(console, arguments);
+  };
 
   try {
     const manifestEl = document.querySelector('script[type="__bundler/manifest"]');
@@ -132,10 +154,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     // (synthesizing one if the source HTML omitted it) but may carry
     // attributes through, so match the full opening tag. slice() rather than
     // replace() keeps us clear of $-pattern substitution in resourceScript.
+    // PWA-иконки для «Добавить на экран Домой» (iOS) и манифест (Android).
+    // Внутренний шаблон бандла своих icon-тегов не содержит, а внешний <head>
+    // выкидывается при замене documentElement ниже — поэтому инжектим теги
+    // прямо в <head> шаблона, рядом с resourceScript.
+    const iconTags =
+      '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">' +
+      '<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">' +
+      '<link rel="manifest" href="/manifest.json">' +
+      '<meta name="theme-color" content="#000000">' +
+      '<meta name="mobile-web-app-capable" content="yes">' +
+      '<meta name="apple-mobile-web-app-capable" content="yes">' +
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
+      '<meta name="apple-mobile-web-app-title" content="авито.пф">';
     const headOpen = template.match(/<head[^>]*>/i);
     if (headOpen) {
       const i = headOpen.index + headOpen[0].length;
-      template = template.slice(0, i) + resourceScript + template.slice(i);
+      template = template.slice(0, i) + resourceScript + iconTags + template.slice(i);
     }
 
     // Parse the template and swap the root element. Scripts inserted via

@@ -1029,10 +1029,6 @@ def orders_kb():
         )
         keyboard.row(
             InlineKeyboardButton(
-                text="✅ Выполнить",
-                callback_data="gotovoebat"
-            ),
-            InlineKeyboardButton(
                 text="❎ Удалить",
                 callback_data="del_order"
             )

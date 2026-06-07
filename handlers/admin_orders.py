@@ -47,10 +47,6 @@ class Order(StatesGroup):
     user = State()
 
 
-class Order1(StatesGroup):
-    order = State()
-
-
 class magic(StatesGroup):
     user = State()
 
@@ -246,40 +242,6 @@ async def order_work_start(message: types.Message, state: FSMContext):
         links_cnt += 1
     STR = STR.format(inc, price, user_str, pos_name, status, cont, dat, links_cnt, links)
     await message.answer(STR, reply_markup=admin_back_kb(None))
-    await state.finish()
-
-
-@dp.callback_query_handler(text="gotovoebat")
-async def order_input_id(call: types.CallbackQuery, state: FSMContext):
-    try:
-        await call.message.delete()
-    except:
-        logger.debug("could not delete message")
-    await bot.send_message(chat_id=call.from_user.id, text=f"⚙️ Введите ID заказа:")
-    await Order1.order.set()
-
-
-@dp.message_handler(state=Order1.order)
-async def order_finish(message: types.Message, state: FSMContext):
-    order = message.text
-    order1 = get_order(order)
-    if not order1:
-        await bot.send_message(chat_id=message.from_user.id, text=f"⚠️ Заказ {order} не найден!", reply_markup=admin_back_kb('orders_man'))
-        await state.finish()
-        return
-    old_status = str(order1.get('status') or '')
-    edit_order(status="done", order=order)
-
-    from services.notifications import notify_order_status_changed
-    await notify_order_status_changed(
-        user_id=int(order1['user_id']),
-        kind="order",
-        order_id=int(order),
-        old_status=old_status,
-        new_status="done",
-    )
-
-    await bot.send_message(chat_id=message.from_user.id, text="✅ Успешно")
     await state.finish()
 
 

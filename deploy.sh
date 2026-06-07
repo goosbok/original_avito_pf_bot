@@ -10,11 +10,31 @@
 
 set -euo pipefail
 
-LANDING_SRC="web/landing/index.html"
-LANDING_DST="/var/www/pf-bot-landing/index.html"
+LANDING_SRC_DIR="web/landing"
+LANDING_DST_DIR="/var/www/pf-bot-landing"
+# index.html + PWA-ассеты (favicon, apple-touch-icon, манифест и иконки для
+# «Добавить на экран Домой»). Все файлы лежат рядом в web/landing/.
+LANDING_ASSETS=(
+  index.html
+  manifest.json
+  favicon-32.png
+  apple-touch-icon.png
+  icon-192.png
+  icon-512.png
+  icon-192-maskable.png
+  icon-512-maskable.png
+)
 SERVER="root@167.233.52.85"
 PROD_HOSTNAME="ubuntu-4gb-fsn1-1-igor"
 PROJECT_DIR="/root/projects/original_avito_pf_bot"
+
+# Копирует лендинг (index.html + PWA-ассеты) в каталог, который раздаёт nginx.
+copy_landing() {
+  mkdir -p "$LANDING_DST_DIR"
+  for asset in "${LANDING_ASSETS[@]}"; do
+    cp "$LANDING_SRC_DIR/$asset" "$LANDING_DST_DIR/$asset"
+  done
+}
 
 # ──────────────────────────────────────────
 # Если запущен локально — прокидываем на сервер
@@ -37,7 +57,7 @@ if [[ "$MODE" == "--landing" ]]; then
   step "Pulling latest code..."
   git pull origin dev --ff-only
   step "Copying landing HTML..."
-  cp "$LANDING_SRC" "$LANDING_DST"
+  copy_landing
   echo "✅ Landing updated."
   exit 0
 fi
@@ -51,7 +71,7 @@ if [[ "$MODE" == "--api" ]]; then
   step "Restarting api..."
   docker compose up -d api
   step "Copying landing HTML..."
-  cp "$LANDING_SRC" "$LANDING_DST"
+  copy_landing
   echo ""
   docker compose ps api
   echo "✅ API redeployed."
@@ -69,7 +89,7 @@ step "Restarting containers..."
 docker compose up -d
 
 step "Copying landing HTML..."
-cp "$LANDING_SRC" "$LANDING_DST"
+copy_landing
 
 step "Waiting for api to start..."
 sleep 4

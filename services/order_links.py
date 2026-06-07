@@ -315,6 +315,18 @@ def compute_deadline(
 
 # === Bulk operations ===
 
+def count_pending_manual_links_due_today() -> int:
+    """Сколько pending+manual ссылок готовы к bulk-переводу прямо сейчас."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT COUNT(*) AS c FROM order_links ol "
+            "JOIN orders o ON o.increment = ol.order_id "
+            "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now'))"
+        ).fetchone()
+    return int(row["c"])
+
+
 def mark_all_manual_in_work(*, admin_id: int) -> int:
     """Bulk-перевод pending+manual ссылок (с due start_date) в in_work.
 

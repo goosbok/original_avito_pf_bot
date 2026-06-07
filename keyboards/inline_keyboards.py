@@ -1033,6 +1033,12 @@ def orders_kb():
                 callback_data="del_order"
             )
         )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📤 Отправил все manual",
+                callback_data="mark_all_manual"
+            )
+        )
         keyboard.add(
             InlineKeyboardButton(
                 text=main_menu,

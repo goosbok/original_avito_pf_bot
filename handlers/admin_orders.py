@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from data.loader import dp, bot
 from data.config import services
@@ -37,6 +38,10 @@ from keyboards.inline_keyboards import (
 )
 from utils.googlesheets import create_orders_report, create_refills_report
 from .admin_base import find_user, generate_random_string
+from services.order_links import (
+    mark_all_manual_in_work,
+    count_pending_manual_links_due_today as count_pending_manual_links,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +58,10 @@ class magic(StatesGroup):
 
 class refills(StatesGroup):
     user = State()
+
+
+class MarkManual(StatesGroup):
+    confirm = State()
 
 
 ###############################################################################################
@@ -803,3 +812,41 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
     )
 
     buf.close()
+
+
+@dp.callback_query_handler(text="mark_all_manual", state='*')
+async def mark_manual_prompt(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 1: показать сколько будет переведено + кнопки подтверждения."""
+    await state.finish()
+    n = count_pending_manual_links()
+    if n == 0:
+        await call.message.answer(
+            "Нет manual-ссылок к отправке.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        return
+    text = (
+        f"📤 Будет переведено в работу: <b>{n}</b> ссылок.\n"
+        f"Юзеры получат уведомление когда все ссылки заказа будут готовы.\n\n"
+        f"Точно отправил?"
+    )
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(text="✅ Да, точно", callback_data="mark_all_manual_confirm"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="orders_man"),
+    )
+    await call.message.answer(text, reply_markup=kb)
+    await MarkManual.confirm.set()
+
+
+@dp.callback_query_handler(text="mark_all_manual_confirm",
+                            state=MarkManual.confirm)
+async def mark_manual_confirm(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 2: подтверждено — bulk-перевод."""
+    admin_id = int(call.from_user.id)
+    n = mark_all_manual_in_work(admin_id=admin_id)
+    await call.message.answer(
+        f"✅ Отмечено как отправленные: <b>{n}</b> ссылок.",
+        reply_markup=admin_back_kb('orders_man'),
+    )
+    await state.finish()

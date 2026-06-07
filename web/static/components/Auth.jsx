@@ -307,7 +307,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     />
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
-                    {loading ? 'Отправка...' : 'Получить код в Telegram'}
+                    {loading ? 'Отправка...' : 'Получить код'}
                   </button>
                 </>
               ) : (
@@ -369,7 +369,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     <div className="form-hint">Минимум 8 символов</div>
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterRequest} disabled={loading}>
-                    {loading ? 'Отправка кода...' : 'Получить код на email'}
+                    {loading ? 'Отправка кода...' : 'Получить код'}
                   </button>
                 </>
               ) : (
@@ -524,7 +524,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     />
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
-                    {loading ? 'Отправка...' : 'Получить код в Telegram'}
+                    {loading ? 'Отправка...' : 'Получить код'}
                   </button>
                 </>
               ) : (

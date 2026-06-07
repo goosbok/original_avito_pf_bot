@@ -561,6 +561,25 @@ def get_orders_batch(limit=1000, offset=0):
         sql = "SELECT * FROM orders LIMIT ? OFFSET ?"
         return con.execute(sql, (limit, offset)).fetchall()
 
+
+def get_orders_with_links_batch(limit=1000, offset=0):
+    """JOIN orders + order_links, по строке на ссылку. Спек §7.1."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        sql = (
+            "SELECT "
+            "  o.increment AS order_id, o.user_id, o.position_name, "
+            "  o.status AS order_status, o.date AS order_date, "
+            "  o.contacts, o.phone, o.start_date, o.user_name, "
+            "  ol.url, ol.status AS link_status, "
+            "  ol.delivery_mode, ol.deadline_at "
+            "FROM orders o "
+            "JOIN order_links ol ON ol.order_id = o.increment "
+            "ORDER BY o.increment DESC, ol.id "
+            "LIMIT ? OFFSET ?"
+        )
+        return con.execute(sql, (limit, offset)).fetchall()
+
 # Получение всех заказов в зависимости от статуса
 def all_orders_by_status(status):
     array = []

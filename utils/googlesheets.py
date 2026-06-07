@@ -198,7 +198,12 @@ def _resolve_user_scope(user_id):
 
 
 def create_sheet():
-    """Полный отчёт по всем заказам, лист 'Все заказы'."""
+    """Полный отчёт по всем заказам, лист 'Все заказы'.
+
+    Новая схема: одна строка на ссылку (JOIN orders+order_links).
+    Колонки: №, id, username, Ссылка, Статус ссылки, Mode, Дедлайн,
+    Контакты, Дней/ПФ, Цена, Статус заказа, Дата.
+    """
     _init()
     _require_target()
     sheet_id = _get_or_create_tab(TAB_ALL_ORDERS)
@@ -209,50 +214,59 @@ def create_sheet():
     ids = ['id']
     logins = ['username']
     links = ['Ссылки']
+    link_status = ['Статус ссылки']
+    delivery_mode = ['Mode']
+    deadline = ['Дедлайн']
     contacts = ['Контакты']
     position = ['Дней/ПФ']
     prices = ['Итого']
-    status = ['Статус']
+    status = ['Статус заказа']
     dates = ['Дата']
 
+    from utils.sqlite3 import get_orders_with_links_batch
     DB_BATCH_SIZE = 1000
     db_offset = 0
     while True:
-        batch = get_orders_batch(limit=DB_BATCH_SIZE, offset=db_offset)
+        batch = get_orders_with_links_batch(limit=DB_BATCH_SIZE, offset=db_offset)
         if not batch:
             break
-        logger.info("gsheets: processing orders %d-%d", db_offset, db_offset + len(batch))
-        for order in batch:
-            if str(order['user_id']) in excludes:
+        for row in batch:
+            if str(row['user_id']) in excludes:
                 continue
-            for link in order['links'].split():
-                no.append(order['increment'])
-                ids.append(order['user_id'])
-                logins.append(order['user_name'])
-                links.append(link.replace("'", "").replace("[", "").replace("]", ""))
-                contacts.append('Да' if order['contacts'] else 'Нет')
-                position.append(order['position_name'])
-                prices.append(order['price'])
-                status.append(_order_status_ru(order['status']))
-                dates.append(format_display(order['date']))
+            no.append(row['order_id'])
+            ids.append(row['user_id'])
+            logins.append(row['user_name'])
+            links.append(row['url'])
+            link_status.append(row['link_status'] or '')
+            delivery_mode.append(row['delivery_mode'] or '')
+            deadline.append(format_display(row['deadline_at'])
+                            if row['deadline_at'] else '')
+            contacts.append('Да' if row['contacts'] else 'Нет')
+            position.append(row['position_name'])
+            prices.append('')  # цена показывается только в первой строке заказа? Пока пусто
+            status.append(_order_status_ru(row['order_status']))
+            dates.append(format_display(row['order_date']))
         db_offset += DB_BATCH_SIZE
 
     column_widths = [
         (0, 1, 40),
         (1, 3, 100),
         (3, 4, 500),
-        (4, 5, 80),
-        (5, 6, 140),
-        (6, 7, 80),
+        (4, 7, 120),
         (7, 8, 80),
-        (8, 9, 140),
+        (8, 9, 100),
+        (9, 10, 80),
+        (10, 11, 140),
+        (11, 12, 140),
     ]
     url = _write_tab(
         TAB_ALL_ORDERS, sheet_id,
-        [no, ids, logins, links, contacts, position, prices, status, dates],
+        [no, ids, logins, links, link_status, delivery_mode, deadline,
+         contacts, position, prices, status, dates],
         column_widths,
     )
-    logger.info("gsheets: 'Все заказы' updated, %d rows, url=%s", len(no) - 1, url)
+    logger.info("gsheets: 'Все заказы' updated, %d rows, url=%s",
+                len(no) - 1, url)
     return url
 
 

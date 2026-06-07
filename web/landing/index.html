@@ -76,6 +76,36 @@ document.addEventListener('DOMContentLoaded', async function() {
     } catch (_e) {}
     __origConsoleError.apply(console, arguments);
   };
+  // ВРЕМЕННАЯ диагностика. Babel-санитизированные ошибки внутри обработчиков
+  // событий теряют текст ("Script error."). Оборачиваем каждый слушатель в
+  // try/catch, чтобы поймать настоящий объект ошибки со стеком — в т.ч. на
+  // visibilitychange/pagehide/blur, которые Safari шлёт при открытии шторки
+  // «Поделиться». removeEventListener патчим в пару, чтобы снятие слушателей
+  // продолжало работать.
+  var __origAEL = EventTarget.prototype.addEventListener;
+  var __origREL = EventTarget.prototype.removeEventListener;
+  EventTarget.prototype.addEventListener = function(type, listener, opts) {
+    if (typeof listener === 'function') {
+      var wrapped = function(ev) {
+        try {
+          return listener.call(this, ev);
+        } catch (err) {
+          appendErr('[on:' + type + '] ' +
+            (err && err.stack ? err.stack : (err && err.message ? err.message : String(err))));
+          throw err;
+        }
+      };
+      try { listener.__wrapped = wrapped; } catch (_e) {}
+      return __origAEL.call(this, type, wrapped, opts);
+    }
+    return __origAEL.call(this, type, listener, opts);
+  };
+  EventTarget.prototype.removeEventListener = function(type, listener, opts) {
+    if (typeof listener === 'function' && listener.__wrapped) {
+      return __origREL.call(this, type, listener.__wrapped, opts);
+    }
+    return __origREL.call(this, type, listener, opts);
+  };
 
   try {
     const manifestEl = document.querySelector('script[type="__bundler/manifest"]');

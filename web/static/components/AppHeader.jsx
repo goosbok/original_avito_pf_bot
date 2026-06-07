@@ -68,7 +68,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
 
         {/* Logo */}
         <div
-          className="header__logo"
+          className={`header__logo${!user ? ' header__logo--guest' : ''}`}
           onClick={() => onNavigate(user ? 'cabinet' : 'order-new')}
         >
           <img className="header__logo-mark" src="/logo.png" alt={brandName} width="30" height="30" />
@@ -138,13 +138,13 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
             <span className="theme-toggle__thumb" />
           </button>
 
-          {/* Auth buttons — landing desktop */}
-          {!isApp && !user && (
+          {/* Auth buttons — для любого гостя (вкл. страницу заказа и мобильные) */}
+          {!user && (
             <>
-              <button className="btn btn--ghost btn--sm desktop-only" onClick={() => onNavigate('login')}>
+              <button className="btn btn--ghost btn--sm" onClick={() => onNavigate('login')}>
                 Войти
               </button>
-              <button className="btn btn--primary btn--sm desktop-only" onClick={() => onNavigate('register')}>
+              <button className="btn btn--primary btn--sm" onClick={() => onNavigate('register')}>
                 Регистрация
               </button>
             </>

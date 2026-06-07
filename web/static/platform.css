@@ -700,6 +700,9 @@ p  { line-height: 1.65; }
   /* Header — compact admin button (icon only) and tighter actions */
   .header__inner { gap: 10px; padding: 0 12px; }
   .header__actions { gap: 6px; }
+  /* Гость: на узких экранах прячем текст бренда, чтобы влезли кнопки
+     «Войти» / «Регистрация» (круглый логотип остаётся). */
+  .header__logo--guest .header__logo-name { display: none; }
   .admin-toggle {
     width: 36px; padding: 0; gap: 0;
     justify-content: center;

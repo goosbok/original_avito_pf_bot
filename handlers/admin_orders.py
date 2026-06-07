@@ -252,11 +252,17 @@ async def order_work_start(message: types.Message, state: FSMContext):
     else:
         cont = '❎Нет'
     dat = format_display(order['date'])
+    from services.order_links import list_links as _list_order_links
+    order_links_rows = _list_order_links(int(inc))
     links = ''
-    links_cnt = 0
-    for link in order['links'].split():
-        links += f"<code>{link}</code>\n"
-        links_cnt += 1
+    for ln in order_links_rows:
+        status_label = ln['status']
+        if ln['delivery_mode']:
+            status_label += f" · {ln['delivery_mode']}"
+        if ln.get('deadline_at') and ln['status'] == 'in_work':
+            status_label += f" · до {ln['deadline_at'][:10]}"
+        links += f"<code>{ln['url']}</code> [{status_label}]\n"
+    links_cnt = len(order_links_rows)
     STR = STR.format(inc, price, user_str, pos_name, status, cont, dat, links_cnt, links)
     await message.answer(STR, reply_markup=admin_back_kb(None))
     await state.finish()

@@ -595,7 +595,8 @@ def get_pending_manual_links_due_today():
             "FROM order_links ol "
             "JOIN orders o ON o.increment = ol.order_id "
             "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
-            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now')) "
+            # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours')) "
             "ORDER BY COALESCE(o.start_date, '9999-12-31') ASC, o.date ASC"
         )
         return con.execute(sql).fetchall()

@@ -175,3 +175,18 @@ def test_fail_remaining_links_idempotent(tmp_db):
     fail_remaining_links(order_id=order_id, reason="x", admin_id=1)
     second = fail_remaining_links(order_id=order_id, reason="y", admin_id=1)
     assert second is None  # status уже failed
+
+
+def test_mark_all_manual_query_uses_msk_anchored_date():
+    """Регрессия: date('now') на UTC отрезает заказы с MSK-датой 00:00-03:00 MSK."""
+    import inspect
+    from services import order_links
+    source = inspect.getsource(order_links.mark_all_manual_in_work)
+    assert "'+3 hours'" in source
+
+
+def test_count_pending_manual_query_uses_msk_anchored_date():
+    import inspect
+    from services import order_links
+    source = inspect.getsource(order_links.count_pending_manual_links_due_today)
+    assert "'+3 hours'" in source

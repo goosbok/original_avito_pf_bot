@@ -77,3 +77,10 @@ def test_create_manual_tasks_sheet_writes_columns(tmp_db):
     assert captured["tab"] == "Manual задачи"
     links_col = captured["columns"][3]
     assert "url-x" in links_col
+
+
+def test_get_pending_manual_links_query_uses_msk_anchored_date():
+    import inspect
+    from utils import sqlite3 as u
+    source = inspect.getsource(u.get_pending_manual_links_due_today)
+    assert "'+3 hours'" in source

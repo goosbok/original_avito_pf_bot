@@ -322,7 +322,8 @@ def count_pending_manual_links_due_today() -> int:
             "SELECT COUNT(*) AS c FROM order_links ol "
             "JOIN orders o ON o.increment = ol.order_id "
             "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
-            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now'))"
+            # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours'))"
         ).fetchone()
     return int(row["c"])
 
@@ -342,7 +343,8 @@ def mark_all_manual_in_work(
             "SELECT ol.id, ol.order_id "
             "FROM order_links ol JOIN orders o ON o.increment = ol.order_id "
             "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
-            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now'))"
+            # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours'))"
         ).fetchall()
         candidates = [(int(r["id"]), int(r["order_id"])) for r in rows]
     if not candidates:

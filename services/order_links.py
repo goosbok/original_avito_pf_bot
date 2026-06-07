@@ -78,6 +78,10 @@ def _transition(
 
     Не делает commit и не пересчитывает order.status — это ответственность
     публичных методов поверх (`mark_in_work` / `mark_done` / `mark_failed`).
+
+    Caller MUST own an open transaction (BEGIN active). The status check
+    is enforced at the SQL level via `WHERE status = ?` to be safe against
+    races, but the function only commits when caller commits.
     """
     row = con.execute(
         "SELECT status FROM order_links WHERE id=?", (link_id,)
@@ -119,7 +123,15 @@ def _transition(
             values.append(failure_reason)
 
     values.append(link_id)
-    con.execute(
-        f"UPDATE order_links SET {', '.join(fields)} WHERE id = ?",
+    values.append(current)
+    cur = con.execute(
+        f"UPDATE order_links SET {', '.join(fields)} "
+        f"WHERE id = ? AND status = ?",
         values,
     )
+    if cur.rowcount == 0:
+        # Race lost — link's status changed between our SELECT and UPDATE.
+        # Raise InvalidLinkTransition to signal the caller to retry/abort.
+        raise InvalidLinkTransition(
+            from_status=current, to_status=to_status
+        )

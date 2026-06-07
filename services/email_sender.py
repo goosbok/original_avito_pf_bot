@@ -23,7 +23,7 @@ def send_email(to: str, subject: str, body: str, *, html: bool = False) -> None:
     port = int(os.getenv("SMTP_PORT", "465"))
     user = os.getenv("SMTP_USER", "")
     password = os.getenv("SMTP_PASSWORD", "")
-    from_name = os.getenv("SMTP_FROM_NAME", "ProBoost")
+    from_name = os.getenv("SMTP_FROM_NAME", "авито.пф")
 
     if not user or not password:
         raise EmailSendError("SMTP_USER or SMTP_PASSWORD not configured")

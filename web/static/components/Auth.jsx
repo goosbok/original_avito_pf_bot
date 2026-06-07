@@ -218,11 +218,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
 
   const logoMark = (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-      <div style={{
-        width: 48, height: 48, borderRadius: 14, background: 'var(--primary)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1rem', fontWeight: 900, color: '#fff'
-      }}>PB</div>
+      <img src="/logo.png" alt="авито.пф" width="48" height="48"
+        style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'cover' }} />
     </div>
   );
 

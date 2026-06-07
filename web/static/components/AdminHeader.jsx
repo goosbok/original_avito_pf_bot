@@ -50,7 +50,11 @@ function AdminHeader({ route, user, balance, brandName, onToggleAdminMode, onNav
     <header className="header">
       <div className="header__inner">
         <div className="header__logo" onClick={() => onNavigate('admin')}>
-          <div className="header__logo-mark" style={{ fontWeight: 900, fontSize: '0.7rem', letterSpacing: '-0.02em' }}>AD</div>
+          <div className="header__logo-mark" style={{
+            background: 'var(--primary)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 900, fontSize: '0.7rem', letterSpacing: '-0.02em',
+          }}>AD</div>
           <span className="header__logo-name">{brandName} · admin</span>
         </div>
 

@@ -4,7 +4,7 @@ const { useState, useEffect } = React;
 const TWEAK_DEFAULTS = {
   theme: 'light',
   variant: 'classic',
-  brandName: 'ProBoost',
+  brandName: 'авито.пф',
   accentColor: '#0088cc'
 };
 

@@ -71,7 +71,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
           className="header__logo"
           onClick={() => onNavigate(user ? 'cabinet' : 'order-new')}
         >
-          <div className="header__logo-mark" style={{ fontWeight: 900, fontSize: '0.75rem', letterSpacing: '-0.02em' }}>PB</div>
+          <img className="header__logo-mark" src="/logo.png" alt={brandName} width="30" height="30" />
           <span className="header__logo-name">{brandName}</span>
         </div>
 

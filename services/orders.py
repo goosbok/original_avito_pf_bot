@@ -29,6 +29,7 @@ from services.exceptions import (
     PaymentExpired,
     UserNotFound,
 )
+from services.order_links_dispatcher import dispatch_pending_links
 from utils.sqlite3 import (
     get_price,
     user_orders_count,
@@ -191,6 +192,10 @@ def pay_with_balance(*, order_id: int, user_id: int) -> None:
             (order_id,),
         )
         con.commit()
+    try:
+        dispatch_pending_links(order_id)
+    except Exception:  # noqa: BLE001 — best-effort; cron добьёт
+        logger.exception("pay_with_balance: dispatch_pending_links failed for %s", order_id)
 
 
 def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
@@ -249,13 +254,20 @@ def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
 def mark_paid(order_id: int) -> None:
     """Идемпотентно перевести unpaid → paid. Используется YooKassa webhook'ом
     и status-pollers. Если статус уже не unpaid — no-op (двойной webhook
-    не должен ломать систему)."""
+    не должен ломать систему). После перехода в paid запускается dispatcher
+    ссылок."""
     with connect() as con:
-        con.execute(
+        cur = con.execute(
             "UPDATE orders SET status='paid' WHERE increment=? AND status='unpaid'",
             (order_id,),
         )
         con.commit()
+        changed = cur.rowcount > 0
+    if changed:
+        try:
+            dispatch_pending_links(order_id)
+        except Exception:  # noqa: BLE001 — best-effort; cron добьёт
+            logger.exception("mark_paid: dispatch_pending_links failed for %s", order_id)
 
 
 def mark_payment_failed(order_id: int) -> None:

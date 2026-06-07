@@ -309,8 +309,8 @@ p  { line-height: 1.65; }
 }
 .header__logo { display: flex; align-items: center; gap: 8px; text-decoration: none !important; cursor: pointer; }
 .header__logo-mark {
-  width: 30px; height: 30px; border-radius: 8px;
-  object-fit: cover; flex-shrink: 0; display: block;
+  width: 30px; height: 30px; border-radius: 50%;
+  object-fit: cover; background: #000; flex-shrink: 0; display: block;
 }
 .header__logo-name { font-size: 1rem; font-weight: 800; color: var(--text-1); letter-spacing: -0.03em; }
 .header__spacer { flex: 1; }

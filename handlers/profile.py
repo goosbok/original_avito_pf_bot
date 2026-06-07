@@ -117,12 +117,15 @@ async def user_call_show_order_by_index(call: types.CallbackQuery, state: FSMCon
         logger.debug("could not delete message")
 
     state_data = await state.get_data()
-    orders = state_data['orders']
-    orders_array = listord_array(orders)
+    orders = state_data.get('orders')
+    orders_array = state_data.get('array')
+    if not orders or not orders_array:
+        from utils.error_handler import error_kb
+        await call.message.answer(get_string('str_error'), reply_markup=error_kb())
+        return
 
     try:
         index = int(call.data.split(":")[1])
-        orders_array = state_data['array']
         await state.update_data(index=index, array=orders_array)
         await call.message.answer(
             f"Страница {index+1} из {len(orders)}\n{orders_array[index]}",

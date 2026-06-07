@@ -307,7 +307,17 @@ def create_orders_report(user_id):
             no.append(order['increment'])
             ids.append(order['user_id'])
             logins.append(get_user_str(usr) if usr else str(oid))
-            links.append(order['links'].replace("'", "").replace(", ", "\n").replace("\n\n", "\n"))
+            from services.order_links import list_links as _list_order_links
+            order_links_rows = _list_order_links(int(order['increment']))
+            cell_parts = []
+            for ln in order_links_rows:
+                label = ln['status']
+                if ln['delivery_mode']:
+                    label += f" · {ln['delivery_mode']}"
+                if ln.get('deadline_at') and ln['status'] == 'in_work':
+                    label += f" · до {ln['deadline_at'][:10]}"
+                cell_parts.append(f"{ln['url']}  [{label}]")
+            links.append("\n".join(cell_parts))
             contacts.append('Да' if order['contacts'] else 'Нет')
             position_name.append(order['position_name'])
             prices.append(order['price'])

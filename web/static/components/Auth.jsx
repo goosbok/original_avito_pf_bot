@@ -395,7 +395,6 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
         <p className="auth-card__sub">Выберите способ входа</p>
 
         {error && <div className="alert alert--error">{error}</div>}
-        {success && <div className="alert alert--success">{success}</div>}
 
         <div className={`method-row${activeMethod ? ' has-active' : ''}`}>
           {/* ── Telegram ─────────────────────────────────────────────────── */}
@@ -404,7 +403,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}
             onClick={() => pickMethod('tg')}
           >
-            <span className="method-btn__icon">✈</span>Войти через Telegram
+            Войти через Telegram
           </button>
           {activeMethod === 'tg' && (
             <div className="method-form">
@@ -442,6 +441,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 </>
               ) : (
                 <>
+                  {success && <div className="alert alert--success">{success}</div>}
                   <div className="form-field">
                     <label className="form-label">6-значный код из Telegram</label>
                     <input
@@ -473,7 +473,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'email' ? ' active' : ''}`}
             onClick={() => pickMethod('email')}
           >
-            <span className="method-btn__icon">✉</span>Войти по Email
+            Войти по Email
           </button>
           {activeMethod === 'email' && (
             <div className="method-form">
@@ -506,7 +506,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`}
             onClick={() => pickMethod('sms')}
           >
-            <span className="method-btn__icon">📱</span>Войти по SMS
+            Войти по SMS
           </button>
           {activeMethod === 'sms' && (
             <div className="method-form">

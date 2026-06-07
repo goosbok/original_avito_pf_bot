@@ -135,3 +135,61 @@ def _transition(
         raise InvalidLinkTransition(
             from_status=current, to_status=to_status
         )
+
+
+# === Aggregation ===
+
+# Какие orders.status можно менять через агрегацию ссылок.
+# Спец §4.1 guard: unpaid/payment_failed/cancelled не трогаем.
+_AGGREGATABLE_ORDER_STATUSES = frozenset({"paid"})
+
+
+def _recompute_order_status(con, order_id: int) -> tuple[str, str] | None:
+    """Пересчитать orders.status по строкам order_links.
+
+    Правило (Спец §4.1):
+        pending + in_work > 0 → paid (без изменений)
+        ≥1 failed → failed
+        иначе → done
+
+    Guard: если orders.status ∉ {paid} — не трогаем (защита от перехода
+    в done из неоплаченного заказа).
+
+    Не делает commit. Возвращает (old, new) если статус сменился,
+    иначе None — caller должен сам шлёт notify_order_status_changed.
+    """
+    row = con.execute(
+        "SELECT status FROM orders WHERE increment=?", (order_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    old_status = row["status"] if hasattr(row, "keys") else row[0]
+    if old_status not in _AGGREGATABLE_ORDER_STATUSES:
+        return None
+
+    counts_rows = con.execute(
+        "SELECT status, COUNT(*) AS c FROM order_links "
+        "WHERE order_id=? GROUP BY status",
+        (order_id,),
+    ).fetchall()
+    counts = {r["status"] if hasattr(r, "keys") else r[0]:
+              r["c"] if hasattr(r, "keys") else r[1]
+              for r in counts_rows}
+
+    if not counts:
+        return None  # no links yet
+    if counts.get("pending", 0) + counts.get("in_work", 0) > 0:
+        return None  # still in flight
+    if counts.get("failed", 0) > 0:
+        new_status = "failed"
+    else:
+        new_status = "done"
+
+    if new_status == old_status:
+        return None
+
+    con.execute(
+        "UPDATE orders SET status=? WHERE increment=? AND status=?",
+        (new_status, order_id, old_status),
+    )
+    return (old_status, new_status)

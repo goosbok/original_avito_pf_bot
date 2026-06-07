@@ -20,6 +20,12 @@ function App() {
     const n = raw ? parseInt(raw, 10) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
   })();
+  // Лендинг ведёт «Личный кабинет» на /?auth=login → сразу открываем экран входа
+  // (для гостя). Залогиненного session-restore ниже всё равно отправит в cabinet.
+  const _authParam = (() => {
+    const v = _qs.get('auth');
+    return v === 'login' || v === 'register' ? v : null;
+  })();
   // Решение начального route:
   // - yookassa_return=paid → order-detail (показать оплаченный заказ + таймер ушёл)
   // - yookassa_return=failed без логина → order-new (пусть переоформит)
@@ -29,6 +35,7 @@ function App() {
   // до loaderssession-restore useEffect ниже.
   const _initialRoute = (() => {
     if (_isResetRoute) return 'auth';
+    if (_authParam) return 'auth';
     if (_yookassaResult === 'paid') return 'order-detail';
     if (_yookassaResult === 'failed') return 'order-new';  // переопределим если залогинен
     if (_returnOrderId) return 'order-detail';
@@ -37,7 +44,9 @@ function App() {
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   const [route, setRoute] = useState(_initialRoute);
-  const [authMode, setAuthMode] = useState(_isResetRoute ? 'reset' : 'login');
+  const [authMode, setAuthMode] = useState(
+    _isResetRoute ? 'reset' : (_authParam || 'login')
+  );
   const [resetToken] = useState(_isResetRoute ? _resetToken : null);
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
@@ -141,10 +150,11 @@ function App() {
   // Чистим query (?yookassa_return, ?order_id) из URL после первой загрузки —
   // чтобы refresh не сбрасывал навигацию и URL выглядел опрятно.
   useEffect(() => {
-    if ((_yookassaResult || _returnOrderId) && window.history && window.history.replaceState) {
+    if ((_yookassaResult || _returnOrderId || _authParam) && window.history && window.history.replaceState) {
       const url = new URL(window.location.href);
       url.searchParams.delete('order_id');
       url.searchParams.delete('yookassa_return');
+      url.searchParams.delete('auth');
       window.history.replaceState({}, '', url.toString());
     }
   }, []);

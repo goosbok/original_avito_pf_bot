@@ -866,6 +866,37 @@ async def mark_manual_confirm(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
 
+@dp.callback_query_handler(text="gsheets_manual", state='*')
+async def gsheets_manual(call: types.CallbackQuery, state: FSMContext):
+    from utils.googlesheets import create_manual_tasks_sheet
+    chat_id = call.message.chat.id
+    try:
+        await call.message.delete()
+    except Exception:
+        logger.debug("could not delete message")
+    STICKER = get_setting('wait_sticker')
+    msg = await bot.send_message(chat_id=chat_id,
+                                  text="⏳ Готовлю Manual задачи...")
+    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER) if STICKER else None
+    try:
+        sheet_url = create_manual_tasks_sheet()
+        await bot.send_message(chat_id=chat_id, text=sheet_complete,
+                                reply_markup=gsheets_url(sheet_url))
+    except Exception:
+        logger.exception('googlesheets: manual tasks failed')
+        await bot.send_message(chat_id=chat_id,
+                                text="⚠️ Ошибка при генерации Manual задач!")
+    finally:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
+            if stick:
+                await bot.delete_message(chat_id=chat_id,
+                                          message_id=stick.message_id)
+        except Exception:
+            logger.debug("could not delete progress messages")
+    await state.finish()
+
+
 @dp.callback_query_handler(text="fail_order", state='*')
 async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
     """Шаг 1: спросить ID заказа."""

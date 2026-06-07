@@ -1043,6 +1043,12 @@ def orders_kb():
                 callback_data="mark_all_manual"
             )
         )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📋 Manual задачи в шит",
+                callback_data="gsheets_manual"
+            )
+        )
         keyboard.add(
             InlineKeyboardButton(
                 text=main_menu,

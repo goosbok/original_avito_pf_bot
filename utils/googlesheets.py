@@ -35,6 +35,7 @@ TAB_ALL_ORDERS = 'Все заказы'
 TAB_USER_ORDERS = 'Заказы по юзеру'
 TAB_USER_REFILLS = 'Пополнения по юзеру'
 TAB_REVIEWS = 'Отзывы'
+TAB_MANUAL_TASKS = 'Manual задачи'
 
 
 def _init():
@@ -385,6 +386,61 @@ def create_refills_report(user_id):
         column_widths,
     )
     logger.info("gsheets: '%s' updated, %d rows, scope=%s", TAB_USER_REFILLS, len(no) - 1, scope_ids)
+    return url
+
+
+def create_manual_tasks_sheet():
+    """Выгрузить pending+manual ссылки с due-start в шит для админа."""
+    _init()
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_MANUAL_TASKS)
+
+    from utils.sqlite3 import get_pending_manual_links_due_today
+    rows = get_pending_manual_links_due_today()
+
+    no = ['№']
+    ids = ['id']
+    logins = ['username']
+    links = ['Ссылка']
+    link_status = ['Статус']
+    delivery_mode = ['Mode']
+    deadline = ['Дедлайн']
+    contacts = ['Контакты']
+    position = ['Дней/ПФ']
+    start = ['Старт']
+    dates = ['Дата заказа']
+
+    for row in rows:
+        no.append(row['order_id'])
+        ids.append(row['user_id'])
+        logins.append(row['user_name'])
+        links.append(row['url'])
+        link_status.append(row['link_status'] or '')
+        delivery_mode.append(row['delivery_mode'] or '')
+        deadline.append(row['deadline_at'] or '')
+        contacts.append('Да' if row['contacts'] else 'Нет')
+        position.append(row['position_name'])
+        start.append(row['start_date'] or '')
+        dates.append(format_display(row['order_date']))
+
+    column_widths = [
+        (0, 1, 40),
+        (1, 3, 100),
+        (3, 4, 500),
+        (4, 7, 120),
+        (7, 8, 80),
+        (8, 9, 100),
+        (9, 10, 100),
+        (10, 11, 140),
+    ]
+    url = _write_tab(
+        TAB_MANUAL_TASKS, sheet_id,
+        [no, ids, logins, links, link_status, delivery_mode, deadline,
+         contacts, position, start, dates],
+        column_widths,
+    )
+    logger.info("gsheets: '%s' updated, %d rows, url=%s",
+                TAB_MANUAL_TASKS, len(no) - 1, url)
     return url
 
 

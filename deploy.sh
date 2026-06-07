@@ -6,19 +6,20 @@
 #   ./deploy.sh --landing  — только обновить лендинг (без ребилда)
 #   ./deploy.sh --api      — pull + rebuild api + up (без bot)
 #
-# Запускать на сервере: ssh root@185.106.93.71 "cd /root/projects/original_avito_pf_bot && ./deploy.sh"
+# Запускать на сервере: ssh root@167.233.52.85 "cd /root/projects/original_avito_pf_bot && ./deploy.sh"
 
 set -euo pipefail
 
 LANDING_SRC="web/landing/index.html"
 LANDING_DST="/var/www/pf-bot-landing/index.html"
-SERVER="root@185.106.93.71"
+SERVER="root@167.233.52.85"
+PROD_HOSTNAME="ubuntu-4gb-fsn1-1-igor"
 PROJECT_DIR="/root/projects/original_avito_pf_bot"
 
 # ──────────────────────────────────────────
 # Если запущен локально — прокидываем на сервер
 # ──────────────────────────────────────────
-if [[ "$(hostname)" != "vm"* ]] && ! [[ -f /.dockerenv ]]; then
+if [[ "$(hostname)" != "$PROD_HOSTNAME" ]] && ! [[ -f /.dockerenv ]]; then
   echo "→ Connecting to $SERVER..."
   ssh "$SERVER" "cd $PROJECT_DIR && bash deploy.sh $*"
   exit $?

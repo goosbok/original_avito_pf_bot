@@ -87,6 +87,8 @@ def create_unpaid(
 
     Returns: order_id (== orders.increment).
     """
+    from services.order_links import create_links as _create_order_links
+
     price = _price_for(links, days, fix_count)
     expires_at = (_now() + timedelta(minutes=TTL_NO_METHOD_MINUTES)).isoformat()
     with connect() as con:
@@ -95,15 +97,17 @@ def create_unpaid(
             "  user_id, price, position_name, status, links, contacts, "
             "  user_name, payment_method, payment_expires_at, payment_id, "
             "  phone, start_date, date"
-            ") VALUES (?, ?, ?, 'unpaid', ?, ?, NULL, NULL, ?, NULL, ?, ?, ?)",
+            ") VALUES (?, ?, ?, 'unpaid', NULL, ?, NULL, NULL, ?, NULL, ?, ?, ?)",
             (
                 user_id, price, f"{days}/{fix_count}",
-                json.dumps(links), int(contacts),
+                int(contacts),
                 expires_at, phone, start_date, _now_iso(),
             ),
         )
+        order_id = int(cur.lastrowid)
+        _create_order_links(con, order_id=order_id, urls=list(links))
         con.commit()
-        return int(cur.lastrowid)
+        return order_id
 
 
 def get_order(order_id: int) -> dict:

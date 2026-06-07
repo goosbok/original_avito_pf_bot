@@ -561,6 +561,46 @@ def get_orders_batch(limit=1000, offset=0):
         sql = "SELECT * FROM orders LIMIT ? OFFSET ?"
         return con.execute(sql, (limit, offset)).fetchall()
 
+
+def get_orders_with_links_batch(limit=1000, offset=0):
+    """JOIN orders + order_links, по строке на ссылку. Спек §7.1."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        sql = (
+            "SELECT "
+            "  o.increment AS order_id, o.user_id, o.position_name, "
+            "  o.status AS order_status, o.date AS order_date, "
+            "  o.contacts, o.phone, o.start_date, o.user_name, "
+            "  ol.url, ol.status AS link_status, "
+            "  ol.delivery_mode, ol.deadline_at "
+            "FROM orders o "
+            "JOIN order_links ol ON ol.order_id = o.increment "
+            "ORDER BY o.increment DESC, ol.id "
+            "LIMIT ? OFFSET ?"
+        )
+        return con.execute(sql, (limit, offset)).fetchall()
+
+
+def get_pending_manual_links_due_today():
+    """Все pending+manual ссылки заказов готовых к старту (Спек §7.2)."""
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        sql = (
+            "SELECT "
+            "  o.increment AS order_id, o.user_id, o.position_name, "
+            "  o.date AS order_date, o.contacts, o.phone, o.start_date, "
+            "  o.user_name, "
+            "  ol.url, ol.status AS link_status, "
+            "  ol.delivery_mode, ol.deadline_at "
+            "FROM order_links ol "
+            "JOIN orders o ON o.increment = ol.order_id "
+            "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
+            # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours')) "
+            "ORDER BY COALESCE(o.start_date, '9999-12-31') ASC, o.date ASC"
+        )
+        return con.execute(sql).fetchall()
+
 # Получение всех заказов в зависимости от статуса
 def all_orders_by_status(status):
     array = []
@@ -887,6 +927,24 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "read_at TIMESTAMP)",
             8,
         ),
+        (
+            "order_links",
+            "CREATE TABLE IF NOT EXISTS order_links("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "order_id INTEGER NOT NULL,"
+            "url TEXT NOT NULL,"
+            "status TEXT NOT NULL DEFAULT 'pending',"
+            "delivery_mode TEXT,"
+            "deadline_at TIMESTAMP,"
+            "started_at TIMESTAMP,"
+            "done_at TIMESTAMP,"
+            "failed_at TIMESTAMP,"
+            "failure_reason TEXT,"
+            "external_id TEXT,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (order_id) REFERENCES orders(increment))",
+            12,
+        ),
     ]
 
 
@@ -901,6 +959,10 @@ def get_index_statements() -> list[str]:
         "ON notifications(user_id, read_at)",
         "CREATE INDEX IF NOT EXISTS idx_notifications_user_created "
         "ON notifications(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_order_links_order "
+        "ON order_links(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_order_links_deadline "
+        "ON order_links(status, deadline_at) WHERE status = 'in_work'",
     ]
 
 

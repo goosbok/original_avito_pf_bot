@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from data.loader import dp, bot
 from data.config import services
@@ -37,6 +38,12 @@ from keyboards.inline_keyboards import (
 )
 from utils.googlesheets import create_orders_report, create_refills_report
 from .admin_base import find_user, generate_random_string
+from services.order_links import (
+    mark_all_manual_in_work,
+    count_pending_manual_links_due_today as count_pending_manual_links,
+    fail_remaining_links,
+)
+from services.notifications import notify_order_status_changed
 
 logger = logging.getLogger(__name__)
 
@@ -47,16 +54,22 @@ class Order(StatesGroup):
     user = State()
 
 
-class Order1(StatesGroup):
-    order = State()
-
-
 class magic(StatesGroup):
     user = State()
 
 
 class refills(StatesGroup):
     user = State()
+
+
+class MarkManual(StatesGroup):
+    confirm = State()
+
+
+class FailOrder(StatesGroup):
+    order_id = State()
+    reason = State()
+    confirm = State()
 
 
 ###############################################################################################
@@ -239,47 +252,19 @@ async def order_work_start(message: types.Message, state: FSMContext):
     else:
         cont = '❎Нет'
     dat = format_display(order['date'])
+    from services.order_links import list_links as _list_order_links
+    order_links_rows = _list_order_links(int(inc))
     links = ''
-    links_cnt = 0
-    for link in order['links'].split():
-        links += f"<code>{link}</code>\n"
-        links_cnt += 1
+    for ln in order_links_rows:
+        status_label = ln['status']
+        if ln['delivery_mode']:
+            status_label += f" · {ln['delivery_mode']}"
+        if ln.get('deadline_at') and ln['status'] == 'in_work':
+            status_label += f" · до {ln['deadline_at'][:10]}"
+        links += f"<code>{ln['url']}</code> [{status_label}]\n"
+    links_cnt = len(order_links_rows)
     STR = STR.format(inc, price, user_str, pos_name, status, cont, dat, links_cnt, links)
     await message.answer(STR, reply_markup=admin_back_kb(None))
-    await state.finish()
-
-
-@dp.callback_query_handler(text="gotovoebat")
-async def order_input_id(call: types.CallbackQuery, state: FSMContext):
-    try:
-        await call.message.delete()
-    except:
-        logger.debug("could not delete message")
-    await bot.send_message(chat_id=call.from_user.id, text=f"⚙️ Введите ID заказа:")
-    await Order1.order.set()
-
-
-@dp.message_handler(state=Order1.order)
-async def order_finish(message: types.Message, state: FSMContext):
-    order = message.text
-    order1 = get_order(order)
-    if not order1:
-        await bot.send_message(chat_id=message.from_user.id, text=f"⚠️ Заказ {order} не найден!", reply_markup=admin_back_kb('orders_man'))
-        await state.finish()
-        return
-    old_status = str(order1.get('status') or '')
-    edit_order(status="done", order=order)
-
-    from services.notifications import notify_order_status_changed
-    await notify_order_status_changed(
-        user_id=int(order1['user_id']),
-        kind="order",
-        order_id=int(order),
-        old_status=old_status,
-        new_status="done",
-    )
-
-    await bot.send_message(chat_id=message.from_user.id, text="✅ Успешно")
     await state.finish()
 
 
@@ -841,3 +826,180 @@ async def call_money_report(call: types.CallbackQuery, state: FSMContext):
     )
 
     buf.close()
+
+
+@dp.callback_query_handler(text="mark_all_manual", state='*')
+async def mark_manual_prompt(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 1: показать сколько будет переведено + кнопки подтверждения."""
+    await state.finish()
+    n = count_pending_manual_links()
+    if n == 0:
+        await call.message.answer(
+            "Нет manual-ссылок к отправке.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        return
+    text = (
+        f"📤 Будет переведено в работу: <b>{n}</b> ссылок.\n"
+        f"Юзеры получат уведомление когда все ссылки заказа будут готовы.\n\n"
+        f"Точно отправил?"
+    )
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(text="✅ Да, точно", callback_data="mark_all_manual_confirm"),
+        InlineKeyboardButton(text="❌ Отмена", callback_data="orders_man"),
+    )
+    await call.message.answer(text, reply_markup=kb)
+    await MarkManual.confirm.set()
+
+
+@dp.callback_query_handler(text="mark_all_manual_confirm",
+                            state=MarkManual.confirm)
+async def mark_manual_confirm(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 2: подтверждено — bulk-перевод."""
+    admin_id = int(call.from_user.id)
+    n, transitions = mark_all_manual_in_work(admin_id=admin_id)
+
+    # Notify users whose orders transitioned to a new status
+    for order_id, old, new in transitions:
+        order = get_order(order_id)
+        if order is None:
+            continue
+        try:
+            await notify_order_status_changed(
+                user_id=int(order["user_id"]),
+                kind="order",
+                order_id=int(order_id),
+                old_status=old,
+                new_status=new,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "mark_manual_confirm: notify failed for order %s", order_id
+            )
+
+    await call.message.answer(
+        f"✅ Отмечено как отправленные: <b>{n}</b> ссылок.\n"
+        f"Заказов завершено: <b>{len(transitions)}</b>.",
+        reply_markup=admin_back_kb('orders_man'),
+    )
+    await state.finish()
+
+
+@dp.callback_query_handler(text="gsheets_manual", state='*')
+async def gsheets_manual(call: types.CallbackQuery, state: FSMContext):
+    from utils.googlesheets import create_manual_tasks_sheet
+    chat_id = call.message.chat.id
+    try:
+        await call.message.delete()
+    except Exception:
+        logger.debug("could not delete message")
+    STICKER = get_setting('wait_sticker')
+    msg = await bot.send_message(chat_id=chat_id,
+                                  text="⏳ Готовлю Manual задачи...")
+    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER) if STICKER else None
+    try:
+        sheet_url = create_manual_tasks_sheet()
+        await bot.send_message(chat_id=chat_id, text=sheet_complete,
+                                reply_markup=gsheets_url(sheet_url))
+    except Exception:
+        logger.exception('googlesheets: manual tasks failed')
+        await bot.send_message(chat_id=chat_id,
+                                text="⚠️ Ошибка при генерации Manual задач!")
+    finally:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
+            if stick:
+                await bot.delete_message(chat_id=chat_id,
+                                          message_id=stick.message_id)
+        except Exception:
+            logger.debug("could not delete progress messages")
+    await state.finish()
+
+
+@dp.callback_query_handler(text="fail_order", state='*')
+async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 1: спросить ID заказа."""
+    await state.finish()
+    await call.message.answer("❌ Введите ID заказа, который нужно пометить как failed:")
+    await FailOrder.order_id.set()
+
+
+@dp.message_handler(state=FailOrder.order_id)
+async def fail_order_collect_id(message: types.Message, state: FSMContext):
+    """Шаг 2: получили ID, спрашиваем причину."""
+    try:
+        order_id = int(message.text.strip())
+    except (TypeError, ValueError):
+        await message.answer("⚠️ ID должен быть числом. Попробуйте снова.")
+        return
+    order = get_order(order_id)
+    if not order:
+        await message.answer(f"⚠️ Заказ {order_id} не найден.",
+                              reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
+    if order.get("status") != "paid":
+        await message.answer(
+            f"⚠️ Заказ {order_id} в статусе {order.get('status')}, "
+            f"failed можно только из paid.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+    await state.update_data(order_id=order_id)
+    await message.answer("Опишите причину (одно сообщение, пойдёт в логи):")
+    await FailOrder.reason.set()
+
+
+@dp.message_handler(state=FailOrder.reason)
+async def fail_order_collect_reason(message: types.Message, state: FSMContext):
+    """Шаг 3: получили причину, показываем подтверждение."""
+    reason = message.text.strip()
+    if not reason:
+        await message.answer("⚠️ Причина не может быть пустой.")
+        return
+    await state.update_data(reason=reason)
+    data = await state.get_data()
+    text = (
+        f"❌ Подтверждение: пометить заказ #{data['order_id']} как failed.\n"
+        f"Причина: {reason}\n\n"
+        f"Юзер получит уведомление. Отправьте 'yes' для подтверждения "
+        f"или 'no' для отмены."
+    )
+    await message.answer(text)
+    await FailOrder.confirm.set()
+
+
+@dp.message_handler(state=FailOrder.confirm)
+async def fail_order_confirm(message: types.Message, state: FSMContext):
+    """Шаг 4: подтверждение."""
+    answer = (message.text or "").strip().lower()
+    if answer != "yes":
+        await message.answer("Отменено.", reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
+    data = await state.get_data()
+    order_id = int(data["order_id"])
+    reason = str(data["reason"])
+    admin_id = int(message.from_user.id)
+
+    order = get_order(order_id)
+    transition = fail_remaining_links(
+        order_id=order_id, reason=reason, admin_id=admin_id
+    )
+    if transition is not None and order is not None:
+        old, new = transition
+        try:
+            await notify_order_status_changed(
+                user_id=int(order["user_id"]),
+                kind="order", order_id=order_id,
+                old_status=old, new_status=new,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("fail_order_confirm: notify failed")
+    await message.answer(
+        f"✅ Заказ #{order_id} помечен failed.",
+        reply_markup=admin_back_kb('orders_man'),
+    )
+    await state.finish()

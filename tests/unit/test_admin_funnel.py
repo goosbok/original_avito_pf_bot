@@ -1,6 +1,7 @@
 """Tests for handlers.admin_funnel."""
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -80,6 +81,10 @@ async def test_funnel_period_callback_sends_photo(admin_call, tmp_db: Path):
     from services.funnel import track_step
 
     # Seed two distinct users, one of them progressing further
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (1,))
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (2,))
+        con.commit()
     track_step(user_id=1, service="pf_avito", step="view_tariff")
     track_step(user_id=2, service="pf_avito", step="view_tariff")
     track_step(user_id=1, service="pf_avito", step="select_period")

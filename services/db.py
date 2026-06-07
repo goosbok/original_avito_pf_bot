@@ -25,6 +25,13 @@ def connect() -> Iterator[sqlite3.Connection]:
 
     con = sqlite3.connect(config.path_database)
     con.row_factory = _dict_factory
+    # Concurrency + integrity hardening.
+    # WAL allows readers while a writer is active; busy_timeout makes
+    # transient lock contention wait instead of immediately erroring.
+    # foreign_keys=ON enforces the FOREIGN KEY clauses (off by default in SQLite).
+    con.execute("PRAGMA journal_mode=WAL")
+    con.execute("PRAGMA busy_timeout=5000")
+    con.execute("PRAGMA foreign_keys=ON")
     try:
         yield con
     finally:

@@ -120,3 +120,34 @@ class PaymentExpired(ServiceError):
 
     Caller should refuse the payment and prompt the actor to create a new order.
     """
+
+
+class LinkNotFound(ServiceError):
+    """Ссылка order_links с переданным id не найдена."""
+
+
+class InvalidLinkTransition(ServiceError):
+    """Попытка изменить статус ссылки на недопустимый.
+
+    Например, in_work → in_work (no-op обрабатывается выше),
+    или done → in_work (terminal).
+    """
+
+    def __init__(self, *, from_status: str, to_status: str) -> None:
+        super().__init__(
+            f"Invalid link transition: {from_status} → {to_status}"
+        )
+        self.from_status = from_status
+        self.to_status = to_status
+
+
+class ExecutorAPIError(ServiceError):
+    """Ошибка при работе с API исполнителя ПФ."""
+
+
+class ExecutorAPIRejected(ExecutorAPIError):
+    """API явно отказался брать ссылку (не поддерживает регион/тип/и т.п.).
+
+    Caller должен fallback'нуться в manual delivery_mode.
+    Отличается от `ExecutorAPIError` тем, что повторная попытка не поможет.
+    """

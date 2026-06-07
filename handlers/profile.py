@@ -200,8 +200,16 @@ async def user_call_show_all_orders(call: types.CallbackQuery, state: FSMContext
 async def call_repeat(call: types.CallbackQuery, state: FSMContext, user_id: int):
     index = call.data.split(":")[1]
     order = user_orders_all(user_id)[int(index)]
-    from handlers.pf_order import extract_avito_links
-    links = extract_avito_links(order['links'])
+    from services.order_links import list_links as _list_order_links
+    order_links_rows = _list_order_links(int(order['increment']))
+    links = [r['url'] for r in order_links_rows]
+    if not links:
+        # Legacy fallback: orders before the migration may have links in
+        # the deprecated orders.links column. Backfill script normally
+        # handles this; defensive fallback for edge cases.
+        from handlers.pf_order import extract_avito_links
+        raw = order.get('links')
+        links = extract_avito_links(raw) if raw else []
     async with state.proxy() as data:
         data['links'] = links
     image = f"images/avito_pf.jpg"

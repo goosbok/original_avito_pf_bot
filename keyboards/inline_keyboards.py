@@ -1029,12 +1029,24 @@ def orders_kb():
         )
         keyboard.row(
             InlineKeyboardButton(
-                text="✅ Выполнить",
-                callback_data="gotovoebat"
+                text="❌ Заказ failed",
+                callback_data="fail_order"
             ),
             InlineKeyboardButton(
                 text="❎ Удалить",
                 callback_data="del_order"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📤 Отправил все manual",
+                callback_data="mark_all_manual"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📋 Manual задачи в шит",
+                callback_data="gsheets_manual"
             )
         )
         keyboard.add(

@@ -87,6 +87,10 @@ def test_max_attempts_invalidates_code(tmp_db: Path):
 
 
 def test_link_purpose_user_id_via_get_user_id_to_link(tmp_db: Path):
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (42,))
+        con.commit()
     code = otp.issue(channel='telegram', destination=_TG, purpose='link',
                      cooldown_seconds=0, user_id_to_link=42)
     assert otp.get_user_id_to_link(channel='telegram', destination=_TG,

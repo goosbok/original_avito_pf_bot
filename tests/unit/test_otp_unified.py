@@ -87,6 +87,9 @@ def test_get_user_id_to_link_peeks_without_consuming(tmp_db: Path):
     """get_user_id_to_link читает user_id_to_link без consume — чтобы caller мог
     проверить владельца до фактического consume."""
     from services import otp
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (77,))
+        con.commit()
     code = otp.issue(channel='telegram', destination='999',
                      purpose='link', ttl_seconds=300, cooldown_seconds=0,
                      user_id_to_link=77)
@@ -104,6 +107,9 @@ def test_get_user_id_to_link_peeks_without_consuming(tmp_db: Path):
 
 def test_get_user_id_to_link_returns_none_for_wrong_code(tmp_db: Path):
     from services import otp
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (77,))
+        con.commit()
     otp.issue(channel='telegram', destination='999',
               purpose='link', ttl_seconds=300, cooldown_seconds=0,
               user_id_to_link=77)

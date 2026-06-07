@@ -22,11 +22,12 @@ from utils.other import (
 from utils.sender import send_admins
 from utils.sqlite3 import (
     get_user,
-    add_order, get_users_last_order,
-    update_user,
     get_string, get_price,
 )
 from services.funnel import track_step
+from services.orders import create_unpaid, pay_with_balance, get_order as _get_order
+from services.exceptions import InsufficientBalance
+from services.order_links import list_links as _list_order_links
 
 logger = logging.getLogger(__name__)
 logger.info("pf_order.py loaded — registering handlers")
@@ -219,18 +220,34 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
             return
         if user['balance'] >= data['total_price']:
             try:
-                update_user(id=user['id'], balance=user['balance'] - data['total_price'])
-                add_order(
-                    user_id=user['id'],
-                    price=data['total_price'],
-                    position_name=f"{data['days']}/{data['fix']}",
-                    status="paid",
-                    links=str(data['links']),
-                    contacts=data['contact'],
-                    user_name=user['user_name'],
+                # 1. Create unpaid order (writes orders + order_links in one transaction)
+                order_id = create_unpaid(
+                    user_id=int(user['id']),
+                    links=list(data['links']),
+                    days=int(data['days']),
+                    fix_count=int(data['fix']),
+                    contacts=bool(data['contact']),
+                    phone=None,
                 )
+
+                # 2. Pay with balance (atomic debit + mark paid + dispatch links)
+                try:
+                    pay_with_balance(order_id=order_id, user_id=int(user['id']))
+                except InsufficientBalance:
+                    # Race with concurrent debit — route to "not enough money" branch
+                    await state.reset_data()
+                    STR = get_string('str_not_enough_money')
+                    await call.message.answer(STR, reply_markup=get_menu_kb())
+                    try:
+                        await call.message.delete()
+                    except Exception:
+                        pass
+                    await state.finish()
+                    return
+
+                # 3. Build admin notification from order_links (no more order['links'])
                 ADM_MSG = get_string('str_new_order_text')
-                order = get_users_last_order(user['id'])
+                order = _get_order(order_id)
                 ord_id = order['increment']
                 f_price = format_decimal(order['price'])
                 user_str = await get_user_string_without_first_name(user)
@@ -238,11 +255,11 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                 status = order['status']
                 con_str = 'Да' if order['contacts'] else 'Нет'
                 ord_date = format_display(order['date'])
-                links_cnt = len(order['links'])
+                order_links_rows = _list_order_links(ord_id)
+                links_cnt = len(order_links_rows)
                 links_str = ""
-                for link in order['links'].split(','):
-                    link = link.replace("'", "")
-                    links_str += f"\n<code>{link}</code>"
+                for ln in order_links_rows:
+                    links_str += f"\n<code>{ln['url']}</code>"
                 ADM_MSG = ADM_MSG.format(
                     ord_id, f_price, user_str, pos_name, status,
                     con_str, ord_date, links_cnt, links_str,
@@ -268,7 +285,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                         "balance": user['balance'],
                         "total_price": data.get('total_price'),
                         "days": data.get('days'),
-                        "links_count": len(str(data.get('links', '')).split(',')),
+                        "links_count": len(data.get('links', [])),
                     },
                     reply_target=call,
                 )

@@ -16,7 +16,6 @@
 """
 from __future__ import annotations
 
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 
@@ -29,6 +28,7 @@ from services.exceptions import (
     PaymentExpired,
     UserNotFound,
 )
+from services.order_links_dispatcher import dispatch_pending_links
 from utils.sqlite3 import (
     get_price,
     user_orders_count,
@@ -87,6 +87,8 @@ def create_unpaid(
 
     Returns: order_id (== orders.increment).
     """
+    from services.order_links import create_links as _create_order_links
+
     price = _price_for(links, days, fix_count)
     expires_at = (_now() + timedelta(minutes=TTL_NO_METHOD_MINUTES)).isoformat()
     with connect() as con:
@@ -95,15 +97,17 @@ def create_unpaid(
             "  user_id, price, position_name, status, links, contacts, "
             "  user_name, payment_method, payment_expires_at, payment_id, "
             "  phone, start_date, date"
-            ") VALUES (?, ?, ?, 'unpaid', ?, ?, NULL, NULL, ?, NULL, ?, ?, ?)",
+            ") VALUES (?, ?, ?, 'unpaid', NULL, ?, NULL, NULL, ?, NULL, ?, ?, ?)",
             (
                 user_id, price, f"{days}/{fix_count}",
-                json.dumps(links), int(contacts),
+                int(contacts),
                 expires_at, phone, start_date, _now_iso(),
             ),
         )
+        order_id = int(cur.lastrowid)
+        _create_order_links(con, order_id=order_id, urls=list(links))
         con.commit()
-        return int(cur.lastrowid)
+        return order_id
 
 
 def get_order(order_id: int) -> dict:
@@ -187,6 +191,10 @@ def pay_with_balance(*, order_id: int, user_id: int) -> None:
             (order_id,),
         )
         con.commit()
+    try:
+        dispatch_pending_links(order_id)
+    except Exception:  # noqa: BLE001 — best-effort; cron добьёт
+        logger.exception("pay_with_balance: dispatch_pending_links failed for %s", order_id)
 
 
 def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
@@ -245,13 +253,20 @@ def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
 def mark_paid(order_id: int) -> None:
     """Идемпотентно перевести unpaid → paid. Используется YooKassa webhook'ом
     и status-pollers. Если статус уже не unpaid — no-op (двойной webhook
-    не должен ломать систему)."""
+    не должен ломать систему). После перехода в paid запускается dispatcher
+    ссылок."""
     with connect() as con:
-        con.execute(
+        cur = con.execute(
             "UPDATE orders SET status='paid' WHERE increment=? AND status='unpaid'",
             (order_id,),
         )
         con.commit()
+        changed = cur.rowcount > 0
+    if changed:
+        try:
+            dispatch_pending_links(order_id)
+        except Exception:  # noqa: BLE001 — best-effort; cron добьёт
+            logger.exception("mark_paid: dispatch_pending_links failed for %s", order_id)
 
 
 def mark_payment_failed(order_id: int) -> None:

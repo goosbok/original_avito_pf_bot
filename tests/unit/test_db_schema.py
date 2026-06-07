@@ -81,3 +81,24 @@ def test_otp_codes_has_channel_and_destination_columns(tmp_db):
     assert "channel" in cols
     assert "destination" in cols
     assert "telegram_id" not in cols  # переименовано
+
+
+def test_order_links_table_in_schema(tmp_db):
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        cols = {row[1] for row in con.execute("PRAGMA table_info(order_links)")}
+    assert cols == {
+        "id", "order_id", "url", "status", "delivery_mode",
+        "deadline_at", "started_at", "done_at", "failed_at",
+        "failure_reason", "external_id", "created_at",
+    }
+
+
+def test_order_links_indexes_present(tmp_db):
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        idx = {row[0] for row in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='order_links'"
+        )}
+    assert "idx_order_links_order" in idx
+    assert "idx_order_links_deadline" in idx

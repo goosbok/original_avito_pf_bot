@@ -48,6 +48,9 @@ def test_get_step_label_falls_back_to_step_id():
 def test_track_step_inserts_row(tmp_db: Path):
     from services.funnel import track_step
 
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (42,))
+        con.commit()
     track_step(user_id=42, service="pf_avito", step="view_tariff")
 
     with sqlite3.connect(tmp_db) as con:
@@ -81,6 +84,9 @@ def test_track_step_invalid_step_raises(tmp_db: Path):
 def test_track_step_multiple_events_same_user(tmp_db: Path):
     from services.funnel import track_step
 
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT OR IGNORE INTO users(id, balance) VALUES (?, 0)", (7,))
+        con.commit()
     track_step(user_id=7, service="pf_avito", step="view_tariff")
     track_step(user_id=7, service="pf_avito", step="view_tariff")
     track_step(user_id=7, service="pf_avito", step="select_period")

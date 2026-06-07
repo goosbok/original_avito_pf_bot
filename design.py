@@ -101,15 +101,23 @@ refill_balance_text = '''💳 Даём + 50% к балансу при попол
 🧊 Пожалуйста, введите сумму пополнения баланса (минимум - 100)'''
 
 
-def listord_text(orders: list[dict]):
-    msg = "Список заказов:\n"
-    for order in orders:
-        if order['contacts']:
-            contacts_str = 'Да'
-        else:
-            contacts_str = 'Нет'
-        msg += f"\nЗаказ номер {order['increment']}\nУслуга: {order['position_name']}\nЦена:{order['price']}\nДата размещения: {order['date']}\n{order['links']}"
-    return msg
+def _render_order_links_block(order: dict) -> str:
+    """Возвращает HTML-блок ссылок для TG-сообщения о заказе.
+
+    Читает order_links таблицу — orders.links колонка deprecated."""
+    from services.order_links import list_links
+    try:
+        rows = list_links(int(order['increment']))
+    except Exception:
+        rows = []
+    urls = [r['url'] for r in rows if r.get('url')]
+    if not urls:
+        return "🔗 Ссылок нет"
+    out = f"🔗 Ссылки на объявления({len(urls)}):"
+    for url in urls:
+        out += f"\n<code>{url}</code>"
+    return out
+
 
 def listord_array(orders: list[dict]):
     orders_array = []
@@ -142,10 +150,7 @@ def listord_array(orders: list[dict]):
                f"🔰 Статус: {status}\n"
                f"👥 Контакты: {contacts_str}\n"
                f"🗓 Дата: {order['date']}\n"
-               f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-        for link in order['links'].split(','):
-            link = link.replace("'", "")
-            msg += f"\n<code>{link}</code>"
+               + _render_order_links_block(order))
         orders_array.append(msg)
     return orders_array
 
@@ -214,10 +219,7 @@ def order_text(order: dict):
                f"🔰 Статус: {order['status']}\n"
                f"👥 Контакты: {contacts_str}\n"
                f"🗓 Дата: {order['date']}\n"
-               f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-        for link in order['links'].split(','):
-            link = link.replace("'", "")
-            msg += f"\n<code>{link}</code>"
+               + _render_order_links_block(order))
         return msg
     except Exception as e:
         print(e)

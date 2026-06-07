@@ -563,18 +563,26 @@ def get_orders_batch(limit=1000, offset=0):
 
 
 def get_orders_with_links_batch(limit=1000, offset=0):
-    """JOIN orders + order_links, по строке на ссылку. Спек §7.1."""
+    """JOIN orders + order_links, по строке на ссылку. Спек §7.1.
+
+    user_name берётся из users (live), а не из snapshot в orders — последний
+    в новом unpaid→paid flow (services.orders.create_unpaid) пишется NULL.
+    COALESCE с o.user_name — фоллбэк для случая, когда users-строки нет
+    (удалённый юзер), сохраняет исторический snapshot.
+    """
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         sql = (
             "SELECT "
             "  o.increment AS order_id, o.user_id, o.position_name, "
             "  o.status AS order_status, o.date AS order_date, "
-            "  o.contacts, o.phone, o.start_date, o.user_name, "
+            "  o.contacts, o.phone, o.start_date, "
+            "  COALESCE(u.user_name, o.user_name) AS user_name, "
             "  ol.url, ol.status AS link_status, "
             "  ol.delivery_mode, ol.deadline_at "
             "FROM orders o "
             "JOIN order_links ol ON ol.order_id = o.increment "
+            "LEFT JOIN users u ON u.id = o.user_id "
             "ORDER BY o.increment DESC, ol.id "
             "LIMIT ? OFFSET ?"
         )
@@ -582,18 +590,23 @@ def get_orders_with_links_batch(limit=1000, offset=0):
 
 
 def get_pending_manual_links_due_today():
-    """Все pending+manual ссылки заказов готовых к старту (Спек §7.2)."""
+    """Все pending+manual ссылки заказов готовых к старту (Спек §7.2).
+
+    user_name — live из users с фоллбэком на snapshot, см. комментарий в
+    get_orders_with_links_batch.
+    """
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
         sql = (
             "SELECT "
             "  o.increment AS order_id, o.user_id, o.position_name, "
             "  o.date AS order_date, o.contacts, o.phone, o.start_date, "
-            "  o.user_name, "
+            "  COALESCE(u.user_name, o.user_name) AS user_name, "
             "  ol.url, ol.status AS link_status, "
             "  ol.delivery_mode, ol.deadline_at "
             "FROM order_links ol "
             "JOIN orders o ON o.increment = ol.order_id "
+            "LEFT JOIN users u ON u.id = o.user_id "
             "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
             # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
             "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours')) "

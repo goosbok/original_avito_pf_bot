@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from services.order_links_deadline import run_deadline_loop
+from services.order_links_dispatcher import run_dispatcher_loop
 from services.payment_expiry import run_expiry_loop
 from utils.sqlite3 import create_db
 
@@ -25,6 +27,8 @@ async def lifespan(app: FastAPI):
     # uvicorn (docker compose) тоже должен уметь инициализировать БД.
     await asyncio.get_event_loop().run_in_executor(None, create_db)
     expiry_task = asyncio.create_task(run_expiry_loop())
+    deadline_task = asyncio.create_task(run_deadline_loop())
+    dispatcher_task = asyncio.create_task(run_dispatcher_loop())
     try:
         yield
     finally:
@@ -33,6 +37,13 @@ async def lifespan(app: FastAPI):
             await expiry_task
         except (asyncio.CancelledError, Exception):  # noqa: BLE001
             pass
+        deadline_task.cancel()
+        dispatcher_task.cancel()
+        for task in (deadline_task, dispatcher_task):
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
 
 
 app = FastAPI(title="Avito PF Bot Web", version="0.1.0", lifespan=lifespan)

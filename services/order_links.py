@@ -311,3 +311,86 @@ def compute_deadline(
         tzinfo=timezone.utc,
     )
     return deadline.isoformat()
+
+
+# === Bulk operations ===
+
+def mark_all_manual_in_work(*, admin_id: int) -> int:
+    """Bulk-перевод pending+manual ссылок (с due start_date) в in_work.
+
+    Используется админ-кнопкой «Отправил все manual-ссылки» (Спек §5.2).
+    Для каждой ссылки вычисляется deadline_at и пересчитывается status заказа.
+    Возвращает количество переведённых ссылок.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT ol.id, ol.order_id "
+            "FROM order_links ol JOIN orders o ON o.increment = ol.order_id "
+            "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
+            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now'))"
+        ).fetchall()
+        candidates = [(int(r["id"]), int(r["order_id"])) for r in rows]
+    if not candidates:
+        return 0
+
+    order_cache: dict[int, dict] = {}
+    count = 0
+    for link_id, order_id in candidates:
+        if order_id not in order_cache:
+            with connect() as con:
+                order_row = con.execute(
+                    "SELECT * FROM orders WHERE increment=?", (order_id,)
+                ).fetchone()
+            if order_row is None:
+                continue
+            order_cache[order_id] = dict(order_row)
+        order = order_cache[order_id]
+        deadline = compute_deadline(order)
+        try:
+            mark_in_work(link_id, delivery_mode="manual",
+                         deadline_at=deadline)
+            count += 1
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "mark_all_manual_in_work: link %s failed (admin=%s)",
+                link_id, admin_id,
+            )
+    logger.info(
+        "mark_all_manual_in_work: %d links marked by admin=%s",
+        count, admin_id,
+    )
+    return count
+
+
+def fail_remaining_links(
+    *, order_id: int, reason: str, admin_id: int
+) -> tuple[str, str] | None:
+    """Bulk-перевод pending+in_work ссылок заказа в failed.
+
+    done-ссылки остаются done. Пересчитывает order.status в той же
+    транзакции. Возвращает transition (old, new) если заказ перешёл,
+    иначе None. Спек §5.4.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT id FROM order_links WHERE order_id=? "
+            "AND status IN ('pending', 'in_work')",
+            (order_id,),
+        ).fetchall()
+        link_ids = [int(r["id"]) for r in rows]
+        for link_id in link_ids:
+            try:
+                _transition(con, link_id=link_id, to_status="failed",
+                            failure_reason=reason)
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "fail_remaining_links: link %s failed (admin=%s)",
+                    link_id, admin_id,
+                )
+        transition = _recompute_order_status(con, order_id)
+        con.commit()
+    logger.info(
+        "fail_remaining_links: order=%s admin=%s reason=%s links=%d",
+        order_id, admin_id, reason, len(link_ids),
+    )
+    return transition

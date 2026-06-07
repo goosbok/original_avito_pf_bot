@@ -274,7 +274,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                       ? <span className="service-card__price">{s.price}</span>
                       : <span className="badge badge--muted" style={{ fontSize: '0.7rem' }}>{s.badge}</span>
                     }
-                    {s.available && <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>Заказать →</span>}
+                    {s.available && <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>Заказать</span>}
                   </div>
                 </div>
               ))}
@@ -286,7 +286,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
             <div className="section-header">
               <span className="section-title">Последние заказы</span>
               <button className="btn btn--ghost btn--sm" onClick={() => onNavigate('orders')}>
-                Все заказы →
+                Все заказы
               </button>
             </div>
             <div className="card" style={{ overflow: 'hidden' }}>

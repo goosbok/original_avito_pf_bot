@@ -113,7 +113,7 @@ function PhoneLogin({ onSuccess }) {
         <div className="form-hint">Код отправлен на {phone}. Действителен 5 минут.</div>
       </div>
       <button className="btn btn--primary btn--lg btn--full" onClick={verify} disabled={loading}>
-        {loading ? 'Проверка...' : 'Войти →'}
+        {loading ? 'Проверка...' : 'Войти'}
       </button>
       <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
         {resendIn > 0 ? (

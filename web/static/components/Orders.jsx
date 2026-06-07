@@ -41,7 +41,7 @@ function OrderMobileCard({ order: o, onNavigate }) {
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>
-            Подробнее →
+            Подробнее
           </span>
         </div>
       </div>

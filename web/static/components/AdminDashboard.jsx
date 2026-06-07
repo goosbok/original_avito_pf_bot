@@ -45,7 +45,7 @@ function AdminDashboard({ onNavigate }) {
                 {c.value}
               </div>
               <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontWeight: 700 }}>
-                {c.ctaLabel} →
+                {c.ctaLabel}
               </div>
             </div>
           ))}

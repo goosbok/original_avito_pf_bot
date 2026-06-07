@@ -328,7 +328,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     <div className="form-hint">Код действителен 10 минут</div>
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
-                    {loading ? 'Проверка...' : 'Создать аккаунт →'}
+                    {loading ? 'Проверка...' : 'Создать аккаунт'}
                   </button>
                   <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
                     ← Изменить номер
@@ -369,7 +369,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     <div className="form-hint">Минимум 8 символов</div>
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterRequest} disabled={loading}>
-                    {loading ? 'Отправка кода...' : 'Получить код на email →'}
+                    {loading ? 'Отправка кода...' : 'Получить код на email'}
                   </button>
                 </>
               ) : (
@@ -390,7 +390,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     <div className="form-hint">Код отправлен на {email}. Действителен 10 минут.</div>
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterVerify} disabled={loading}>
-                    {loading ? 'Проверка...' : 'Создать аккаунт →'}
+                    {loading ? 'Проверка...' : 'Создать аккаунт'}
                   </button>
                   <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
                     <span style={{ color: 'var(--text-3)' }}>Не пришёл код?</span>{' '}
@@ -545,7 +545,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                     <div className="form-hint">Код действителен 10 минут</div>
                   </div>
                   <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
-                    {loading ? 'Проверка...' : 'Войти →'}
+                    {loading ? 'Проверка...' : 'Войти'}
                   </button>
                   <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
                     ← Изменить номер
@@ -578,7 +578,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 />
               </div>
               <button className="btn btn--primary btn--lg btn--full" onClick={handleEmailLogin} disabled={loading}>
-                {loading ? 'Вход...' : 'Войти →'}
+                {loading ? 'Вход...' : 'Войти'}
               </button>
               <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85rem' }}>
                 <span onClick={() => setMode('forgot')} style={{ color: 'var(--primary)', cursor: 'pointer' }}>

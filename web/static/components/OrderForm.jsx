@@ -477,7 +477,7 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                 disabled={loading || urlCount === 0}
                 style={{ fontSize: '0.9375rem' }}
               >
-                {loading ? 'Создаём заказ...' : (user ? 'Создать заказ →' : 'Далее →')}
+                {loading ? 'Создаём заказ...' : (user ? 'Создать заказ' : 'Далее')}
               </button>
 
               {/* Согласия — мелким текстом под кнопкой */}

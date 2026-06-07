@@ -9,6 +9,7 @@ fallback'ит в manual.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from services.db import connect
@@ -105,3 +106,45 @@ def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
     deadline = compute_deadline(order)
     mark_in_work(link_id, delivery_mode="auto",
                  deadline_at=deadline, external_id=external_id)
+
+
+DISPATCHER_LOOP_INTERVAL_SECONDS = 5 * 60  # 5 минут
+
+
+def dispatch_for_paid_orders() -> int:
+    """Найти все paid-заказы с pending-ссылками и прогнать dispatcher.
+
+    Используется cron'ом — добивает заказы, чей dispatch при оплате упал
+    или прошёл частично (например, API временно не доступен).
+    Возвращает количество обработанных заказов.
+    """
+    with connect() as con:
+        rows = con.execute(
+            "SELECT DISTINCT o.increment "
+            "FROM orders o JOIN order_links ol ON ol.order_id = o.increment "
+            "WHERE o.status='paid' AND ol.status='pending'"
+        ).fetchall()
+    order_ids = [int(r["increment"]) for r in rows]
+    for order_id in order_ids:
+        try:
+            dispatch_pending_links(order_id)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "dispatch_for_paid_orders: order %s failed", order_id
+            )
+    return len(order_ids)
+
+
+async def run_dispatcher_loop() -> None:
+    logger.info(
+        "dispatcher loop started (interval=%ss)",
+        DISPATCHER_LOOP_INTERVAL_SECONDS,
+    )
+    while True:
+        try:
+            count = dispatch_for_paid_orders()
+            if count:
+                logger.info("dispatcher: handled %d orders", count)
+        except Exception:  # noqa: BLE001
+            logger.exception("dispatcher loop iteration failed")
+        await asyncio.sleep(DISPATCHER_LOOP_INTERVAL_SECONDS)

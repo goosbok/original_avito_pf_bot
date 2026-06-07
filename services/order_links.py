@@ -7,6 +7,7 @@ orders.status (Спек §4.1). Все методы работают как че
 from __future__ import annotations
 
 import logging
+from datetime import date, datetime, timedelta, timezone
 
 from services.db import connect
 from services.exceptions import InvalidLinkTransition, LinkNotFound
@@ -252,3 +253,50 @@ def mark_failed(link_id: int, *, reason: str) -> tuple[str, str] | None:
         result = _recompute_order_status(con, order_id)
         con.commit()
         return result
+
+
+# === Deadline ===
+
+def compute_deadline(
+    order: dict,
+    *,
+    now: datetime | None = None,
+) -> str:
+    """Вычислить deadline_at для ссылки заказа.
+
+    Формула: max(order.start_date, today) + days, где days берётся из
+    order.position_name (формат 'days/fix_count').
+
+    `now` параметр для тестов (фиксированное "сейчас"); по умолчанию utcnow.
+
+    Возвращает ISO+TZ строку.
+    Raises ValueError если position_name не парсится.
+    """
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    parts = str(order["position_name"]).split("/")
+    if len(parts) < 1:
+        raise ValueError(f"invalid position_name: {order['position_name']!r}")
+    try:
+        days = int(parts[0])
+    except (ValueError, TypeError) as exc:
+        raise ValueError(
+            f"invalid position_name: {order['position_name']!r}"
+        ) from exc
+
+    today = now.date()
+    start_str = order.get("start_date")
+    start = today
+    if start_str:
+        try:
+            start = date.fromisoformat(str(start_str))
+        except ValueError:
+            start = today
+    start_effective = max(start, today)
+    deadline = datetime.combine(
+        start_effective + timedelta(days=days),
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
+    return deadline.isoformat()

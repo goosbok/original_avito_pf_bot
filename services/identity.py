@@ -130,6 +130,17 @@ def touch_provider(provider: str, identifier: str) -> None:
         con.commit()
 
 
+def _find_legacy_user_by_id(uid: int) -> dict | None:
+    """SELECT id FROM users WHERE id=uid. Returns dict or None.
+    Used as fallback in get_or_create_user_by_telegram — legacy bot
+    stored users.id == tg_id without auth_providers table."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT id FROM users WHERE id = ?", (int(uid),)
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def get_or_create_user_by_telegram(
     tg_id: int,
     *,
@@ -146,7 +157,25 @@ def get_or_create_user_by_telegram(
     if user_id is not None:
         return user_id
 
-    # New user
+    # Legacy-safety: legacy bot stored users.id == tg_id without auth_providers.
+    # If such a row exists in `users` (e.g. backfill hasn't run, or DB was
+    # restored from an older backup), claim it instead of creating a duplicate.
+    legacy = _find_legacy_user_by_id(tg_id)
+    if legacy is not None:
+        link_provider(int(legacy["id"]), "telegram", str(tg_id))
+        # Also update user_name / first_name if newer info available
+        if user_name or first_name:
+            from utils.sqlite3 import update_user
+            kwargs = {}
+            if user_name:
+                kwargs["user_name"] = user_name
+            if first_name:
+                kwargs["first_name"] = first_name
+            if kwargs:
+                update_user(int(legacy["id"]), **kwargs)
+        return int(legacy["id"])
+
+    # Genuinely new user
     new_id = _create_user(user_name=user_name, first_name=first_name, ref_id=ref_id)
     link_provider(new_id, "telegram", str(tg_id))
     return new_id

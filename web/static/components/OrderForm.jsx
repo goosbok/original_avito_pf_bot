@@ -36,6 +36,52 @@ function SliderField({ label, min, max, step, value, onChange, suffix = '', hint
   );
 }
 
+// Маленькая info-подсказка: иконка «i» + поповер по клику (работает и на тач-экранах).
+function InfoHint({ text }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
+        aria-label="Подробнее"
+        style={{
+          width: 18, height: 18, borderRadius: '50%',
+          border: `1.5px solid ${open ? 'var(--primary)' : 'var(--text-3)'}`,
+          background: 'transparent', color: open ? 'var(--primary)' : 'var(--text-3)',
+          cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, lineHeight: 1,
+          fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, padding: 0,
+        }}
+      >i</button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: 'calc(100% + 8px)', left: 0, zIndex: 100,
+            width: 280, maxWidth: '75vw',
+            background: 'var(--surface)', color: 'var(--text-2)',
+            border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+            boxShadow: 'var(--shadow-lg)', padding: '10px 12px',
+            fontSize: '0.75rem', lineHeight: 1.55, fontWeight: 400,
+            textAlign: 'left', whiteSpace: 'normal', cursor: 'default',
+          }}
+        >
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
 function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced }) {
   // Step 1 fields
   const [inputText, setInputText] = useOrderState('');
@@ -392,7 +438,10 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                 <div className="toggle-row" onClick={() => setContacts(v => !v)} style={{ userSelect: 'none', cursor: 'pointer' }}>
                   <div className={`toggle${contacts ? ' on' : ''}`} />
                   <div>
-                    <div className="toggle-label" style={{ fontSize: '0.875rem' }}>Запросы контактов</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div className="toggle-label" style={{ fontSize: '0.875rem' }}>Запросы контактов</div>
+                      <InfoHint text="Контакты приходят в любом процентном соотношении к просмотрам — вплоть до полного отсутствия: это зависит от реальных пользователей Авито, поэтому их количество мы не гарантируем. Просмотры же идут 1:1 с заказом — их объём мы гарантируем, иначе вернём деньги." />
+                    </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginTop: 2 }}>Включать постепенно</div>
                   </div>
                 </div>

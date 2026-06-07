@@ -285,6 +285,8 @@ p  { line-height: 1.65; }
   transition: opacity 0.15s;
 }
 .balance-badge:hover { opacity: 0.85; }
+.balance-badge--btn { border: none; font-family: inherit; }
+.balance-badge--btn:hover { opacity: 1; box-shadow: 0 0 0 2px var(--primary) inset; }
 
 /* ===== HEADER ===== */
 .header {

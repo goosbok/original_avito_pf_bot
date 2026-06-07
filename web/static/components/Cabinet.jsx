@@ -45,6 +45,16 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
   const refillBusy = refillStatus === 'pending' || refillStatus === 'polling';
   const refillAmountValid = Number(refillAmount) >= 100;
 
+  // Клик по балансу в шапке → переход в кабинет с автоскроллом к пополнению.
+  useCabinetEffect(() => {
+    if (sessionStorage.getItem('scroll_to_refill') !== '1') return;
+    sessionStorage.removeItem('scroll_to_refill');
+    const t = setTimeout(() => {
+      document.getElementById('cabinet-refill')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => clearTimeout(t);
+  }, []);
+
   const openSupportForRefill = () => {
     const text = `Хочу пополнить баланс на ${Number(refillAmount).toLocaleString('ru-RU')} ₽, но через сайт не получается. Помогите, пожалуйста.`;
     window.dispatchEvent(new CustomEvent('support-chat-send', { detail: { text } }));
@@ -129,7 +139,7 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
               </p>
             </div>
 
-            <div className="card cabinet-balance-card" style={{ padding: '16px 20px', width: '100%', maxWidth: 340, flex: '0 0 auto' }}>
+            <div id="cabinet-refill" className="card cabinet-balance-card" style={{ padding: '16px 20px', width: '100%', maxWidth: 340, flex: '0 0 auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Баланс</span>
                 <span style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--primary)' }}>{balance.toLocaleString('ru-RU')} ₽</span>

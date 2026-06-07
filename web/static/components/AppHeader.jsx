@@ -62,6 +62,17 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
     { label: 'Заказы',   route: 'orders',  icon: '📋' },
   ];
 
+  // Клик по балансу → к форме пополнения в кабинете. Если уже в кабинете —
+  // просто скроллим; иначе ставим флаг и переходим (Cabinet подхватит скролл).
+  const goToRefill = () => {
+    if (route === 'cabinet') {
+      document.getElementById('cabinet-refill')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      sessionStorage.setItem('scroll_to_refill', '1');
+      onNavigate('cabinet');
+    }
+  };
+
   return (
     <header className="header">
       <div className="header__inner">
@@ -119,11 +130,15 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
           {/* Notifications bell (regular user view only) */}
           {isApp && user && !adminMode && <NotificationsBell onNavigate={onNavigate} />}
 
-          {/* Balance badge */}
+          {/* Balance badge → пополнение */}
           {isApp && user && (
-            <div className="balance-badge desktop-only">
+            <button
+              className="balance-badge balance-badge--btn desktop-only"
+              onClick={goToRefill}
+              title="Пополнить баланс"
+            >
               {balance.toLocaleString('ru-RU')} ₽
-            </div>
+            </button>
           )}
 
           {/* Theme toggle — sun/moon pill switch */}
@@ -273,7 +288,11 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>@{user.user_name || 'user'}</div>
                       </div>
                     </div>
-                    <div className="balance-badge">{balance.toLocaleString('ru-RU')} ₽</div>
+                    <button
+                      className="balance-badge balance-badge--btn"
+                      onClick={() => { setMenuOpen(false); goToRefill(); }}
+                      title="Пополнить баланс"
+                    >{balance.toLocaleString('ru-RU')} ₽</button>
                   </div>
 
                   {[

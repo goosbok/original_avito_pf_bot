@@ -262,8 +262,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     <div className="auth-wrap">
       <div className="card auth-card">
         <div className="auth-card__logo">{logoMark}</div>
-        <h2 className="auth-card__title">Создать аккаунт</h2>
-        <p className="auth-card__sub">Выберите способ регистрации</p>
+        <h2 className="auth-card__title">Регистрация</h2>
+        <p className="auth-card__sub">Выберите способ</p>
 
         {error && <div className="alert alert--error">{error}</div>}
 
@@ -274,7 +274,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}
             onClick={() => pickMethod('tg')}
           >
-            Регистрация через Telegram
+            Через Telegram
           </button>
           {activeMethod === 'tg' && (
             <div className="method-form">
@@ -344,7 +344,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'email' ? ' active' : ''}`}
             onClick={() => pickMethod('email')}
           >
-            Регистрация по Email
+            По Email
           </button>
           {activeMethod === 'email' && (
             <div className="method-form">
@@ -418,7 +418,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`}
             onClick={() => pickMethod('sms')}
           >
-            Регистрация по SMS
+            По SMS
           </button>
           {activeMethod === 'sms' && (
             <div className="method-form">

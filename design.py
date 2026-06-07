@@ -126,7 +126,6 @@ def listord_array(orders: list[dict]):
             contacts_str = '✅ Да'
         else:
             contacts_str = '❎ Нет'
-        #orders_array.append(f"\nЗаказ номер {order['increment']}\nУслуга: {order['position_name']}\nЦена:{order['price']}\nДата размещения: {order['date']}\n{order['links']}")
         info = get_user(id=order['user_id'])
         if info:
             if info['user_name'] is not None:
@@ -182,27 +181,6 @@ pf_links = """Больше 1 ссылки запустить сразу - мож
 
 - КАЖДАЯ ССЫЛКА С НОВОЙ СТРОКИ 'CTRL+ENTER'."""
 
-
-def new_order_text(order: dict):
-    info = get_user(id=order['user_id'])
-    if order['contacts']:
-        contacts_str = 'Да'
-    else:
-        contacts_str = 'Нет'
-
-    msg = (f"<b>💰 Поступил новый заказ!</b>\n"
-           f"🐼 ID заказа: {order['increment']}\n"
-           f"💳 Цена: {order['price']}\n"
-           f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-           f"⚙️ Имя позиции: {order['position_name']}\n"
-           f"🔰 Статус: {order['status']}\n"
-           f"👥 Контакты: {contacts_str}\n"
-           f"🗓 Дата: {order['date']}\n"
-           f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-    for link in order['links'].split(','):
-        link = link.replace("'", "")
-        msg += f"\n<code>{link}</code>"
-    return msg
 
 def order_text(order: dict):
     info = get_user(id=order['user_id'])

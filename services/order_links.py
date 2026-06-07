@@ -15,6 +15,9 @@ from utils.dates import now_iso
 
 logger = logging.getLogger(__name__)
 
+# Moscow timezone — project's business day boundary.
+_MSK = timezone(timedelta(hours=3))
+
 
 # === CRUD ===
 
@@ -268,6 +271,11 @@ def compute_deadline(
     order.position_name (формат 'days/fix_count').
 
     `now` параметр для тестов (фиксированное "сейчас"); по умолчанию utcnow.
+    'today' привязана на Moscow time — граница бизнес-дня проекта.
+
+    Если start_date невалидный — используем today (с warning в логи). Не
+    raise, чтобы backfill кривых legacy-значений не валился; пользовательский
+    ввод валидируется выше.
 
     Возвращает ISO+TZ строку.
     Raises ValueError если position_name не парсится.
@@ -276,22 +284,25 @@ def compute_deadline(
         now = datetime.now(timezone.utc)
 
     parts = str(order["position_name"]).split("/")
-    if len(parts) < 1:
-        raise ValueError(f"invalid position_name: {order['position_name']!r}")
     try:
         days = int(parts[0])
-    except (ValueError, TypeError) as exc:
+    except (ValueError, IndexError) as exc:
         raise ValueError(
             f"invalid position_name: {order['position_name']!r}"
         ) from exc
 
-    today = now.date()
+    # "today" anchored on Moscow time — project's business day boundary.
+    today = now.astimezone(_MSK).date()
     start_str = order.get("start_date")
     start = today
     if start_str:
         try:
             start = date.fromisoformat(str(start_str))
         except ValueError:
+            logger.warning(
+                "compute_deadline: invalid start_date %r, defaulting to today",
+                start_str,
+            )
             start = today
     start_effective = max(start, today)
     deadline = datetime.combine(

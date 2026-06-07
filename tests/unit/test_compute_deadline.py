@@ -58,3 +58,16 @@ def test_returns_iso_with_tz(monkeypatch):
     # Должно парситься обратно
     parsed = order_links.datetime.fromisoformat(deadline)
     assert parsed.tzinfo is not None
+
+
+def test_invalid_start_date_falls_back_to_today_with_warning(caplog):
+    import logging
+    from services import order_links
+    order = {"position_name": "3/100", "start_date": "15.06.2026"}
+    with caplog.at_level(logging.WARNING, logger="services.order_links"):
+        deadline = order_links.compute_deadline(
+            order, now=_fixed_now("2026-06-07T10:00:00+00:00")
+        )
+    # Used today MSK (2026-06-07) + 3 days = 2026-06-10
+    assert deadline.startswith("2026-06-10")
+    assert any("invalid start_date" in rec.message for rec in caplog.records)

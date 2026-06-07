@@ -149,9 +149,10 @@ async def enter_pf_func(message: types.Message, state: FSMContext, user_id: int)
 
 def extract_avito_links(text: str) -> list:
     """Извлекает уникальные ссылки avito.ru из произвольного текста."""
-    # Убираем переносы строк между не-пробельными символами — склеиваем URL разбитые переносом
-    normalized = re.sub(r'(?<=\S)[\r\n]+(?=\S)', '', text)
-    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/\S+', normalized)
+    # Склеиваем перенос ВНУТРИ URL, но не если следующая строка — новый https://
+    normalized = re.sub(r'(?<=\S)[\r\n]+(?!https?://)(?=\S)', '', text)
+    # Регекс стопится перед следующим https:// даже если нет пробела между URL
+    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/(?:(?!https?://)\S)+', normalized)
 
     seen = set()
     unique_links = []

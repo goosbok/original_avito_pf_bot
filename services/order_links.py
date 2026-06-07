@@ -193,3 +193,57 @@ def _recompute_order_status(con, order_id: int) -> tuple[str, str] | None:
         (new_status, order_id, old_status),
     )
     return (old_status, new_status)
+
+
+# === Public mutation API ===
+
+
+def _get_order_id(con, link_id: int) -> int:
+    row = con.execute(
+        "SELECT order_id FROM order_links WHERE id=?", (link_id,)
+    ).fetchone()
+    if row is None:
+        raise LinkNotFound(f"link_id={link_id}")
+    return int(row["order_id"] if hasattr(row, "keys") else row[0])
+
+
+def mark_in_work(
+    link_id: int,
+    *,
+    delivery_mode: str,
+    deadline_at: str,
+    external_id: str | None = None,
+) -> tuple[str, str] | None:
+    """pending → in_work. Пересчитывает order.status в той же транзакции.
+    Возвращает (old, new) если статус заказа сменился, иначе None."""
+    with connect() as con:
+        order_id = _get_order_id(con, link_id)
+        _transition(
+            con, link_id=link_id, to_status="in_work",
+            delivery_mode=delivery_mode, deadline_at=deadline_at,
+            external_id=external_id,
+        )
+        result = _recompute_order_status(con, order_id)
+        con.commit()
+        return result
+
+
+def mark_done(link_id: int) -> tuple[str, str] | None:
+    """in_work → done."""
+    with connect() as con:
+        order_id = _get_order_id(con, link_id)
+        _transition(con, link_id=link_id, to_status="done")
+        result = _recompute_order_status(con, order_id)
+        con.commit()
+        return result
+
+
+def mark_failed(link_id: int, *, reason: str) -> tuple[str, str] | None:
+    """pending | in_work → failed."""
+    with connect() as con:
+        order_id = _get_order_id(con, link_id)
+        _transition(con, link_id=link_id, to_status="failed",
+                    failure_reason=reason)
+        result = _recompute_order_status(con, order_id)
+        con.commit()
+        return result

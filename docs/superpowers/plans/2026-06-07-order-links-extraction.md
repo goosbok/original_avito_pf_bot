@@ -10,7 +10,13 @@
 
 **Spec:** [docs/superpowers/specs/2026-06-07-order-links-extraction-design.md](../specs/2026-06-07-order-links-extraction-design.md)
 
-**Tests in this codebase:** Все pytest запускаются в docker-контейнере: `docker compose -f docker-compose.yml exec -T bot pytest <path> -v`. Не запускай pytest локально (см. MEMORY.md / feedback_docker_tests).
+**Tests in this codebase:** Все pytest запускаются в docker-контейнере. Этот воркtree смонтирован в существующий образ:
+
+```bash
+docker run --rm -v "$(pwd):/app" -w /app original_avito_pf_bot-api pytest <path> -v
+```
+
+Не запускай pytest локально (см. MEMORY.md / feedback_docker_tests). Команды `docker compose -f docker-compose.yml exec -T bot pytest` в задачах ниже — заменять на форму выше (бот-контейнер не поднят, образ собран из main-репо, а воркtree надо примонтировать).
 
 ---
 

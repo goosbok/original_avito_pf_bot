@@ -6,6 +6,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException
 
 from services.db import connect
+from services.order_links import list_links as _list_order_links
 from services.notifications import (
     push_tg_notification,
     record_order_status_change,
@@ -20,6 +21,19 @@ from web.schemas import (
 router = APIRouter(prefix="/api/admin/orders", tags=["admin"])
 
 
+def _render_links_str(order_id: int) -> str:
+    """Return newline-joined URLs from order_links (orders.links is NULL for new orders).
+
+    NOTE: adds one extra DB query per order shown (N+1). Acceptable for
+    paginated lists of ≤20 orders; can be batched later if needed.
+    """
+    try:
+        rows = _list_order_links(int(order_id))
+    except Exception:
+        return ""
+    return "\n".join(r["url"] for r in rows if r.get("url"))
+
+
 def _row_to_item(row) -> AdminOrderItem:
     phone = row["phone"] if "phone" in row.keys() else None
     return AdminOrderItem(
@@ -29,7 +43,7 @@ def _row_to_item(row) -> AdminOrderItem:
         price=int(row["price"] or 0),
         position_name=str(row["position_name"] or ""),
         status=str(row["status"] or ""),
-        links=str(row["links"] or ""),
+        links=_render_links_str(int(row["increment"])),
         date=str(row["date"] or ""),
         contacts=bool(row["contacts"]),
         is_guest=phone is not None,

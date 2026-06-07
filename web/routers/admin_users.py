@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from services import identity, orders as orders_svc
 from services.db import connect
+from services.order_links import list_links as _list_order_links
 from services.exceptions import UserNotFound
 from web.admin_deps import require_admin
 from web.schemas import (
@@ -21,6 +22,19 @@ from web.schemas import (
 )
 
 router = APIRouter(prefix="/api/admin/users", tags=["admin"])
+
+
+def _render_links_str(order_id: int) -> str:
+    """Return newline-joined URLs from order_links (orders.links is NULL for new orders).
+
+    NOTE: adds one extra DB query per order shown (N+1). Acceptable for
+    paginated lists of ≤20 orders; can be batched later if needed.
+    """
+    try:
+        rows = _list_order_links(int(order_id))
+    except Exception:
+        return ""
+    return "\n".join(r["url"] for r in rows if r.get("url"))
 
 
 def _row_to_summary(row) -> AdminUserSummary:
@@ -92,7 +106,7 @@ async def user_detail(
             price=int(o["price"] or 0),
             position_name=str(o["position_name"] or ""),
             status=str(o["status"] or ""),
-            links=str(o["links"] or ""),
+            links=_render_links_str(o["increment"]),
             date=str(o["date"] or ""),
             contacts=bool(o["contacts"]),
         )

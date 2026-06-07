@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from services.db import connect
-from services.exceptions import LinkNotFound
+from services.exceptions import InvalidLinkTransition, LinkNotFound
 from utils.dates import now_iso
 
 logger = logging.getLogger(__name__)
@@ -47,3 +47,79 @@ def get_link(link_id: int) -> dict:
     if row is None:
         raise LinkNotFound(f"link_id={link_id}")
     return dict(row)
+
+
+# === State transitions ===
+
+# Допустимые переходы статусов ссылки. Спек §3.2.
+_ALLOWED_TRANSITIONS = {
+    ("pending", "in_work"),
+    ("pending", "failed"),
+    ("in_work", "done"),
+    ("in_work", "failed"),
+}
+
+
+def _transition(
+    con,
+    *,
+    link_id: int,
+    to_status: str,
+    delivery_mode: str | None = None,
+    deadline_at: str | None = None,
+    external_id: str | None = None,
+    failure_reason: str | None = None,
+) -> None:
+    """Атомарно перевести ссылку в новый статус.
+
+    Валидирует допустимость через `_ALLOWED_TRANSITIONS`. Повтор в текущий
+    статус — no-op (идемпотентность). Проставляет соответствующий timestamp
+    (started_at / done_at / failed_at).
+
+    Не делает commit и не пересчитывает order.status — это ответственность
+    публичных методов поверх (`mark_in_work` / `mark_done` / `mark_failed`).
+    """
+    row = con.execute(
+        "SELECT status FROM order_links WHERE id=?", (link_id,)
+    ).fetchone()
+    if row is None:
+        raise LinkNotFound(f"link_id={link_id}")
+    current = row["status"] if hasattr(row, "keys") else row[0]
+
+    if current == to_status:
+        return  # idempotent no-op
+
+    if (current, to_status) not in _ALLOWED_TRANSITIONS:
+        raise InvalidLinkTransition(from_status=current, to_status=to_status)
+
+    now = now_iso()
+    fields = ["status = ?"]
+    values: list = [to_status]
+
+    if to_status == "in_work":
+        fields.append("started_at = ?")
+        values.append(now)
+        if delivery_mode is not None:
+            fields.append("delivery_mode = ?")
+            values.append(delivery_mode)
+        if deadline_at is not None:
+            fields.append("deadline_at = ?")
+            values.append(deadline_at)
+        if external_id is not None:
+            fields.append("external_id = ?")
+            values.append(external_id)
+    elif to_status == "done":
+        fields.append("done_at = ?")
+        values.append(now)
+    elif to_status == "failed":
+        fields.append("failed_at = ?")
+        values.append(now)
+        if failure_reason is not None:
+            fields.append("failure_reason = ?")
+            values.append(failure_reason)
+
+    values.append(link_id)
+    con.execute(
+        f"UPDATE order_links SET {', '.join(fields)} WHERE id = ?",
+        values,
+    )

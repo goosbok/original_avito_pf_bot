@@ -887,6 +887,24 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "read_at TIMESTAMP)",
             8,
         ),
+        (
+            "order_links",
+            "CREATE TABLE IF NOT EXISTS order_links("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "order_id INTEGER NOT NULL,"
+            "url TEXT NOT NULL,"
+            "status TEXT NOT NULL DEFAULT 'pending',"
+            "delivery_mode TEXT,"
+            "deadline_at TIMESTAMP,"
+            "started_at TIMESTAMP,"
+            "done_at TIMESTAMP,"
+            "failed_at TIMESTAMP,"
+            "failure_reason TEXT,"
+            "external_id TEXT,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (order_id) REFERENCES orders(increment))",
+            12,
+        ),
     ]
 
 
@@ -901,6 +919,10 @@ def get_index_statements() -> list[str]:
         "ON notifications(user_id, read_at)",
         "CREATE INDEX IF NOT EXISTS idx_notifications_user_created "
         "ON notifications(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_order_links_order "
+        "ON order_links(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_order_links_deadline "
+        "ON order_links(status, deadline_at) WHERE status = 'in_work'",
     ]
 
 

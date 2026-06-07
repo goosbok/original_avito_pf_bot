@@ -41,7 +41,9 @@ from .admin_base import find_user, generate_random_string
 from services.order_links import (
     mark_all_manual_in_work,
     count_pending_manual_links_due_today as count_pending_manual_links,
+    fail_remaining_links,
 )
+from services.notifications import notify_order_status_changed
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,12 @@ class refills(StatesGroup):
 
 
 class MarkManual(StatesGroup):
+    confirm = State()
+
+
+class FailOrder(StatesGroup):
+    order_id = State()
+    reason = State()
     confirm = State()
 
 
@@ -847,6 +855,94 @@ async def mark_manual_confirm(call: types.CallbackQuery, state: FSMContext):
     n = mark_all_manual_in_work(admin_id=admin_id)
     await call.message.answer(
         f"✅ Отмечено как отправленные: <b>{n}</b> ссылок.",
+        reply_markup=admin_back_kb('orders_man'),
+    )
+    await state.finish()
+
+
+@dp.callback_query_handler(text="fail_order", state='*')
+async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
+    """Шаг 1: спросить ID заказа."""
+    await state.finish()
+    await call.message.answer("❌ Введите ID заказа, который нужно пометить как failed:")
+    await FailOrder.order_id.set()
+
+
+@dp.message_handler(state=FailOrder.order_id)
+async def fail_order_collect_id(message: types.Message, state: FSMContext):
+    """Шаг 2: получили ID, спрашиваем причину."""
+    try:
+        order_id = int(message.text.strip())
+    except (TypeError, ValueError):
+        await message.answer("⚠️ ID должен быть числом. Попробуйте снова.")
+        return
+    order = get_order(order_id)
+    if not order:
+        await message.answer(f"⚠️ Заказ {order_id} не найден.",
+                              reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
+    if order.get("status") != "paid":
+        await message.answer(
+            f"⚠️ Заказ {order_id} в статусе {order.get('status')}, "
+            f"failed можно только из paid.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+    await state.update_data(order_id=order_id)
+    await message.answer("Опишите причину (одно сообщение, пойдёт в логи):")
+    await FailOrder.reason.set()
+
+
+@dp.message_handler(state=FailOrder.reason)
+async def fail_order_collect_reason(message: types.Message, state: FSMContext):
+    """Шаг 3: получили причину, показываем подтверждение."""
+    reason = message.text.strip()
+    if not reason:
+        await message.answer("⚠️ Причина не может быть пустой.")
+        return
+    await state.update_data(reason=reason)
+    data = await state.get_data()
+    text = (
+        f"❌ Подтверждение: пометить заказ #{data['order_id']} как failed.\n"
+        f"Причина: {reason}\n\n"
+        f"Юзер получит уведомление. Отправьте 'yes' для подтверждения "
+        f"или 'no' для отмены."
+    )
+    await message.answer(text)
+    await FailOrder.confirm.set()
+
+
+@dp.message_handler(state=FailOrder.confirm)
+async def fail_order_confirm(message: types.Message, state: FSMContext):
+    """Шаг 4: подтверждение."""
+    answer = (message.text or "").strip().lower()
+    if answer != "yes":
+        await message.answer("Отменено.", reply_markup=admin_back_kb('orders_man'))
+        await state.finish()
+        return
+    data = await state.get_data()
+    order_id = int(data["order_id"])
+    reason = str(data["reason"])
+    admin_id = int(message.from_user.id)
+
+    order = get_order(order_id)
+    transition = fail_remaining_links(
+        order_id=order_id, reason=reason, admin_id=admin_id
+    )
+    if transition is not None and order is not None:
+        old, new = transition
+        try:
+            await notify_order_status_changed(
+                user_id=int(order["user_id"]),
+                kind="order", order_id=order_id,
+                old_status=old, new_status=new,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("fail_order_confirm: notify failed")
+    await message.answer(
+        f"✅ Заказ #{order_id} помечен failed.",
         reply_markup=admin_back_kb('orders_man'),
     )
     await state.finish()

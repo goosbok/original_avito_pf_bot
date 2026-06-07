@@ -204,7 +204,7 @@ def _get_order_id(con, link_id: int) -> int:
     ).fetchone()
     if row is None:
         raise LinkNotFound(f"link_id={link_id}")
-    return int(row["order_id"] if hasattr(row, "keys") else row[0])
+    return int(row["order_id"])
 
 
 def mark_in_work(
@@ -215,7 +215,8 @@ def mark_in_work(
     external_id: str | None = None,
 ) -> tuple[str, str] | None:
     """pending → in_work. Пересчитывает order.status в той же транзакции.
-    Возвращает (old, new) если статус заказа сменился, иначе None."""
+    Возвращает (old, new) если статус заказа сменился, иначе None.
+    Caller отвечает за дёрнуть notify_order_status_changed при не-None возврате."""
     with connect() as con:
         order_id = _get_order_id(con, link_id)
         _transition(
@@ -229,7 +230,9 @@ def mark_in_work(
 
 
 def mark_done(link_id: int) -> tuple[str, str] | None:
-    """in_work → done."""
+    """in_work → done. Пересчитывает order.status в той же транзакции.
+    Возвращает (old, new) если статус заказа сменился, иначе None.
+    Caller отвечает за дёрнуть notify_order_status_changed при не-None возврате."""
     with connect() as con:
         order_id = _get_order_id(con, link_id)
         _transition(con, link_id=link_id, to_status="done")
@@ -239,7 +242,9 @@ def mark_done(link_id: int) -> tuple[str, str] | None:
 
 
 def mark_failed(link_id: int, *, reason: str) -> tuple[str, str] | None:
-    """pending | in_work → failed."""
+    """pending | in_work → failed. Пересчитывает order.status в той же транзакции.
+    Возвращает (old, new) если статус заказа сменился, иначе None.
+    Caller отвечает за дёрнуть notify_order_status_changed при не-None возврате."""
     with connect() as con:
         order_id = _get_order_id(con, link_id)
         _transition(con, link_id=link_id, to_status="failed",

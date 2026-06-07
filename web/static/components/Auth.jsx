@@ -412,19 +412,10 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             </div>
           )}
 
-          {/* ── SMS ──────────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`}
-            onClick={() => pickMethod('sms')}
-          >
-            По SMS
-          </button>
-          {activeMethod === 'sms' && (
-            <div className="method-form">
-              <PhoneLogin onSuccess={(jwt) => onLogin(jwt)} />
-            </div>
-          )}
+          {/* ── SMS ── временно отключено (2026-06-07): нужен provider integration ──
+              <button type="button" className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`} onClick={() => pickMethod('sms')}>По SMS</button>
+              {activeMethod === 'sms' && (<div className="method-form"><PhoneLogin onSuccess={(jwt) => onLogin(jwt)} /></div>)}
+          */}
         </div>
 
         <div className="auth-links">
@@ -588,19 +579,10 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
             </div>
           )}
 
-          {/* ── SMS ──────────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`}
-            onClick={() => pickMethod('sms')}
-          >
-            По SMS
-          </button>
-          {activeMethod === 'sms' && (
-            <div className="method-form">
-              <PhoneLogin onSuccess={(jwt) => onLogin(jwt)} />
-            </div>
-          )}
+          {/* ── SMS ── временно отключено (2026-06-07): нужен provider integration ──
+              <button type="button" className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`} onClick={() => pickMethod('sms')}>По SMS</button>
+              {activeMethod === 'sms' && (<div className="method-form"><PhoneLogin onSuccess={(jwt) => onLogin(jwt)} /></div>)}
+          */}
         </div>
 
         <div className="auth-links">

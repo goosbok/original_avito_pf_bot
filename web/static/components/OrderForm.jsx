@@ -120,6 +120,22 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   // Step 3 state
   const [createdOrder, setCreatedOrder] = useOrderState(null); // { order_id, price, available_methods }
 
+  // For prefilled (repeat-order) flow: kick off preview fetch on mount so the
+  // restored cards don't stay on shimmer forever. Paste flow handles itself via
+  // handleInputChange; this is the only entry point that bypasses paste.
+  useOrderEffect(() => {
+    const prefilled = Array.isArray(prefilledFrom?.links) ? prefilledFrom.links : [];
+    if (!prefilled.length) return;
+    setLinkMeta(prev => {
+      const next = { ...prev };
+      for (const u of prefilled) {
+        if (!next[u]) next[u] = { status: 'loading' };
+      }
+      return next;
+    });
+    _fetchPreviewsAndMerge(prefilled);
+  }, []);
+
   useOrderEffect(() => {
     api.get('/api/orders/pf/price').then(data => {
       if (!data.__unauthorized) setPricePerUnit(data.price_per_unit || 6);

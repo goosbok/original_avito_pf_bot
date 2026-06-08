@@ -114,13 +114,17 @@ async def info(call: CallbackQuery, state: FSMContext):
 
 @dp.callback_query_handler(text="how_to", state='*')
 async def call_how_to(call: CallbackQuery, state: FSMContext):
-    with open('images/IMG_2661.MP4', 'rb') as video:
-        video_obj = InputMediaVideo(media=video, caption="Видео инструкция")
-        video.width = 886
-        video.height = 1612
-        await call.message.answer_media_group(media=[video_obj])
-        STR = get_string('str_select_action')
-        await call.message.answer(STR, reply_markup=get_menu_kb())
+    try:
+        with open('images/IMG_2661.MP4', 'rb') as video:
+            video_obj = InputMediaVideo(media=video, caption="Видео инструкция")
+            video.width = 886
+            video.height = 1612
+            await call.message.answer_media_group(media=[video_obj])
+    except FileNotFoundError:
+        logger.warning("how_to: видео images/IMG_2661.MP4 не найдено, шлём фоллбек-текст")
+        await call.message.answer("Видео-инструкция временно недоступна, попробуйте позже.")
+    STR = get_string('str_select_action')
+    await call.message.answer(STR, reply_markup=get_menu_kb())
     try:
         await call.message.delete()
     except Exception:

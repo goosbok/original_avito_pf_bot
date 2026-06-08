@@ -16,6 +16,10 @@ services:
       - START_WEB=0
     volumes:
       - ./storage:/app/storage
+      # images/ монтируем с хоста: IMG_2661.MP4 (46MB) исключён из образа
+      # через .dockerignore, чтобы не раздувать build. Файл приезжает через
+      # `git pull` в deploy.sh и подхватывается отсюда.
+      - ./images:/app/images:ro
     # На хосте нет глобального IPv6. Docker DNS иногда отдаёт для googleapis.com
     # только AAAA — httplib2 (oauth2client/googleapiclient) перебирает все
     # адреса, упирается в "Errno 101 Network is unreachable" и падает.

@@ -70,6 +70,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.PF_AUTO_DISPATCH_ENABLED = False
     stub.PF_PHRASE_CACHE_CHUNK_DAYS = 4
     stub.PF_PHRASE_CACHE_REFRESH_INTERVAL_H = 24
+    stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
     return stub
 
 

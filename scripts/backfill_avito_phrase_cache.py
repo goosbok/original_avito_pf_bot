@@ -44,7 +44,11 @@ def backfill(*, days: int, chunk_size: int = None,
                  else config.PF_DASHBOARD_REQUEST_DELAY_SEC)
     today = today or datetime.now(timezone.utc).astimezone(_MSK).date()
 
-    session = login(config.BIZA_LOGIN, config.BIZA_PASSWORD)
+    try:
+        session = login(config.BIZA_LOGIN, config.BIZA_PASSWORD)
+    except BiznesklondaikError as exc:
+        logger.exception("backfill.login_failed err=%s", exc)
+        return 0
     chunks = list(iter_chunks(today, days_back=days, chunk_size=chunk_size))
     total_upserted = 0
     for i, (df, dt) in enumerate(chunks, 1):

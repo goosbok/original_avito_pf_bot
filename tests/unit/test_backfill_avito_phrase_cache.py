@@ -1,7 +1,10 @@
 from datetime import date
 from unittest.mock import patch, MagicMock
 
+import pytest
+
 from scripts.backfill_avito_phrase_cache import iter_chunks, backfill
+from services.biznesklondaik_client import LoginFailed
 
 
 def test_iter_chunks_splits_correctly():
@@ -30,3 +33,17 @@ def test_backfill_idempotent(tmp_db):
     # повторный запуск не валится; кэш консистентен
     from services.avito_phrase_cache import lookup
     assert lookup("111") == "x"
+
+
+def test_backfill_login_failure_returns_zero(tmp_db, caplog):
+    """Login fails → return 0, log error, don't bubble."""
+    import logging
+    caplog.set_level(logging.ERROR)
+    with patch("scripts.backfill_avito_phrase_cache.login",
+               side_effect=LoginFailed("bad creds")) as login_mock, \
+         patch("scripts.backfill_avito_phrase_cache.fetch_dashboard") as fetch:
+        n = backfill(days=8, chunk_size=4,
+                     today=date(2026, 6, 8), delay_sec=0)
+    assert n == 0
+    fetch.assert_not_called()
+    assert any("backfill.login_failed" in r.message for r in caplog.records)

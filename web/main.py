@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from services.avito_phrase_cache_refresh import run_refresh_loop
 from services.order_links_deadline import run_deadline_loop
 from services.order_links_dispatcher import run_dispatcher_loop
 from services.payment_expiry import run_expiry_loop
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI):
     expiry_task = asyncio.create_task(run_expiry_loop())
     deadline_task = asyncio.create_task(run_deadline_loop())
     dispatcher_task = asyncio.create_task(run_dispatcher_loop())
+    refresh_task = asyncio.create_task(run_refresh_loop())
     try:
         yield
     finally:
@@ -39,7 +41,8 @@ async def lifespan(app: FastAPI):
             pass
         deadline_task.cancel()
         dispatcher_task.cancel()
-        for task in (deadline_task, dispatcher_task):
+        refresh_task.cancel()
+        for task in (deadline_task, dispatcher_task, refresh_task):
             try:
                 await task
             except (asyncio.CancelledError, Exception):  # noqa: BLE001

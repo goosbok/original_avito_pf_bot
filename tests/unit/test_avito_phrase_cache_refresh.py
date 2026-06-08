@@ -1,3 +1,4 @@
+import asyncio
 from datetime import date
 from unittest.mock import patch, MagicMock
 
@@ -34,3 +35,30 @@ def test_refresh_window_is_last_n_days(tmp_db):
     assert kwargs["date_from"] == date(2026, 6, 6)
     assert kwargs["date_to"] == date(2026, 6, 8)
     assert n == 1
+
+
+def test_run_refresh_loop_does_boot_refresh():
+    """Loop вызывает refresh_recent ОДИН раз сразу при старте,
+    до первого asyncio.sleep."""
+    from services.avito_phrase_cache_refresh import run_refresh_loop
+
+    call_count = 0
+
+    def fake_refresh(days=2):
+        nonlocal call_count
+        call_count += 1
+        return 0
+
+    async def runner():
+        with patch("services.avito_phrase_cache_refresh.refresh_recent",
+                   side_effect=fake_refresh), \
+             patch("services.avito_phrase_cache_refresh.asyncio.sleep",
+                   side_effect=asyncio.CancelledError):
+            try:
+                await run_refresh_loop()
+            except asyncio.CancelledError:
+                pass
+
+    asyncio.run(runner())
+    # Boot refresh ran, then loop hit sleep and got cancelled.
+    assert call_count == 1

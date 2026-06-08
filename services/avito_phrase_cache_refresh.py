@@ -64,6 +64,13 @@ def refresh_recent(days: int = 2) -> int:
 async def run_refresh_loop() -> None:
     interval_sec = config.PF_PHRASE_CACHE_REFRESH_INTERVAL_H * 3600
     logger.info("biza.refresh.loop start interval=%ss", interval_sec)
+    # Boot-time refresh: deploy в 23:59 не должен оставлять кэш stale
+    # на сутки. refresh_recent сам гейтится feature-flag'ом, так что
+    # при выключенном флаге это бесплатный no-op.
+    try:
+        refresh_recent(days=2)
+    except Exception:  # noqa: BLE001
+        logger.exception("biza.refresh.boot_refresh_failed")
     while True:
         await asyncio.sleep(interval_sec)
         try:

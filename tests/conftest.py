@@ -58,6 +58,14 @@ def _make_config_stub() -> types.ModuleType:
     stub.OTP_MAX_ATTEMPTS = 5
     stub.OTP_RESEND_COOLDOWN = 60
     stub.BOT_HTTP_API_BASE = "https://api.telegram.org"
+    # Biznesklondaik PF executor (auto-mode) — keep stub in sync with
+    # data/config.py so services.biznesklondaik_client and friends don't
+    # AttributeError when imported in unit tests.
+    stub.BIZA_API_KEY = ""
+    stub.BIZA_LOGIN = ""
+    stub.BIZA_PASSWORD = ""
+    stub.BIZA_API_BASE_URL = "https://biznesklondaik.test/api"
+    stub.BIZA_DASHBOARD_BASE_URL = "https://biznesklondaik.test/pf-avito"
     return stub
 
 

@@ -58,6 +58,8 @@ def _make_config_stub() -> types.ModuleType:
     stub.OTP_MAX_ATTEMPTS = 5
     stub.OTP_RESEND_COOLDOWN = 60
     stub.BOT_HTTP_API_BASE = "https://api.telegram.org"
+    stub.AVITO_PROXY_URL = "https://lk.pf-bot.com"
+    stub.AVITO_PROXY_SECRET = ""
     return stub
 
 

@@ -42,6 +42,10 @@ def upsert_many(rows: Iterable[dict]) -> int:
             phrase = r.get("search_link")
             created = r.get("created_at")
             if not ad_id or not phrase or not created:
+                logger.warning(
+                    "phrase_cache.upsert.skip_invalid ad_id=%r search_link=%r created_at=%r",
+                    ad_id, phrase, created,
+                )
                 continue
             cur = con.execute(
                 "INSERT INTO avito_ad_phrase_cache"

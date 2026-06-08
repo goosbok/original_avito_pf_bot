@@ -65,3 +65,9 @@ OTP_TTL_SECONDS: int = int(os.getenv("OTP_TTL_SECONDS", "300"))
 OTP_MAX_ATTEMPTS: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
 OTP_RESEND_COOLDOWN: int = int(os.getenv("OTP_RESEND_COOLDOWN", "60"))
 BOT_HTTP_API_BASE: str = os.getenv("BOT_HTTP_API_BASE", "https://api.telegram.org")
+
+# Avito link-preview proxy on the RU-VPS (139.28.222.146).
+# Bypass: Avito blocks Hetzner egress (403) but the RU-VPS sits in Moscow and gets 200.
+# The proxy is a single nginx location with a shared-secret header check.
+AVITO_PROXY_URL: str = os.getenv("AVITO_PROXY_URL", "https://lk.pf-bot.com")
+AVITO_PROXY_SECRET: str = os.getenv("AVITO_PROXY_SECRET", "")

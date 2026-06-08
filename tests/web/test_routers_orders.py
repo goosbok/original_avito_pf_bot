@@ -131,6 +131,42 @@ def test_create_pf_order_invalid_link(authed_with_balance):
     assert r.status_code == 422
 
 
+def test_create_pf_order_rejects_avito_substring_in_query(authed_with_balance):
+    """Defense-in-depth: don't allow a non-avito host with avito.ru in the query."""
+    client, _, headers = authed_with_balance
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://evil.com/?ref=avito.ru"],
+            "days": 1,
+            "fix_count": 5,
+            "contacts": False,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
+    assert r.status_code == 422
+
+
+def test_create_pf_order_rejects_avito_subdomain_prefix(authed_with_balance):
+    """Defense-in-depth: don't allow a domain that just starts with avito.ru.*."""
+    client, _, headers = authed_with_balance
+    r = client.post(
+        "/api/orders/pf",
+        headers=headers,
+        json={
+            "links": ["https://avito.ru.evil.com/x"],
+            "days": 1,
+            "fix_count": 5,
+            "contacts": False,
+            "agreed_privacy": True,
+            "agreed_offer": True,
+        },
+    )
+    assert r.status_code == 422
+
+
 def test_list_orders_after_create(authed_with_balance, monkeypatch):
     client, _, headers = authed_with_balance
     monkeypatch.setattr("services.orders.get_pf_price_per_unit", lambda: 1)

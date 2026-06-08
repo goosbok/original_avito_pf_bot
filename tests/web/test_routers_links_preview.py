@@ -55,3 +55,21 @@ def test_preview_rejects_over_20_urls(client):
     urls = [f"https://www.avito.ru/x{i}" for i in range(21)]
     resp = client.post("/api/orders/links/preview", json={"urls": urls})
     assert resp.status_code == 422
+
+
+def test_preview_rejects_avito_substring_in_query(client):
+    """Defense-in-depth: don't allow a non-avito host with avito.ru in the query."""
+    resp = client.post(
+        "/api/orders/links/preview",
+        json={"urls": ["https://evil.com/?ref=avito.ru"]},
+    )
+    assert resp.status_code == 422
+
+
+def test_preview_rejects_avito_subdomain_prefix(client):
+    """Defense-in-depth: don't allow a domain that just starts with avito.ru.*."""
+    resp = client.post(
+        "/api/orders/links/preview",
+        json={"urls": ["https://avito.ru.evil.com/x"]},
+    )
+    assert resp.status_code == 422

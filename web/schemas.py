@@ -164,7 +164,7 @@ class PFOrderRequest(BaseModel):
     @classmethod
     def links_must_be_avito(cls, v: list[str]) -> list[str]:
         for link in v:
-            if not _re.search(r'avito\.ru', link):
+            if not _re.match(r'^https?://(www\.)?avito\.ru/', link):
                 raise ValueError(f"invalid avito link: {link}")
         return v
 
@@ -183,7 +183,7 @@ class LinkPreviewRequest(BaseModel):
     @classmethod
     def urls_must_be_avito(cls, v: list[str]) -> list[str]:
         for u in v:
-            if not _re.search(r'avito\.ru', u):
+            if not _re.match(r'^https?://(www\.)?avito\.ru/', u):
                 raise ValueError(f"invalid avito link: {u}")
         return v
 

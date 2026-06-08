@@ -165,9 +165,11 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
         }
         return next;
       });
-    } catch (_) {
-      // Network/server error — leave entries in 'loading' state, the card will
-      // keep its placeholder. Best-effort feature, not blocking.
+    } catch (err) {
+      // Network/server error — flip the still-loading entries to fetch_failed so
+      // the card renders the placeholder instead of a perpetual skeleton.
+      // Best-effort feature, not blocking — the form still submits.
+      console.warn('[link-preview] fetch failed', err);
       setLinkMeta(prev => {
         const next = { ...prev };
         for (const u of urls) {

@@ -35,6 +35,27 @@ def test_parse_og_returns_none_when_missing():
     assert title is None
 
 
+def test_proxy_params_preserves_query_string():
+    """CDN signed URLs carry `?cqp=...` — nginx needs the full path-with-query."""
+    p = avito_preview._proxy_params("https://www.avito.ru/img/share/auto/123?cqp=sig&t=1")
+    assert p == {"path": "/img/share/auto/123?cqp=sig&t=1"}
+
+
+def test_proxy_params_handles_no_query():
+    """Path-only URLs don't get a trailing '?'."""
+    p = avito_preview._proxy_params("https://www.avito.ru/ekaterinburg/telefony/iphone")
+    assert p == {"path": "/ekaterinburg/telefony/iphone"}
+
+
+def test_proxy_headers_returns_shared_secret():
+    """Header is required for nginx auth — empty default still produces the key."""
+    from data import config
+
+    h = avito_preview._proxy_headers()
+    assert "X-Pf-Secret" in h
+    assert h["X-Pf-Secret"] == config.AVITO_PROXY_SECRET
+
+
 @pytest.mark.asyncio
 async def test_fetch_preview_ok():
     """Happy path: GET returns og:image, HEAD returns 301 Location to CDN."""

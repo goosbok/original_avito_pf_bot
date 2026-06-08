@@ -36,22 +36,22 @@ def dispatch_pending_links(order_id: int) -> None:
             return
         order_d = dict(order)
         rows = con.execute(
-            "SELECT id, delivery_mode FROM order_links "
+            "SELECT id FROM order_links "
             "WHERE order_id=? AND status='pending'",
             (order_id,),
         ).fetchall()
-        candidates = [(r["id"], r["delivery_mode"]) for r in rows]
+        candidates = [r["id"] for r in rows]
 
-    for link_id, current_mode in candidates:
+    for link_id in candidates:
         try:
-            _dispatch_one(link_id, current_mode, order_d)
+            _dispatch_one(link_id, order_d)
         except Exception:  # noqa: BLE001 — best-effort на партию
             logger.exception(
                 "dispatch_pending_links: link %s failed", link_id
             )
 
 
-def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
+def _dispatch_one(link_id: int, order: dict) -> None:
     """Обработать одну pending-ссылку."""
     # Re-fetch url под текущее соединение (отдельная транзакция)
     with connect() as con:
@@ -63,7 +63,7 @@ def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
             return  # already not pending — race, skip
         url = row["url"]
 
-    # Классифицируем ссылку. Даже если current_mode уже 'auto' (retry-кейс
+    # Классифицируем ссылку. Даже если delivery_mode уже 'auto' (retry-кейс
     # после ExecutorAPIError), переклассификация идемпотентна — фразу
     # cache_lookup вернёт ту же.
     mode, phrase = classify(url, order, link_id=link_id)
@@ -80,6 +80,14 @@ def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
         return
 
     # mode == 'auto' — пробуем API
+    # Contract: classifier гарантирует phrase != None когда mode='auto'.
+    # Если контракт нарушится — лучше упасть здесь, чем POST'ить None в
+    # search_link.
+    if not phrase:
+        raise RuntimeError(
+            f"classifier returned mode='auto' without phrase "
+            f"(link_id={link_id})"
+        )
     try:
         external_id = submit_link(url, order, search_phrase=phrase)
     except ExecutorAPIRejected:

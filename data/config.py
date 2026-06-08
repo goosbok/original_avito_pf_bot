@@ -80,10 +80,10 @@ BIZA_DASHBOARD_BASE_URL: str = os.getenv(
 ).rstrip("/")
 
 PF_PHRASE_CACHE_REFRESH_ENABLED: bool = (
-    os.getenv("PF_PHRASE_CACHE_REFRESH_ENABLED", "false").lower() == "true"
+    os.getenv("PF_PHRASE_CACHE_REFRESH_ENABLED", "false").lower() in ("1", "true", "yes")
 )
 PF_AUTO_DISPATCH_ENABLED: bool = (
-    os.getenv("PF_AUTO_DISPATCH_ENABLED", "false").lower() == "true"
+    os.getenv("PF_AUTO_DISPATCH_ENABLED", "false").lower() in ("1", "true", "yes")
 )
 
 PF_PHRASE_CACHE_CHUNK_DAYS: int = int(

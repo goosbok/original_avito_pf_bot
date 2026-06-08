@@ -965,7 +965,7 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "search_link TEXT NOT NULL,"
             "created_at TIMESTAMP NOT NULL,"
             "cached_at TIMESTAMP NOT NULL)",
-            13,  # bump phase
+            4,  # column count
         ),
     ]
 

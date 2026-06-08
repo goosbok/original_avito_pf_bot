@@ -123,7 +123,7 @@ docker run --rm -v "$(pwd):/app" -w /app original_avito_pf_bot-api \
     "search_link TEXT NOT NULL,"
     "created_at TIMESTAMP NOT NULL,"
     "cached_at TIMESTAMP NOT NULL)",
-    13,  # bump phase
+    4,  # column count
 ),
 ```
 

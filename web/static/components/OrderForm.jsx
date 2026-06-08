@@ -86,6 +86,9 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   // Step 1 fields
   const [inputText, setInputText] = useOrderState('');
   const [links, setLinks] = useOrderState(() => Array.isArray(prefilledFrom?.links) ? prefilledFrom.links : []);
+  // Preview meta for each URL — survives removeLink so re-paste is instant.
+  // Shape: { [url]: { status: 'loading'|'ok'|'not_found'|'fetch_failed', image_url?, title? } }
+  const [linkMeta, setLinkMeta] = useOrderState({});
   // fixCount = views per day
   const [fixCount, setFixCount] = useOrderState(() => Number(prefilledFrom?.fix_count) || 30);
   // For prefilled flow days is deliberately blank per plan
@@ -131,8 +134,50 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
     const val = e.target.value;
     const parsed = parseAvitoUrls(val);
     const toAdd = parsed.filter(u => !links.includes(u));
-    if (toAdd.length) setLinks(prev => [...prev, ...toAdd]);
+    if (toAdd.length) {
+      setLinks(prev => [...prev, ...toAdd]);
+      // Mark new URLs as loading (skip URLs we already have meta for — re-add case).
+      const newlyLoading = toAdd.filter(u => !linkMeta[u]);
+      if (newlyLoading.length) {
+        setLinkMeta(prev => {
+          const next = { ...prev };
+          for (const u of newlyLoading) next[u] = { status: 'loading' };
+          return next;
+        });
+        _fetchPreviewsAndMerge(newlyLoading);
+      }
+    }
     setInputText(val);
+  };
+
+  const _fetchPreviewsAndMerge = async (urls) => {
+    try {
+      const data = await api.post('/api/orders/links/preview', { urls });
+      if (!data || !Array.isArray(data.previews)) return;
+      setLinkMeta(prev => {
+        const next = { ...prev };
+        for (const p of data.previews) {
+          next[p.url] = {
+            status: p.status,
+            image_url: p.image_url || null,
+            title: p.title || null,
+          };
+        }
+        return next;
+      });
+    } catch (_) {
+      // Network/server error — leave entries in 'loading' state, the card will
+      // keep its placeholder. Best-effort feature, not blocking.
+      setLinkMeta(prev => {
+        const next = { ...prev };
+        for (const u of urls) {
+          if (next[u] && next[u].status === 'loading') {
+            next[u] = { status: 'fetch_failed' };
+          }
+        }
+        return next;
+      });
+    }
   };
 
   const removeLink = url => setLinks(prev => prev.filter(u => u !== url));
@@ -392,7 +437,16 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                     </div>
                   )}
 
-                  <AddedLinksList links={links} onRemove={removeLink} />
+                  {links.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-2)', marginBottom: 6 }}>
+                        Добавленные объявления
+                      </div>
+                      {links.map(url => (
+                        <LinkCard key={url} url={url} meta={linkMeta[url]} onRemove={removeLink} />
+                      ))}
+                    </div>
+                  )}
 
                   {urlCount === 0 && (
                     <div className="form-hint" style={{ marginTop: 6 }}>

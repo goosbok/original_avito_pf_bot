@@ -86,3 +86,43 @@ def test_parse_dashboard_html_skips_broken_rows():
 def test_parse_dashboard_html_empty_returns_empty():
     assert parse_dashboard_html("") == []
     assert parse_dashboard_html("<html></html>") == []
+
+
+def test_parse_dashboard_html_handles_date_only_row():
+    """Если в дате нет времени, всё равно вытаскивает YYYY-MM-DD."""
+    html = """
+    <table><tbody>
+    <tr>
+      <td></td>
+      <td>2026-06-07 Через поиск</td>
+      <td><a href='x'>купить</a></td>
+      <td><a href='https://www.avito.ru/x_1234567890'>ad</a></td>
+    </tr>
+    </tbody></table>
+    """
+    rows = parse_dashboard_html(html)
+    assert len(rows) == 1
+    assert rows[0]["created_at"] == "2026-06-07"
+
+
+def test_parse_dashboard_html_skips_row_without_parseable_date():
+    """Если в td[1] нет даты — строка пропускается (column-drift защита)."""
+    html = """
+    <table><tbody>
+    <tr>
+      <td></td>
+      <td>not a date at all</td>
+      <td><a href='x'>купить</a></td>
+      <td><a href='https://www.avito.ru/x_1234567890'>ad</a></td>
+    </tr>
+    </tbody></table>
+    """
+    assert parse_dashboard_html(html) == []
+
+
+def test_fmt_date_no_leading_zeros():
+    """_fmt_date должна давать формат биза 'YYYY_M_D'."""
+    from services.biznesklondaik_client import _fmt_date
+    from datetime import date
+    assert _fmt_date(date(2026, 1, 5)) == "2026_1_5"
+    assert _fmt_date(date(2026, 12, 31)) == "2026_12_31"

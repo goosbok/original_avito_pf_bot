@@ -30,6 +30,11 @@ _DASHBOARD_PATH = "/dashboard.php"
 # Cookies, которые ожидаем после успешного логина.
 _AUTH_COOKIE_NAMES = ("PHPSESSID",)
 
+# Anchor для извлечения created_at — гарантирует, что мы НЕ запишем
+# garbage если столбцы биза сменили порядок или формат даты упростился.
+import re as _re
+_CREATED_AT_RE = _re.compile(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?")
+
 
 class BiznesklondaikError(RuntimeError):
     pass
@@ -166,11 +171,14 @@ def _parse_row(tr) -> dict | None:
     if len(tds) < 3:
         return None
 
-    # Дата — первая строка во второй td (без "Через поиск" второй строкой).
-    created_text = tds[1].get_text(" ", strip=True).split()
-    # ожидаем "YYYY-MM-DD HH:MM Через поиск" → берём первые 2 токена.
-    created_at = " ".join(created_text[:2]) if len(created_text) >= 2 \
-        else (created_text[0] if created_text else "")
+    # Дата — анкеруем по regex (catches both 'YYYY-MM-DD HH:MM' и 'YYYY-MM-DD').
+    # Защищает от silent column-drift: если td[1] перестанет быть датой,
+    # вернём None и строка попадёт в skipped с предупреждением.
+    second_td_text = tds[1].get_text(" ", strip=True)
+    m_date = _CREATED_AT_RE.search(second_td_text)
+    if not m_date:
+        return None
+    created_at = m_date.group(0)
 
     # search_link — первая ссылка/текст в третьей td.
     sl_td = tds[2]

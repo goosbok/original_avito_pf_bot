@@ -54,3 +54,35 @@ def test_login_empty_credentials_raises():
         login("", "pwd")
     with pytest.raises(LoginFailed):
         login("user", "")
+
+
+from pathlib import Path
+from services.biznesklondaik_client import parse_dashboard_html
+
+_FIXTURE = Path(__file__).parent.parent / "fixtures" \
+    / "biznesklondaik_dashboard_sample.html"
+
+
+def test_parse_dashboard_html_basic_shape():
+    html = _FIXTURE.read_text()
+    rows = parse_dashboard_html(html)
+    assert len(rows) >= 5
+    sample = rows[0]
+    assert set(sample.keys()) >= {"ad_id", "search_link", "created_at"}
+    assert sample["ad_id"].isdigit()
+    assert len(sample["ad_id"]) >= 8
+    assert sample["search_link"]
+    # ISO-like дата 'YYYY-MM-DD HH:MM' либо 'YYYY-MM-DD'
+    assert sample["created_at"].startswith("202")
+
+
+def test_parse_dashboard_html_skips_broken_rows():
+    # одна строка без ad-link → должна быть пропущена с warning, остальные ОК
+    bad = "<table><tbody><tr><td>broken</td></tr></tbody></table>"
+    rows = parse_dashboard_html(bad)
+    assert rows == []
+
+
+def test_parse_dashboard_html_empty_returns_empty():
+    assert parse_dashboard_html("") == []
+    assert parse_dashboard_html("<html></html>") == []

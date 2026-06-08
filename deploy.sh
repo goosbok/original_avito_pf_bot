@@ -28,11 +28,28 @@ SERVER="root@167.233.52.85"
 PROD_HOSTNAME="ubuntu-4gb-fsn1-1-igor"
 PROJECT_DIR="/root/projects/original_avito_pf_bot"
 
-# Копирует лендинг (index.html + PWA-ассеты) в каталог, который раздаёт nginx.
+# Копирует лендинг (index.html + PWA-ассеты) в каталог, который раздаёт nginx
+# и пред-сжимает текстовые ассеты в .gz/.br (gzip_static + brotli_static в nginx).
+# Без пред-сжатия nginx жёг бы CPU на каждый запрос ИЛИ отдавал 636KB сырой
+# index.html (≈30% сжимается даже на base64-набитом HTML, шейпленным RU-каналам
+# критично).
 copy_landing() {
   mkdir -p "$LANDING_DST_DIR"
   for asset in "${LANDING_ASSETS[@]}"; do
     cp "$LANDING_SRC_DIR/$asset" "$LANDING_DST_DIR/$asset"
+  done
+
+  # Пред-сжимаем только текстовые форматы. PNG уже сжаты deflate — повторный
+  # gzip их раздувает, а .png.br/.png.gz для nginx_static не нужны.
+  for asset in "${LANDING_ASSETS[@]}"; do
+    case "$asset" in
+      *.html|*.json|*.css|*.js|*.svg|*.xml|*.txt)
+        gzip   -k -9 -f "$LANDING_DST_DIR/$asset"
+        if command -v brotli >/dev/null 2>&1; then
+          brotli -k -q 11 -f "$LANDING_DST_DIR/$asset"
+        fi
+        ;;
+    esac
   done
 }
 

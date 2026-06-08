@@ -117,3 +117,13 @@ def test_avito_ad_phrase_cache_table(tmp_db):
             "PRAGMA table_info(avito_ad_phrase_cache)"
         ) if r[5] == 1]  # pk flag
     assert pk == ["ad_id"]
+
+
+def test_avito_ad_phrase_cache_indexes_present(tmp_db):
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        idx = {row[0] for row in con.execute(
+            "SELECT name FROM sqlite_master "
+            "WHERE type='index' AND tbl_name='avito_ad_phrase_cache'"
+        )}
+    assert "idx_apc_cached_at" in idx

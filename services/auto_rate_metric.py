@@ -35,6 +35,11 @@ async def run_metric_loop() -> None:
     logger.info("metric.auto_rate.loop start interval=%ss", interval_sec)
     while True:
         await asyncio.sleep(interval_sec)
+        # Skip when auto-dispatch is off — иначе rate=0.0 каждый час
+        # выглядит как поломанный classifier, хотя это by design (всё → manual).
+        if not config.PF_AUTO_DISPATCH_ENABLED:
+            logger.info("metric.auto_rate.skip feature_off")
+            continue
         try:
             m = compute_recent_auto_rate(
                 hours=config.PF_AUTO_RATE_METRIC_INTERVAL_H,

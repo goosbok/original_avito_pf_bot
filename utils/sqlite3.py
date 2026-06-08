@@ -985,6 +985,8 @@ def get_index_statements() -> list[str]:
         "ON order_links(order_id)",
         "CREATE INDEX IF NOT EXISTS idx_order_links_deadline "
         "ON order_links(status, deadline_at) WHERE status = 'in_work'",
+        "CREATE INDEX IF NOT EXISTS idx_apc_cached_at "
+        "ON avito_ad_phrase_cache(cached_at)",
     ]
 
 

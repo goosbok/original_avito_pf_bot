@@ -63,8 +63,10 @@ def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
             return  # already not pending — race, skip
         url = row["url"]
 
-    # Если delivery_mode ещё не назначен — классифицируем.
-    mode = current_mode or classify(url, order)
+    # Классифицируем ссылку. Даже если current_mode уже 'auto' (retry-кейс
+    # после ExecutorAPIError), переклассификация идемпотентна — фразу
+    # cache_lookup вернёт ту же.
+    mode, phrase = classify(url, order, link_id=link_id)
 
     if mode == "manual":
         # просто проставить delivery_mode и оставить pending
@@ -79,7 +81,7 @@ def _dispatch_one(link_id: int, current_mode: str | None, order: dict) -> None:
 
     # mode == 'auto' — пробуем API
     try:
-        external_id = submit_link(url, order)
+        external_id = submit_link(url, order, search_phrase=phrase)
     except ExecutorAPIRejected:
         # Не возьмут — fallback в manual
         with connect() as con:

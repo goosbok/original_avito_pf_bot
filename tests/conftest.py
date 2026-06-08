@@ -66,6 +66,10 @@ def _make_config_stub() -> types.ModuleType:
     stub.BIZA_PASSWORD = ""
     stub.BIZA_API_BASE_URL = "https://biznesklondaik.test/api"
     stub.BIZA_DASHBOARD_BASE_URL = "https://biznesklondaik.test/pf-avito"
+    stub.PF_PHRASE_CACHE_REFRESH_ENABLED = False
+    stub.PF_AUTO_DISPATCH_ENABLED = False
+    stub.PF_PHRASE_CACHE_CHUNK_DAYS = 4
+    stub.PF_PHRASE_CACHE_REFRESH_INTERVAL_H = 24
     return stub
 
 

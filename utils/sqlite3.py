@@ -958,6 +958,15 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (order_id) REFERENCES orders(increment))",
             12,
         ),
+        (
+            "avito_ad_phrase_cache",
+            "CREATE TABLE IF NOT EXISTS avito_ad_phrase_cache("
+            "ad_id TEXT PRIMARY KEY,"
+            "search_link TEXT NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "cached_at TIMESTAMP NOT NULL)",
+            13,  # bump phase
+        ),
     ]
 
 

@@ -102,3 +102,18 @@ def test_order_links_indexes_present(tmp_db):
         )}
     assert "idx_order_links_order" in idx
     assert "idx_order_links_deadline" in idx
+
+
+def test_avito_ad_phrase_cache_table(tmp_db):
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        cols = {row[1] for row in con.execute(
+            "PRAGMA table_info(avito_ad_phrase_cache)"
+        )}
+    assert cols == {"ad_id", "search_link", "created_at", "cached_at"}
+
+    with sqlite3.connect(tmp_db) as con:
+        pk = [r[1] for r in con.execute(
+            "PRAGMA table_info(avito_ad_phrase_cache)"
+        ) if r[5] == 1]  # pk flag
+    assert pk == ["ad_id"]

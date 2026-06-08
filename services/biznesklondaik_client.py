@@ -76,5 +76,12 @@ def login(login_value: str, password: str,
             f"login did not produce auth cookies (have: {list(cookies)})"
         )
 
+    # PHP создаёт PHPSESSID до проверки кредов, поэтому наличие cookie
+    # само по себе не значит успешный логин. Проверяем тело финальной
+    # страницы — на login.php заголовок 'Страница авторизации', после
+    # успешного входа сервер редиректит на меню/дашборд.
+    if "Страница авторизации" in resp.text:
+        raise LoginFailed("credentials rejected (still on login page)")
+
     logger.info("biza.login.ok cookies=%s", list(cookies.keys()))
     return session

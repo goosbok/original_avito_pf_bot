@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from services import orders as svc
 from services import identity
+from services.avito_preview import fetch_previews
 from services.balance import get_balance
 from services.order_links import list_links as _list_order_links
 from services.exceptions import (
@@ -33,6 +34,8 @@ from services.payment_probe import is_yookassa_enabled
 from utils.phones import normalize_phone
 from web.deps import get_current_user_optional, require_user
 from web.schemas import (
+    LinkPreviewRequest,
+    LinkPreviewResponse,
     OrderDetailResponse,
     OrderItem,
     OrderListResponse,
@@ -155,6 +158,17 @@ async def create_pf(
         price=int(order["price"]),
         available_methods=methods,
     )
+
+
+@router.post("/links/preview", response_model=LinkPreviewResponse)
+async def preview_links(body: LinkPreviewRequest) -> LinkPreviewResponse:
+    """Fetch og:image + og:image:alt for a batch of Avito URLs.
+
+    Public endpoint — the order form is reachable to guests too. We don't
+    rate-limit here (250 orders/day, sequential users, max 20 URLs each).
+    """
+    previews = await fetch_previews(list(body.urls))
+    return LinkPreviewResponse(previews=previews)
 
 
 @router.post("/pf/{order_id}/pay")

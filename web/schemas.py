@@ -175,6 +175,30 @@ class PFOrderResponse(BaseModel):
     available_methods: list[Literal["balance", "yookassa"]]
 
 
+class LinkPreviewRequest(BaseModel):
+    """Batch request: parse preview meta for up to 20 Avito URLs."""
+    urls: list[str] = Field(..., min_length=1, max_length=20)
+
+    @field_validator("urls")
+    @classmethod
+    def urls_must_be_avito(cls, v: list[str]) -> list[str]:
+        for u in v:
+            if not _re.search(r'avito\.ru', u):
+                raise ValueError(f"invalid avito link: {u}")
+        return v
+
+
+class LinkPreviewItem(BaseModel):
+    url: str
+    status: Literal["ok", "not_found", "fetch_failed"]
+    image_url: Optional[str] = None
+    title: Optional[str] = None
+
+
+class LinkPreviewResponse(BaseModel):
+    previews: list[LinkPreviewItem]
+
+
 class OrderPayRequest(BaseModel):
     method: Literal["balance", "yookassa"]
 

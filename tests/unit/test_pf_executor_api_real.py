@@ -70,3 +70,24 @@ def test_submit_link_500_temporary_error():
         with pytest.raises(ExecutorAPIError):
             submit_link("https://avito.ru/x_1234567890",
                         _order(), search_phrase="x")
+
+
+def test_submit_link_missing_position_name_rejected():
+    """Missing position_name → ExecutorAPIRejected (manual fallback)."""
+    bad_order = {"start_date": "2026-06-10", "contacts": 0}
+    # _session.post should not even be called because we raise before that
+    with patch("services.pf_executor_api._session.post") as post:
+        with pytest.raises(ExecutorAPIRejected):
+            submit_link("https://avito.ru/x_1234567890",
+                        bad_order, search_phrase="x")
+    post.assert_not_called()
+
+
+def test_submit_link_malformed_position_name_rejected():
+    """Malformed position_name → ExecutorAPIRejected."""
+    bad_order = {"position_name": "not-a-number", "contacts": 0}
+    with patch("services.pf_executor_api._session.post") as post:
+        with pytest.raises(ExecutorAPIRejected):
+            submit_link("https://avito.ru/x_1234567890",
+                        bad_order, search_phrase="x")
+    post.assert_not_called()

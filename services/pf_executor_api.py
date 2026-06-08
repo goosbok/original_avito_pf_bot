@@ -93,12 +93,22 @@ def _build_avito_payload(
     url: str, order: dict, search_phrase: str
 ) -> dict:
     """Сформировать JSON для POST add-tasks.php (module=avito_pf)."""
-    parts = str(order["position_name"]).split("/")
-    days = int(parts[0])
-    fix_count = int(parts[1]) if len(parts) > 1 else 0
+    raw = order.get("position_name")
+    if not raw:
+        raise ExecutorAPIRejected(
+            f"order has no position_name (order_id={order.get('increment')})"
+        )
+    try:
+        parts = str(raw).split("/")
+        days = int(parts[0])
+        fix_count = int(parts[1]) if len(parts) > 1 else 0
+    except (ValueError, IndexError) as exc:
+        raise ExecutorAPIRejected(
+            f"invalid position_name={raw!r}: {exc}"
+        ) from exc
     if fix_count <= 0:
-        raise ExecutorAPIError(
-            f"invalid fix_count from position_name={order['position_name']!r}"
+        raise ExecutorAPIRejected(
+            f"invalid fix_count from position_name={raw!r}"
         )
 
     today = datetime.now(timezone.utc).astimezone(_MSK).date()

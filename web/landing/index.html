@@ -203,12 +203,21 @@ document.addEventListener('DOMContentLoaded', async function() {
       template = template.slice(0, i) + resourceScript + iconTags + template.slice(i);
     }
 
-    // Parse the template and swap the root element. Scripts inserted via
+    // Parse the template and swap the document content. Scripts inserted via
     // DOMParser/replaceWith are inert per spec — re-create each with
     // createElement so they execute, awaiting onload for src scripts to
     // preserve ordering (React before ReactDOM before Babel before text/babel).
+    //
+    // Заменяем children документа, а не сам <html>: iOS Safari держит
+    // внутренние ссылки на documentElement (viewportDominantIFrameHandle для
+    // Share Sheet, AVKit для PiP/AirPlay), которые при replaceWith остаются
+    // указывать на detached node и крашатся с
+    // "null is not an object (evaluating '...contentWindow')".
     const doc = new DOMParser().parseFromString(template, 'text/html');
-    document.documentElement.replaceWith(doc.documentElement);
+    for (const a of doc.documentElement.attributes) {
+      document.documentElement.setAttribute(a.name, a.value);
+    }
+    document.documentElement.replaceChildren(...doc.documentElement.children);
     const dead = Array.from(document.scripts);
     for (const old of dead) {
       const s = document.createElement('script');

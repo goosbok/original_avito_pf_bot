@@ -1,6 +1,11 @@
 // Auth screens: Email login, Telegram OTP login, Email register
 const { useState, useEffect } = React;
 
+// TG auth temporarily disabled (2026-06-09): keep only Email-based auth for now.
+// To re-enable: flip to true; backend endpoints (/api/auth/telegram/*) and bot
+// integration are still wired and ready.
+const TG_AUTH_ENABLED = false;
+
 const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToken }) => {
   const [mode, setMode] = useState(initialMode || 'login');
 
@@ -268,74 +273,78 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
         {error && <div className="alert alert--error">{error}</div>}
 
         <div className={`method-row${activeMethod ? ' has-active' : ''}`}>
-          {/* ── Telegram ─────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}
-            onClick={() => pickMethod('tg')}
-          >
-            Через Telegram
-          </button>
-          {activeMethod === 'tg' && (
-            <div className="method-form">
-              {needsConnect && (() => {
-                const botUrl = (botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect';
-                const botName = (botConfig && botConfig.bot_username) || 'AVITOPF_bot';
-                return (
-                  <div className="alert alert--info">
-                    <div style={{ fontWeight: 600, marginBottom: 8 }}>Номер не привязан к боту</div>
-                    <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
-                      <li><a href={botUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600, textDecoration: 'underline' }}>Откройте @{botName} в Telegram</a></li>
-                      <li>Нажмите «Поделиться контактом»</li>
-                      <li>Вернитесь сюда и нажмите «Получить код»</li>
-                    </ol>
-                  </div>
-                );
-              })()}
-              {!otpSent ? (
-                <>
-                  <div className="form-field">
-                    <label className="form-label">Номер телефона</label>
-                    <input
-                      className="input"
-                      type="tel"
-                      inputMode="tel"
-                      placeholder="+7 900 123-45-67"
-                      value={tgId}
-                      onChange={e => setTgId(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
-                    />
-                  </div>
-                  <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
-                    {loading ? 'Отправка...' : 'Получить код'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  {success && <div className="alert alert--success">{success}</div>}
-                  <div className="form-field">
-                    <label className="form-label">6-значный код из Telegram</label>
-                    <input
-                      className="input"
-                      placeholder="123456"
-                      value={otpCode}
-                      maxLength={6}
-                      onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-                      onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
-                      style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
-                      autoFocus
-                    />
-                    <div className="form-hint">Код действителен 10 минут</div>
-                  </div>
-                  <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
-                    {loading ? 'Проверка...' : 'Создать аккаунт'}
-                  </button>
-                  <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
-                    ← Изменить номер
-                  </button>
-                </>
+          {TG_AUTH_ENABLED && (
+            <>
+              {/* ── Telegram ─────────────────────────────────────────────── */}
+              <button
+                type="button"
+                className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}
+                onClick={() => pickMethod('tg')}
+              >
+                Через Telegram
+              </button>
+              {activeMethod === 'tg' && (
+                <div className="method-form">
+                  {needsConnect && (() => {
+                    const botUrl = (botConfig && botConfig.bot_connect_url) || 'https://t.me/AVITOPF_bot?start=connect';
+                    const botName = (botConfig && botConfig.bot_username) || 'AVITOPF_bot';
+                    return (
+                      <div className="alert alert--info">
+                        <div style={{ fontWeight: 600, marginBottom: 8 }}>Номер не привязан к боту</div>
+                        <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+                          <li><a href={botUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600, textDecoration: 'underline' }}>Откройте @{botName} в Telegram</a></li>
+                          <li>Нажмите «Поделиться контактом»</li>
+                          <li>Вернитесь сюда и нажмите «Получить код»</li>
+                        </ol>
+                      </div>
+                    );
+                  })()}
+                  {!otpSent ? (
+                    <>
+                      <div className="form-field">
+                        <label className="form-label">Номер телефона</label>
+                        <input
+                          className="input"
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="+7 900 123-45-67"
+                          value={tgId}
+                          onChange={e => setTgId(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleRequestOtp()}
+                        />
+                      </div>
+                      <button className="btn btn--primary btn--lg btn--full" onClick={handleRequestOtp} disabled={loading}>
+                        {loading ? 'Отправка...' : 'Получить код'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {success && <div className="alert alert--success">{success}</div>}
+                      <div className="form-field">
+                        <label className="form-label">6-значный код из Telegram</label>
+                        <input
+                          className="input"
+                          placeholder="123456"
+                          value={otpCode}
+                          maxLength={6}
+                          onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                          onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
+                          style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
+                          autoFocus
+                        />
+                        <div className="form-hint">Код действителен 10 минут</div>
+                      </div>
+                      <button className="btn btn--primary btn--lg btn--full" onClick={handleVerifyOtp} disabled={loading}>
+                        {loading ? 'Проверка...' : 'Создать аккаунт'}
+                      </button>
+                      <button className="btn btn--ghost btn--sm btn--full" onClick={() => { setOtpSent(false); setOtpCode(''); setSuccess(''); }}>
+                        ← Изменить номер
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
 
           {/* ── Email ────────────────────────────────────────────────────── */}
@@ -477,6 +486,10 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
 
         <div className={`method-row${activeMethod ? ' has-active' : ''}`}>
           {/* ── Telegram ─────────────────────────────────────────────────── */}
+          {/* NB: kept on the LOGIN screen even though registration via TG is
+              disabled — 14k+ existing users have TG-only accounts and must
+              still be able to log in. Registration's TG block is gated by
+              TG_AUTH_ENABLED above. */}
           <button
             type="button"
             className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}

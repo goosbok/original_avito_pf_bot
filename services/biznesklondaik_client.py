@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 # URL и имена полей формы — ПОДТВЕРЖДЕНЫ через DevTools.
-_LOGIN_PATH = "/login.php"
+_LOGIN_PATH = "/login.php"  # лежит на project root, NOT под /pf-avito
 _USERNAME_FIELD = "username"
 _PASSWORD_FIELD = "password"
 _DASHBOARD_PATH = "/dashboard.php"
@@ -67,7 +67,9 @@ def login(login_value: str, password: str,
         raise LoginFailed("login/password not configured")
 
     session = _new_session()
-    url = config.BIZA_DASHBOARD_BASE_URL + _LOGIN_PATH
+    # BIZA_DASHBOARD_BASE_URL = .../fwdrjjkigor_new/pf-avito ; login.php
+    # лежит на parent уровне (/fwdrjjkigor_new/login.php), не под /pf-avito.
+    url = config.BIZA_DASHBOARD_BASE_URL.rsplit("/", 1)[0] + _LOGIN_PATH
     payload = {_USERNAME_FIELD: login_value, _PASSWORD_FIELD: password}
 
     try:
@@ -145,48 +147,39 @@ def parse_dashboard_html(html: str) -> list[dict]:
 
 
 def _parse_row(tr) -> dict | None:
-    """Распарсить одну строку <tr>. Возвращает None если в строке нет
-    avito-ссылки или ad_id не извлекается."""
-    # Ищем любую ссылку на avito.ru — берём первую попавшуюся (в строке
-    # таких 1-3, все на один и тот же ad).
-    href = None
-    for a in tr.find_all("a"):
-        h = a.get("href") or ""
-        if "avito.ru" in h:
-            href = _unwrap_redirect(h)
-            break
-        # вложенный параметр ad_link=… в их internal links
-        if "ad_link=" in h:
-            href = _unwrap_redirect(h)
-            break
-    if not href:
-        return None
+    """Распарсить одну строку <tr>. Возвращает None если структура не
+    соответствует ожидаемой (column-drift защита).
 
-    ad_id = extract_ad_id(href)
-    if not ad_id:
-        return None
-
-    # Колонки: чекбокс, дата, search_link, ad_link, ...
+    Колонки: [0]checkbox, [1]date+mode, [2]search_link, [3]ad_link, ...
+    """
     tds = tr.find_all("td")
-    if len(tds) < 3:
+    if len(tds) < 4:
         return None
 
-    # Дата — анкеруем по regex (catches both 'YYYY-MM-DD HH:MM' и 'YYYY-MM-DD').
-    # Защищает от silent column-drift: если td[1] перестанет быть датой,
-    # вернём None и строка попадёт в skipped с предупреждением.
-    second_td_text = tds[1].get_text(" ", strip=True)
-    m_date = _CREATED_AT_RE.search(second_td_text)
+    # td[1]: дата 'YYYY-MM-DD HH:MM' (потом "Через поиск" вторым токеном).
+    m_date = _CREATED_AT_RE.search(tds[1].get_text(" ", strip=True))
     if not m_date:
         return None
     created_at = m_date.group(0)
 
-    # search_link — первая ссылка/текст в третьей td.
-    sl_td = tds[2]
-    a = sl_td.find("a")
-    search_link = (a.get_text(strip=True) if a
-                   else sl_td.get_text(strip=True))
+    # td[2]: search_link — реальный URL в href, display text может быть
+    # обрезан (типа '...ii/tag/kurer?cd=1'). Берём href или title.
+    a_search = tds[2].find("a")
+    if a_search is not None:
+        search_link = (a_search.get("href") or a_search.get("title")
+                       or a_search.get_text(strip=True))
+    else:
+        search_link = tds[2].get_text(strip=True)
+    if not search_link:
+        return None
 
-    if not search_link or not created_at:
+    # td[3]: ad_link — отсюда берём ad_id.
+    a_ad = tds[3].find("a")
+    if a_ad is None:
+        return None
+    ad_href = _unwrap_redirect(a_ad.get("href") or "")
+    ad_id = extract_ad_id(ad_href)
+    if not ad_id:
         return None
 
     return {

@@ -65,6 +65,12 @@ def finalize(
         con.commit()
 
     if won_race:
+        # Edge case: if credit() raises UserNotFound here, the row is left
+        # status='succeeded' but balance was not credited. We don't roll back
+        # because (a) we never delete users in this product, so the race is
+        # vanishingly rare; (b) the reconciler won't retry succeeded rows.
+        # If this fires in production, it requires admin intervention.
+        # Same edge applies to the backfill INSERT-then-credit path below.
         new_balance = credit(user_id, amount)
         return new_balance, True
 
@@ -75,15 +81,24 @@ def finalize(
         ).fetchone()
 
     if row is None:
-        # Backfill: pending row отсутствует. INSERT succeeded напрямую + credit.
+        # Backfill: pending row отсутствует. INSERT first to win the uniqueness
+        # race (UNIQUE INDEX on payment_id catches a concurrent backfill),
+        # THEN credit. Reversing this order would let two concurrent callers
+        # both credit before either INSERT failed — double-credit bug.
+        import sqlite3 as _sqlite3
+        try:
+            with connect() as con:
+                con.execute(
+                    "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id, status) "
+                    "VALUES (?, ?, ?, ?, ?, ?, 'succeeded')",
+                    (amount, get_date(), user_id, payment_id, src_type, src_app),
+                )
+                con.commit()
+        except _sqlite3.IntegrityError:
+            # Кто-то опередил нас на backfill (UNIQUE на payment_id).
+            # Не кредитим повторно — он уже это сделал.
+            return get_balance(user_id), False
         new_balance = credit(user_id, amount)
-        with connect() as con:
-            con.execute(
-                "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id, status) "
-                "VALUES (?, ?, ?, ?, ?, ?, 'succeeded')",
-                (amount, get_date(), user_id, payment_id, src_type, src_app),
-            )
-            con.commit()
         return new_balance, True
 
     if row["status"] == "succeeded":

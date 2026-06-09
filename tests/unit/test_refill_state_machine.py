@@ -144,3 +144,33 @@ def test_finalize_raises_on_unexpected_status(tmp_db: Path):
     with connect() as con:
         bal = con.execute("SELECT balance FROM users WHERE id=42").fetchone()
     assert bal["balance"] == 0  # не зачислили
+
+
+def test_finalize_backfill_detects_existing_succeeded_and_does_not_double_credit(tmp_db: Path):
+    """Если строки нет в pending, но кто-то ИНОЙ уже сделал backfill (succeeded),
+    то наш finalize должен это обнаружить через IntegrityError на INSERT и не задвоить кредит.
+
+    Это lock-in для backfill-race: A добавляет succeeded строку → B пытается backfill →
+    UNIQUE INDEX отлавливает дубликат → B возвращает (текущий_balance, False) без credit."""
+    _make_user(42, balance=0)
+    # Эмулируем то, что A уже успел: запись succeeded существует с этим payment_id,
+    # баланс уже инкрементирован (B не должен инкрементировать его повторно).
+    _insert_refill(user_id=42, amount=500, payment_id="pid-raced", status="succeeded")
+    with connect() as con:
+        con.execute("UPDATE users SET balance=500 WHERE id=42")
+        con.commit()
+
+    # B приходит — видит, что UPDATE pending не сработал (нет pending строки),
+    # SELECT находит существующий succeeded — должен no-op.
+    from services.refill import finalize
+    new_balance, was_new = finalize(
+        42, 500, payment_id="pid-raced", source_type="web", source_app_id=None
+    )
+    assert new_balance == 500     # баланс НЕ удвоился
+    assert was_new is False        # не считаем это новой финализацией
+
+    with connect() as con:
+        rows = con.execute(
+            "SELECT COUNT(*) c FROM refills WHERE payment_id=?", ("pid-raced",)
+        ).fetchone()
+    assert rows["c"] == 1          # ровно одна строка, без задвоения

@@ -81,12 +81,18 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
         finalize_with_referral_bonus,
     )
     from services.exceptions import PaymentError, UserNotFound
+    from services.payment_notifications import (
+        notify_admins_success, notify_referrer, notify_user_success,
+    )
 
     await call.message.delete()
     tg_id = call.from_user.id
 
     try:
-        payment_url, payment_id = svc_create_invoice(user_id, int(amount))
+        payment_url, payment_id = svc_create_invoice(
+            user_id, int(amount),
+            source_type="telegram", source_app_id=None,
+        )
     except PaymentError:
         support_nick = get_nick('manager_nick')
         msg = get_string('str_payment_error').format(support_nick)
@@ -105,53 +111,56 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
         success = True
 
     if not success:
-        STR6 = get_string('str_pay_error').format(get_nick('manager_nick'))
-        await bot.send_message(chat_id=tg_id, text=STR6)
+        # UX: не пугаем пользователя «оплата не прошла». Если она реально прошла —
+        # крон-reconciler в течение минуты переведёт refill в succeeded и пришлёт
+        # уведомление. Если не прошла — это видно по статусу платежа в YK.
+        await bot.send_message(
+            chat_id=tg_id,
+            text=(
+                "⏳ Платёж пока не подтверждён.\n\n"
+                "Если вы успешно оплатили — баланс пополнится автоматически "
+                "в течение минуты. Если нет — попробуйте ещё раз."
+            ),
+        )
+        await state.finish()
         return
 
     try:
         result = finalize_with_referral_bonus(
             user_id, int(amount),
+            payment_id=payment_id,
             source_type="telegram",
         )
     except UserNotFound as exc:
         await report_handler_error(
-            exc,
-            logger=logger,
-            context={"handler": "_handle_yookassa_payment", "user_id": user_id, "amount": amount, "tg_id": tg_id},
+            exc, logger=logger,
+            context={"handler": "_handle_yookassa_payment", "user_id": user_id,
+                     "amount": amount, "tg_id": tg_id},
         )
         await bot.send_message(chat_id=tg_id, text=ERROR_MSG, reply_markup=error_kb())
         return
     except Exception as exc:
         await report_handler_error(
-            exc,
-            logger=logger,
-            context={"handler": "_handle_yookassa_payment", "user_id": user_id, "amount": amount, "tg_id": tg_id},
+            exc, logger=logger,
+            context={"handler": "_handle_yookassa_payment", "user_id": user_id,
+                     "amount": amount, "tg_id": tg_id},
         )
         await bot.send_message(chat_id=tg_id, text=ERROR_MSG, reply_markup=error_kb())
         return
 
-    usr = get_user(id=user_id)
-    user_string = await get_user_string_without_first_name(usr)
-    f_amount = format_decimal(amount)
-    f_balance = format_decimal(result.user_balance)
+    # Уведомления — только если это была первая и реальная финализация.
+    # Если крон/web-status успел раньше — was_newly_finalized=False, дублей не шлём.
+    if result.was_newly_finalized:
+        await notify_user_success(user_id, int(amount), result.user_balance)
+        await notify_admins_success(user_id, int(amount), result.user_balance)
+        if result.referrer_bonus > 0 and result.referrer_id is not None:
+            await notify_referrer(result.referrer_id, result.referrer_bonus,
+                                  result.referrer_new_balance or 0)
+        logger.info("payment success: user_id=%s amount=%s (TG-sync)", user_id, amount)
+    else:
+        logger.info("payment already finalized (race): user_id=%s amount=%s pid=%s",
+                    user_id, amount, payment_id)
 
-    STR2 = get_string('str_usr_pay_success').format(f_amount, f_balance)
-    await bot.send_message(chat_id=tg_id, text=STR2, reply_markup=user_back_kb('user:profile'))
-    STR3 = get_string('str_adm_pay_success').format(f_amount, user_string, f_balance)
-    await send_admins(STR3, "orders")
-    logger.info("payment success: user_id=%s amount=%s", usr['id'], amount)
-
-    if result.referrer_bonus > 0 and result.referrer_id is not None:
-        ref_user = get_user(id=str(result.referrer_id))
-        if ref_user:
-            f_add_bal = format_decimal(result.referrer_bonus)
-            f_new_bal = format_decimal(result.referrer_new_balance)
-            STR4 = get_string('str_ref_balance_refil').format(f_add_bal, f_new_bal)
-            ref_tg_id = _get_tg_id_for_user(result.referrer_id) or result.referrer_id
-            await bot.send_message(chat_id=ref_tg_id, text=STR4)
-            ref_user_str = ref_user.get('user_name') or ref_user['id']
-            logger.info("referral bonus: referrer=%s bonus=%s", ref_user_str, result.referrer_bonus)
     await state.finish()
 
 

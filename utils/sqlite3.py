@@ -660,14 +660,18 @@ def get_user_last_order_seo(user_id):
 def get_user_all_refills(user_id):
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        return con.execute("SELECT * FROM refills WHERE user_id = ?", (user_id,)).fetchall()
+        return con.execute(
+            "SELECT * FROM refills WHERE user_id = ? AND status = 'succeeded'",
+            (user_id,),
+        ).fetchall()
 
-# Получение всех пополнений
+
 def all_refills():
     with sqlite3.connect(path_db) as con:
         con.row_factory = dict_factory
-        sql = "SELECT * FROM refills"
-        return con.execute(sql).fetchall()
+        return con.execute(
+            "SELECT * FROM refills WHERE status = 'succeeded'"
+        ).fetchall()
 
 ###############################################################################################
 #############################            Промокоды             ################################

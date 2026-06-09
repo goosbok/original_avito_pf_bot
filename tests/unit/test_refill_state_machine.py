@@ -257,3 +257,26 @@ def test_create_invoice_alerts_admins_if_insert_fails(tmp_db: Path, monkeypatch)
     from services.refill import create_invoice, PaymentError
     with pytest.raises(PaymentError):
         create_invoice(42, 250, source_type="web", source_app_id=None)
+
+
+def test_get_user_all_refills_excludes_pending(tmp_db: Path):
+    _make_user(42)
+    _insert_refill(user_id=42, amount=100, payment_id="ok", status="succeeded")
+    _insert_refill(user_id=42, amount=200, payment_id="pen", status="pending")
+    _insert_refill(user_id=42, amount=300, payment_id="cx", status="canceled")
+
+    from utils.sqlite3 import get_user_all_refills
+    refills = get_user_all_refills(42)
+    amounts = sorted(r["amount"] for r in refills)
+    assert amounts == [100]  # only succeeded
+
+
+def test_all_refills_excludes_pending(tmp_db: Path):
+    _make_user(1); _make_user(2)
+    _insert_refill(user_id=1, amount=100, payment_id="a", status="succeeded")
+    _insert_refill(user_id=2, amount=200, payment_id="b", status="pending")
+
+    from utils.sqlite3 import all_refills
+    out = all_refills()
+    assert len(out) == 1
+    assert out[0]["amount"] == 100

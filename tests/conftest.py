@@ -139,4 +139,12 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     monkeypatch.setattr("data.config.path_database", str(db_path), raising=False)
     monkeypatch.setattr("utils.sqlite3.path_db", str(db_path), raising=False)
 
+    # Phase-2 migrations create indexes that reference columns added by ALTER
+    # (e.g. refills.status). On a fresh schema from get_schema_statements those
+    # columns already exist, so apply_phase2_migrations becomes a no-op for the
+    # ALTERs but still creates the indexes. Required so unit tests see the same
+    # uq_refills_payment_id partial index that production has.
+    from utils.sqlite3 import apply_phase2_migrations
+    apply_phase2_migrations()
+
     yield db_path

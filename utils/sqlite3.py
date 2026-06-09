@@ -992,8 +992,10 @@ def get_index_statements() -> list[str]:
         "ON order_links(status, deadline_at) WHERE status = 'in_work'",
         "CREATE INDEX IF NOT EXISTS idx_apc_cached_at "
         "ON avito_ad_phrase_cache(cached_at)",
-        "CREATE INDEX IF NOT EXISTS idx_refills_status_date ON refills (status, date)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_refills_payment_id ON refills (payment_id) WHERE payment_id IS NOT NULL",
+        # refills.status/payment_id indexes intentionally NOT here — they reference
+        # a column added by apply_phase2_migrations() which runs AFTER create_db(),
+        # so a fresh-deploy on an existing DB would fail with "no such column: status".
+        # The indexes are created inside apply_phase2_migrations() after ALTER ADD COLUMN.
     ]
 
 

@@ -20,6 +20,7 @@ def _make_user(tmp_db: Path, user_id: int = 1, balance: int = 0) -> None:
 
 
 def test_create_invoice_delegates_to_yookassa(tmp_db: Path) -> None:
+    _make_user(tmp_db, user_id=1)
     with patch(
         "services.refill._yookassa_create_invoice",
         return_value=("https://pay/xyz", "pay-id-1"),

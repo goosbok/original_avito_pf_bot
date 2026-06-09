@@ -12,14 +12,70 @@ from utils.other import get_date
 from utils.yookassa_refil import create_invoice as _yookassa_create_invoice
 
 
-def create_invoice(user_id: int, amount: int) -> tuple[str, str]:
-    """Возвращает (payment_url, payment_id)."""
+def create_invoice(
+    user_id: int,
+    amount: int,
+    *,
+    source_type: str = "telegram",
+    source_app_id: int | None = None,
+) -> tuple[str, str]:
+    """Создаёт инвойс в YK и сразу пишет pending в refills.
+
+    Возвращает (payment_url, payment_id). Бросает PaymentError при сбое YK
+    или БД (INSERT pending). При сбое INSERT платёж в YK уже создан —
+    шлём admin alert с payment_id для ручного восстановления.
+    """
     if amount <= 0:
         raise ValueError(f"amount must be > 0, got {amount}")
+
+    from services.source import normalize
+    src_type, src_app = normalize(source_type, source_app_id)
+
     try:
-        return _yookassa_create_invoice(user_id, amount)
+        url, pid = _yookassa_create_invoice(user_id, amount)
     except Exception as exc:
         raise PaymentError(f"yookassa create_invoice failed: {exc}") from exc
+
+    try:
+        with connect() as con:
+            con.execute(
+                "INSERT INTO refills(amount, date, user_id, payment_id, "
+                "source_type, source_app_id, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'pending')",
+                (amount, get_date(), user_id, pid, src_type, src_app),
+            )
+            con.commit()
+    except Exception as exc:
+        # Платёж в YK создан, но в нашей БД нет следа — крон не подберёт.
+        # Логируем + алерт админам с payment_id для ручного backfill.
+        import logging
+        logging.getLogger(__name__).exception(
+            "INSERT pending failed: payment_id=%s user_id=%s amount=%s",
+            pid, user_id, amount,
+        )
+        try:
+            import asyncio
+            from utils.sender import send_admins
+            msg = (
+                f"⚠️ Платёж в YK создан, но pending row не записалась.\n"
+                f"payment_id=<code>{pid}</code>\n"
+                f"user_id={user_id}, amount={amount} ₽\n"
+                f"Восстановить руками через scripts/backfill_stuck_payments."
+            )
+            # create_invoice вызывается из async-handler'ов (TG + web), но сам он sync.
+            # Проверяем наличие running loop, чтобы не упасть с RuntimeError если когда-то
+            # будут sync-вызовы (например, из скриптов).
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(send_admins(msg, "errors", parse_mode="HTML"))
+            except RuntimeError:
+                # Нет running loop — алерт пропустим, основная ошибка PaymentError всё равно поднимется.
+                pass
+        except Exception:
+            pass  # лучшее усилие; PaymentError ниже всё равно поднимется
+        raise PaymentError(f"refills INSERT pending failed: {exc}") from exc
+
+    return url, pid
 
 
 def finalize(

@@ -215,3 +215,45 @@ def test_referral_bonus_not_double_credited(tmp_db: Path):
     with connect() as con:
         ref_bal = con.execute("SELECT balance FROM users WHERE id=100").fetchone()
     assert ref_bal["balance"] == 300  # не 600
+
+
+def test_create_invoice_inserts_pending_row(tmp_db: Path, monkeypatch):
+    _make_user(42, balance=0)
+
+    # Mock yookassa create_invoice — не дёргаем реальный API.
+    def fake_yk(uid, amount):
+        return ("https://example.com/pay/xyz", "pid-new-123")
+    monkeypatch.setattr("services.refill._yookassa_create_invoice", fake_yk)
+
+    from services.refill import create_invoice
+    url, pid = create_invoice(42, 250, source_type="web", source_app_id=None)
+
+    assert url == "https://example.com/pay/xyz"
+    assert pid == "pid-new-123"
+
+    with connect() as con:
+        row = con.execute(
+            "SELECT user_id, amount, payment_id, source_type, source_app_id, status "
+            "FROM refills WHERE payment_id=?",
+            ("pid-new-123",),
+        ).fetchone()
+    assert row == {
+        "user_id": 42, "amount": 250, "payment_id": "pid-new-123",
+        "source_type": "web", "source_app_id": None, "status": "pending",
+    }
+
+
+def test_create_invoice_alerts_admins_if_insert_fails(tmp_db: Path, monkeypatch):
+    """Если INSERT pending падает — алерт админам, чтобы можно было восстановить руками по логу."""
+    _make_user(42, balance=0)
+    monkeypatch.setattr(
+        "services.refill._yookassa_create_invoice",
+        lambda uid, amount: ("https://example.com/x", "pid-X"),
+    )
+
+    # Спровоцировать падение INSERT: вставить запись с тем же payment_id заранее.
+    _insert_refill(user_id=42, amount=100, payment_id="pid-X", status="pending")
+
+    from services.refill import create_invoice, PaymentError
+    with pytest.raises(PaymentError):
+        create_invoice(42, 250, source_type="web", source_app_id=None)

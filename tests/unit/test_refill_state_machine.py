@@ -174,3 +174,44 @@ def test_finalize_backfill_detects_existing_succeeded_and_does_not_double_credit
             "SELECT COUNT(*) c FROM refills WHERE payment_id=?", ("pid-raced",)
         ).fetchone()
     assert rows["c"] == 1          # ровно одна строка, без задвоения
+
+
+def test_finalize_with_referral_bonus_propagates_was_newly_finalized(tmp_db: Path):
+    _make_user(42, balance=0)
+    _insert_refill(user_id=42, amount=500, payment_id="pid-r", status="pending")
+
+    from services.refill import finalize_with_referral_bonus
+    result = finalize_with_referral_bonus(
+        42, 500, payment_id="pid-r", source_type="web"
+    )
+    assert result.user_balance == 500
+    assert result.was_newly_finalized is True
+
+    # Повторный вызов: was_newly_finalized=False.
+    result2 = finalize_with_referral_bonus(
+        42, 500, payment_id="pid-r", source_type="web"
+    )
+    assert result2.user_balance == 500  # not doubled
+    assert result2.was_newly_finalized is False
+
+
+def test_referral_bonus_not_double_credited(tmp_db: Path):
+    """Реф-бонус должен начисляться РОВНО ОДИН раз: на первой successful finalize."""
+    _make_user(100, balance=0)  # referrer
+    _make_user(42, balance=0, ref_id=100)  # new user with referrer
+    _insert_refill(user_id=42, amount=1000, payment_id="pid-first", status="pending")
+
+    from services.refill import finalize_with_referral_bonus
+    r1 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
+    assert r1.was_newly_finalized is True
+    assert r1.referrer_bonus == 300  # 30% of 1000
+    assert r1.referrer_new_balance == 300
+
+    # Повторный finalize того же payment_id — НЕ должен повторно начислить ни юзеру, ни реферу.
+    r2 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
+    assert r2.was_newly_finalized is False
+    assert r2.referrer_bonus == 0  # бонус не начисляется повторно
+
+    with connect() as con:
+        ref_bal = con.execute("SELECT balance FROM users WHERE id=100").fetchone()
+    assert ref_bal["balance"] == 300  # не 600

@@ -150,18 +150,15 @@ def finalize_with_referral_bonus(
     source_type: str = "telegram",
     source_app_id: int | None = None,
 ) -> RefillResult:
-    """Atomically finalize a refill and credit a referral bonus when applicable.
+    """Финализирует refill + (на первой успешной) начисляет реф-бонус 30% реферу.
 
-    Bonus rules (preserved from handlers/user_functions.py:722-744):
-    - Only on the user's FIRST refill.
-    - User must not be VIP (is_vip IS NULL/falsy).
-    - User must have a ref_id pointing to an existing user.
-    - Bonus = int(amount * 0.3), credited and recorded in refills under referrer's id.
+    was_newly_finalized пробрасывается из finalize() — крон/web-flow используют его,
+    чтобы не задваивать уведомления при гонках.
     """
     user = _get_user_for_referral(user_id)
-    is_first = _is_first_refill(user_id)
+    is_first_before = _is_first_refill(user_id)  # снимок ДО finalize
 
-    new_balance, _ = finalize(
+    new_balance, was_newly_finalized = finalize(
         user_id, amount, payment_id=payment_id,
         source_type=source_type, source_app_id=source_app_id,
     )
@@ -170,16 +167,16 @@ def finalize_with_referral_bonus(
     bonus = 0
     referrer_new_balance: int | None = None
 
-    if is_first and not user["is_vip"] and referrer_id is not None:
+    # Бонус начисляется ТОЛЬКО при реальном переходе pending→succeeded,
+    # И только если это был первый refill у юзера, И юзер не VIP.
+    if was_newly_finalized and is_first_before and not user["is_vip"] and referrer_id is not None:
         bonus = int(amount * 0.3)
         try:
-            if bonus > 0:
-                referrer_new_balance, _ = finalize(
-                    int(referrer_id), bonus,
-                    source_type=source_type, source_app_id=source_app_id,
-                )
-            else:
-                referrer_new_balance = None
+            referrer_new_balance = (
+                finalize(int(referrer_id), bonus,
+                         source_type=source_type, source_app_id=source_app_id)[0]
+                if bonus > 0 else None
+            )
         except UserNotFound:
             referrer_new_balance = None
             bonus = 0
@@ -189,4 +186,5 @@ def finalize_with_referral_bonus(
         referrer_id=int(referrer_id) if referrer_id is not None else None,
         referrer_bonus=bonus,
         referrer_new_balance=referrer_new_balance,
+        was_newly_finalized=was_newly_finalized,
     )

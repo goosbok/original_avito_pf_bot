@@ -71,12 +71,14 @@ class RefillResult:
     referrer_id: int | None
     referrer_bonus: int
     referrer_new_balance: int | None
+    was_newly_finalized: bool = False
 
 
 def _is_first_refill(user_id: int) -> bool:
     with connect() as con:
         row = con.execute(
-            "SELECT 1 FROM refills WHERE user_id = ? LIMIT 1", (user_id,)
+            "SELECT 1 FROM refills WHERE user_id = ? AND status = 'succeeded' LIMIT 1",
+            (user_id,),
         ).fetchone()
     return row is None
 

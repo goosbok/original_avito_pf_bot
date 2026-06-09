@@ -58,3 +58,89 @@ def test_refill_result_has_was_newly_finalized(tmp_db: Path):
         was_newly_finalized=True,
     )
     assert r.was_newly_finalized is True
+
+
+def test_finalize_pending_to_succeeded(tmp_db: Path):
+    _make_user(42, balance=0)
+    _insert_refill(user_id=42, amount=500, payment_id="pid-a", status="pending")
+
+    from services.refill import finalize
+    new_balance, was_new = finalize(
+        42, 500, payment_id="pid-a", source_type="web", source_app_id=None
+    )
+    assert new_balance == 500
+    assert was_new is True
+
+    with connect() as con:
+        row = con.execute(
+            "SELECT status FROM refills WHERE payment_id=?", ("pid-a",)
+        ).fetchone()
+        bal = con.execute("SELECT balance FROM users WHERE id=42").fetchone()
+    assert row["status"] == "succeeded"
+    assert bal["balance"] == 500
+
+
+def test_finalize_idempotent_on_already_succeeded(tmp_db: Path):
+    _make_user(42, balance=500)
+    _insert_refill(user_id=42, amount=500, payment_id="pid-b", status="succeeded")
+
+    from services.refill import finalize
+    new_balance, was_new = finalize(
+        42, 500, payment_id="pid-b", source_type="web", source_app_id=None
+    )
+    assert new_balance == 500     # баланс не вырос
+    assert was_new is False        # повторная финализация не считается «новой»
+
+
+def test_finalize_backfill_when_no_pending_row(tmp_db: Path):
+    """Если pending row нет (backfill 7 stuck, например) — finalize должен INSERT succeeded напрямую."""
+    _make_user(42, balance=0)
+
+    from services.refill import finalize
+    new_balance, was_new = finalize(
+        42, 700, payment_id="pid-backfill",
+        source_type="telegram", source_app_id=None,
+    )
+    assert new_balance == 700
+    assert was_new is True
+
+    with connect() as con:
+        row = con.execute(
+            "SELECT status, source_type FROM refills WHERE payment_id=?",
+            ("pid-backfill",),
+        ).fetchone()
+    assert row["status"] == "succeeded"
+    assert row["source_type"] == "telegram"
+
+
+def test_finalize_legacy_no_payment_id_inserts_succeeded(tmp_db: Path):
+    """Старый вызов finalize(..., payment_id=None) должен по-прежнему работать (INSERT succeeded)."""
+    _make_user(42, balance=0)
+
+    from services.refill import finalize
+    new_balance, was_new = finalize(
+        42, 250, payment_id=None, source_type="telegram", source_app_id=None
+    )
+    assert new_balance == 250
+    assert was_new is True
+
+    with connect() as con:
+        row = con.execute(
+            "SELECT status, payment_id FROM refills WHERE user_id=42"
+        ).fetchone()
+    assert row["status"] == "succeeded"
+    assert row["payment_id"] is None
+
+
+def test_finalize_raises_on_unexpected_status(tmp_db: Path):
+    """Если строка существует в canceled/expired — finalize должен бросить ValueError, не зачислить."""
+    _make_user(42, balance=0)
+    _insert_refill(user_id=42, amount=500, payment_id="pid-cx", status="canceled")
+
+    from services.refill import finalize
+    with pytest.raises(ValueError, match="canceled"):
+        finalize(42, 500, payment_id="pid-cx", source_type="web", source_app_id=None)
+
+    with connect() as con:
+        bal = con.execute("SELECT balance FROM users WHERE id=42").fetchone()
+    assert bal["balance"] == 0  # не зачислили

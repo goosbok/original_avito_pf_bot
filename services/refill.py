@@ -29,11 +29,12 @@ def finalize(
     *,
     source_type: str = "telegram",
     source_app_id: int | None = None,
-) -> int:
-    """Атомарно зачислить amount на баланс и записать в refills с source-tracking.
+) -> tuple[int, bool]:
+    """State machine: переводит pending→succeeded атомарно. Возвращает (new_balance, was_newly_finalized).
 
-    Если передан payment_id — операция идемпотентна: повторный вызов с тем же
-    payment_id не зачисляет деньги повторно, а возвращает текущий баланс.
+    was_newly_finalized=True ровно для одного победителя гонки за payment_id.
+    Повторные вызовы для уже-succeeded → was_newly_finalized=False, баланс не меняется.
+    Если pending row нет (backfill / legacy без payment_id) — INSERT succeeded напрямую.
     """
     if amount <= 0:
         raise ValueError(f"amount must be > 0, got {amount}")
@@ -41,23 +42,56 @@ def finalize(
     from services.source import normalize
     src_type, src_app = normalize(source_type, source_app_id)
 
-    if payment_id is not None:
+    # Legacy path: вызов без payment_id (например, до релиза этого фикса).
+    # Просто INSERT succeeded + credit, без state machine.
+    if payment_id is None:
+        new_balance = credit(user_id, amount)
         with connect() as con:
-            existing = con.execute(
-                "SELECT 1 FROM refills WHERE payment_id = ? LIMIT 1", (payment_id,)
-            ).fetchone()
-        if existing is not None:
-            return get_balance(user_id)
+            con.execute(
+                "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id, status) "
+                "VALUES (?, ?, ?, NULL, ?, ?, 'succeeded')",
+                (amount, get_date(), user_id, src_type, src_app),
+            )
+            con.commit()
+        return new_balance, True
 
-    new_balance = credit(user_id, amount)
+    # State machine path: атомарный UPDATE...WHERE status='pending'.
     with connect() as con:
-        con.execute(
-            "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (amount, get_date(), user_id, payment_id, src_type, src_app),
+        cur = con.execute(
+            "UPDATE refills SET status='succeeded' WHERE payment_id=? AND status='pending'",
+            (payment_id,),
         )
+        won_race = cur.rowcount == 1
         con.commit()
-    return new_balance
+
+    if won_race:
+        new_balance = credit(user_id, amount)
+        return new_balance, True
+
+    # rowcount=0: либо уже succeeded (идемпотентность), либо нет строки, либо неожиданный статус.
+    with connect() as con:
+        row = con.execute(
+            "SELECT status FROM refills WHERE payment_id=?", (payment_id,)
+        ).fetchone()
+
+    if row is None:
+        # Backfill: pending row отсутствует. INSERT succeeded напрямую + credit.
+        new_balance = credit(user_id, amount)
+        with connect() as con:
+            con.execute(
+                "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id, status) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'succeeded')",
+                (amount, get_date(), user_id, payment_id, src_type, src_app),
+            )
+            con.commit()
+        return new_balance, True
+
+    if row["status"] == "succeeded":
+        return get_balance(user_id), False
+
+    raise ValueError(
+        f"refill {payment_id!r} cannot transition to succeeded from status={row['status']!r}"
+    )
 
 
 from dataclasses import dataclass
@@ -112,7 +146,7 @@ def finalize_with_referral_bonus(
     user = _get_user_for_referral(user_id)
     is_first = _is_first_refill(user_id)
 
-    new_balance = finalize(
+    new_balance, _ = finalize(
         user_id, amount, payment_id=payment_id,
         source_type=source_type, source_app_id=source_app_id,
     )
@@ -124,11 +158,13 @@ def finalize_with_referral_bonus(
     if is_first and not user["is_vip"] and referrer_id is not None:
         bonus = int(amount * 0.3)
         try:
-            referrer_new_balance = (
-                finalize(int(referrer_id), bonus,
-                         source_type=source_type, source_app_id=source_app_id)
-                if bonus > 0 else None
-            )
+            if bonus > 0:
+                referrer_new_balance, _ = finalize(
+                    int(referrer_id), bonus,
+                    source_type=source_type, source_app_id=source_app_id,
+                )
+            else:
+                referrer_new_balance = None
         except UserNotFound:
             referrer_new_balance = None
             bonus = 0

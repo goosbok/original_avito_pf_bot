@@ -113,6 +113,20 @@ async def on_startup(dp: Dispatcher):
         _scheduler.add_job(probe_and_alert, "interval", minutes=probe_interval)
         _scheduler.start()
         _log.info("Payment probe scheduler started (interval=%d min)", probe_interval)
+        from services.payment_reconciler import reconcile_pending
+        reconciler_seconds = int(os.getenv("PAYMENT_RECONCILER_INTERVAL_SEC", "60"))
+        if reconciler_seconds > 0:
+            _scheduler.add_job(
+                reconcile_pending, "interval", seconds=reconciler_seconds,
+                id="payment_reconciler",
+                max_instances=1,
+                misfire_grace_time=30,
+            )
+            _log.info(
+                "Payment reconciler scheduled (interval=%d sec)", reconciler_seconds
+            )
+        else:
+            _log.info("Payment reconciler disabled (PAYMENT_RECONCILER_INTERVAL_SEC=0)")
     else:
         _log.info("Payment probe disabled (PAYMENT_PROBE_INTERVAL_MIN=0)")
 

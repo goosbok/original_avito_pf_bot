@@ -7,12 +7,17 @@
 //   onRemove — callback when user clicks "×"
 //
 // States rendered:
-//   loading           → skeleton thumb + shimmer title placeholder
-//   ok                → <img> from image_url, title shown
+//   loading                  → neutral-gray thumb + CSS spinner, skeleton bar for title
+//   ok                       → <img> from image_url, title shown
 //   not_found / fetch_failed → green "A" placeholder, fallback title = url path
 function LinkCard({ url, meta, onRemove }) {
   const status = (meta && meta.status) || 'loading';
+  const isLoading = status === 'loading';
   const hasImage = status === 'ok' && meta && meta.image_url;
+  // Show green "A" tile only when we know there's no preview to load.
+  // (Without this gate the green flashes between loading and the <img>
+  // actually rendering its pixels.)
+  const showFallback = !isLoading && !hasImage;
   const titleText = (meta && meta.title) || _urlShortPath(url);
 
   return (
@@ -32,17 +37,26 @@ function LinkCard({ url, meta, onRemove }) {
       <div style={{
         width: 56, height: 56, borderRadius: 8, flexShrink: 0,
         overflow: 'hidden', position: 'relative',
-        background: 'linear-gradient(135deg, #00aa00 0%, #007f00 100%)',
+        // Brand-green tile ONLY for the explicit fallback ("A"). For loading
+        // and for ok-with-image we use neutral gray so there's no green flash
+        // while the CDN <img> is still pulling pixels.
+        background: showFallback
+          ? 'linear-gradient(135deg, #00aa00 0%, #007f00 100%)'
+          : 'var(--surface-2, #ececec)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {status === 'loading' && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%)',
-            animation: 'linkcard-shimmer 1.2s linear infinite',
-          }} />
+        {isLoading && (
+          <div
+            aria-label="Загрузка превью"
+            style={{
+              width: 22, height: 22, borderRadius: '50%',
+              border: '2.5px solid var(--border, rgba(0,0,0,0.12))',
+              borderTopColor: 'var(--primary, #00aa00)',
+              animation: 'linkcard-spin 0.8s linear infinite',
+            }}
+          />
         )}
-        {hasImage ? (
+        {hasImage && (
           <img
             src={meta.image_url}
             alt=""
@@ -50,26 +64,32 @@ function LinkCard({ url, meta, onRemove }) {
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
-        ) : (
+        )}
+        {showFallback && (
           <span style={{
             color: 'white', fontWeight: 800, fontSize: '1.5rem',
             fontFamily: 'Georgia, "Times New Roman", serif',
-            visibility: status === 'loading' ? 'hidden' : 'visible',
           }}>A</span>
         )}
       </div>
       <div style={{ flex: '1 1 0', minWidth: 0 }}>
-        <div style={{
-          fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-1)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          opacity: status === 'loading' ? 0.4 : 1,
-        }}>
-          {status === 'loading' ? ' ' : titleText}
-        </div>
+        {isLoading ? (
+          // Skeleton bar — clearly signals "loading" alongside the spinner.
+          <div style={{
+            height: 12, width: '62%', borderRadius: 4,
+            background: 'var(--surface-2, #ececec)',
+            animation: 'linkcard-pulse 1.2s ease-in-out infinite',
+          }} />
+        ) : (
+          <div style={{
+            fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-1)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>{titleText}</div>
+        )}
         <div title={url} style={{
           fontSize: '0.7rem', color: 'var(--text-3)',
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          fontFamily: 'monospace', marginTop: 2,
+          fontFamily: 'monospace', marginTop: isLoading ? 6 : 2,
         }}>
           {_urlShortPath(url)}
         </div>
@@ -96,12 +116,15 @@ function _urlShortPath(url) {
   }
 }
 
-// Inject shimmer keyframes once.
-(function _injectShimmerStyles() {
-  if (document.getElementById('linkcard-shimmer-style')) return;
+// Inject spinner + skeleton-pulse keyframes once.
+(function _injectLinkCardStyles() {
+  if (document.getElementById('linkcard-anim-style')) return;
   const s = document.createElement('style');
-  s.id = 'linkcard-shimmer-style';
-  s.textContent = '@keyframes linkcard-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }';
+  s.id = 'linkcard-anim-style';
+  s.textContent = [
+    '@keyframes linkcard-spin { to { transform: rotate(360deg); } }',
+    '@keyframes linkcard-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }',
+  ].join(' ');
   document.head.appendChild(s);
 })();
 

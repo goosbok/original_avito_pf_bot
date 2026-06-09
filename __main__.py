@@ -103,32 +103,39 @@ async def on_startup(dp: Dispatcher):
     ])
     _log.info("Webhook cleared, polling with all update types")
 
-    # ── Payment probe scheduler ───────────────────────────────────────────────
+    # ── Background schedulers (payment_probe + payment_reconciler) ────────────
+    # Two independent jobs. Either can be enabled/disabled separately via env.
+    # _scheduler is created on demand if at least one job is on.
     global _scheduler
     probe_interval = int(os.getenv("PAYMENT_PROBE_INTERVAL_MIN", "15"))
-    if probe_interval > 0:
+    reconciler_seconds = int(os.getenv("PAYMENT_RECONCILER_INTERVAL_SEC", "60"))
+
+    if probe_interval > 0 or reconciler_seconds > 0:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
-        from services.payment_probe import probe_and_alert
         _scheduler = AsyncIOScheduler()
-        _scheduler.add_job(probe_and_alert, "interval", minutes=probe_interval)
-        _scheduler.start()
-        _log.info("Payment probe scheduler started (interval=%d min)", probe_interval)
-        from services.payment_reconciler import reconcile_pending
-        reconciler_seconds = int(os.getenv("PAYMENT_RECONCILER_INTERVAL_SEC", "60"))
+
+        if probe_interval > 0:
+            from services.payment_probe import probe_and_alert
+            _scheduler.add_job(probe_and_alert, "interval", minutes=probe_interval)
+            _log.info("Payment probe scheduled (interval=%d min)", probe_interval)
+        else:
+            _log.info("Payment probe disabled (PAYMENT_PROBE_INTERVAL_MIN=0)")
+
         if reconciler_seconds > 0:
+            from services.payment_reconciler import reconcile_pending
             _scheduler.add_job(
                 reconcile_pending, "interval", seconds=reconciler_seconds,
                 id="payment_reconciler",
                 max_instances=1,
                 misfire_grace_time=30,
             )
-            _log.info(
-                "Payment reconciler scheduled (interval=%d sec)", reconciler_seconds
-            )
+            _log.info("Payment reconciler scheduled (interval=%d sec)", reconciler_seconds)
         else:
             _log.info("Payment reconciler disabled (PAYMENT_RECONCILER_INTERVAL_SEC=0)")
+
+        _scheduler.start()
     else:
-        _log.info("Payment probe disabled (PAYMENT_PROBE_INTERVAL_MIN=0)")
+        _log.info("Both probe and reconciler disabled — no scheduler started")
 
     if os.getenv("START_WEB", "1") != "0":
         asyncio.create_task(serve_web())

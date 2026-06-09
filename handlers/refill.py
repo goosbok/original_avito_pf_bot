@@ -9,15 +9,8 @@ from keyboards.users_menu import (
     get_menu_kb, user_back_kb,
     yookassa_kb, payment_methods_kb, manual_payment_kb, payment_error_kb,
 )
-from utils.other import (
-    format_decimal,
-    get_user_string_without_first_name,
-)
-from utils.sender import send_admins
-from utils.sqlite3 import (
-    get_user,
-    get_string, get_setting, get_nick,
-)
+from utils.other import format_decimal
+from utils.sqlite3 import get_string, get_setting, get_nick
 from utils.yookassa_refil import check_payment_status
 
 logger = logging.getLogger(__name__)

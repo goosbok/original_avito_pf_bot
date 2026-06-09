@@ -1,6 +1,7 @@
 """Admin endpoints for users — list/search, detail, balance, VIP."""
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -147,10 +148,15 @@ async def adjust_balance(
         before = int(row["balance"] or 0)
         after = before + body.delta
         con.execute("UPDATE users SET balance = ? WHERE id = ?", (after, target_user_id))
+        # Microsecond timestamp in payment_id, чтобы повторные adjustments одним
+        # админом с тем же reason не падали на партиальном UNIQUE
+        # (uq_refills_payment_id, добавленном в payment-reconciler milestone).
+        # status='succeeded' явно — DEFAULT покрывает, но в admin path хочется не полагаться на default.
+        payment_id = f"admin:{admin_user_id}:{int(time.time() * 1_000_000)}:{body.reason[:100]}"
         con.execute(
-            "INSERT INTO refills(user_id, amount, date, payment_id, source_type, source_app_id) "
-            "VALUES (?, ?, ?, ?, 'admin_manual', NULL)",
-            (target_user_id, body.delta, now, f"admin:{admin_user_id}:{body.reason[:120]}"),
+            "INSERT INTO refills(user_id, amount, date, payment_id, source_type, source_app_id, status) "
+            "VALUES (?, ?, ?, ?, 'admin_manual', NULL, 'succeeded')",
+            (target_user_id, body.delta, now, payment_id),
         )
         con.commit()
     return AdminBalanceAdjustResponse(

@@ -776,8 +776,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "payment_id TEXT,"
             "source_type TEXT NOT NULL DEFAULT 'telegram',"
             "source_app_id INTEGER,"
+            "status TEXT NOT NULL DEFAULT 'succeeded',"
             "FOREIGN KEY (user_id) REFERENCES users(id))",
-            7,
+            8,
         ),
         (
             "orders",
@@ -987,6 +988,8 @@ def get_index_statements() -> list[str]:
         "ON order_links(status, deadline_at) WHERE status = 'in_work'",
         "CREATE INDEX IF NOT EXISTS idx_apc_cached_at "
         "ON avito_ad_phrase_cache(cached_at)",
+        "CREATE INDEX IF NOT EXISTS idx_refills_status_date ON refills (status, date)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_refills_payment_id ON refills (payment_id) WHERE payment_id IS NOT NULL",
     ]
 
 
@@ -1004,6 +1007,21 @@ def apply_phase2_migrations():
         if 'payment_id' not in existing_refills:
             con.execute("ALTER TABLE refills ADD COLUMN payment_id TEXT")
             print("refills.payment_id added")
+        # === refills.status (state machine: pending|succeeded|canceled|expired) ===
+        if 'status' not in existing_refills:
+            con.execute(
+                "ALTER TABLE refills ADD COLUMN status TEXT NOT NULL DEFAULT 'succeeded'"
+            )
+            print("refills.status added (existing rows defaulted to status='succeeded')")
+        # Индексы создаём отдельно от ALTER — IF NOT EXISTS делает идемпотентным.
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_refills_status_date "
+            "ON refills (status, date)"
+        )
+        con.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_refills_payment_id "
+            "ON refills (payment_id) WHERE payment_id IS NOT NULL"
+        )
         existing_orders = {row['name'] for row in con.execute("PRAGMA table_info(orders)").fetchall()}
         if 'user_name' not in existing_orders:
             con.execute("ALTER TABLE orders ADD COLUMN user_name TEXT")

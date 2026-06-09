@@ -113,6 +113,41 @@ def test_adjust_balance_rejects_non_positive(tmp_db: Path):
     assert r.status_code == 422
 
 
+def test_adjust_balance_twice_with_same_reason_creates_two_rows(tmp_db: Path):
+    """Регресс: payment_id у admin-INSERT'а должен быть уникальным даже при идентичном reason.
+
+    После добавления партиального UNIQUE INDEX uq_refills_payment_id два одинаковых
+    INSERT с payment_id='admin:1:промо' роняли бы 500 на втором вызове. Фикс —
+    timestamp в payment_id. Тест проверяет: оба запроса успешны, обе записи есть.
+    """
+    _seed(tmp_db)
+    c = _client()
+    headers = {"Authorization": f"Bearer {_token_for(1)}"}
+    payload = {"delta": 100, "reason": "промо"}
+
+    r1 = c.post("/api/admin/users/10/balance", headers=headers, json=payload)
+    assert r1.status_code == 200, r1.text
+    r2 = c.post("/api/admin/users/10/balance", headers=headers, json=payload)
+    assert r2.status_code == 200, r2.text
+
+    with sqlite3.connect(tmp_db) as con:
+        rows = con.execute(
+            "SELECT payment_id, amount, source_type, status FROM refills "
+            "WHERE user_id=10 ORDER BY increment"
+        ).fetchall()
+        bal = con.execute("SELECT balance FROM users WHERE id=10").fetchone()[0]
+
+    assert len(rows) == 2, f"ожидаем 2 строки, получили {rows}"
+    assert {r[0] for r in rows}.__len__() == 2, f"payment_id должны быть уникальны: {[r[0] for r in rows]}"
+    for pid, amount, src, status in rows:
+        assert amount == 100
+        assert src == "admin_manual"
+        assert status == "succeeded"   # explicit в INSERT
+        assert pid.startswith("admin:1:") and "промо" in pid
+    # 250 (seed) + 100 + 100
+    assert bal == 450
+
+
 def test_set_vip_toggles_flag(tmp_db: Path):
     _seed(tmp_db)
     c = _client()

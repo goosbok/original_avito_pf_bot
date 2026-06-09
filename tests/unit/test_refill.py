@@ -20,6 +20,7 @@ def _make_user(tmp_db: Path, user_id: int = 1, balance: int = 0) -> None:
 
 
 def test_create_invoice_delegates_to_yookassa(tmp_db: Path) -> None:
+    _make_user(tmp_db, user_id=1)
     with patch(
         "services.refill._yookassa_create_invoice",
         return_value=("https://pay/xyz", "pay-id-1"),
@@ -41,7 +42,7 @@ def test_create_invoice_wraps_yookassa_errors(tmp_db: Path) -> None:
 
 def test_finalize_credits_balance_and_writes_refill(tmp_db: Path) -> None:
     _make_user(tmp_db, balance=10)
-    new_balance = finalize(user_id=1, amount=200)
+    new_balance, _ = finalize(user_id=1, amount=200)
     assert new_balance == 210
     with sqlite3.connect(tmp_db) as con:
         rows = con.execute(
@@ -132,7 +133,7 @@ def test_referral_bonus_referrer_does_not_exist(tmp_db: Path) -> None:
 def test_finalize_is_idempotent_with_payment_id(tmp_db: Path) -> None:
     _make_user(tmp_db, balance=0)
     finalize(user_id=1, amount=100, payment_id="pay-A")
-    new_balance = finalize(user_id=1, amount=100, payment_id="pay-A")
+    new_balance, _ = finalize(user_id=1, amount=100, payment_id="pay-A")
     assert new_balance == 100
     with sqlite3.connect(tmp_db) as con:
         rows = con.execute("SELECT amount FROM refills WHERE user_id = 1").fetchall()

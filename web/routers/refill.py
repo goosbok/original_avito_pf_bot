@@ -95,7 +95,11 @@ async def create_refill(
             detail="Необходимо принять политику конфиденциальности и оферту",
         )
     try:
-        url, pid = create_invoice(caller.user_id, payload.amount)
+        url, pid = create_invoice(
+            caller.user_id, payload.amount,
+            source_type=caller.source_type,
+            source_app_id=caller.source_app_id,
+        )
     except PaymentError as exc:
         # Log + alert admins; surface only a generic error to the client.
         asyncio.create_task(
@@ -121,9 +125,8 @@ async def refill_status(
         payment = Payment.find_one(payment_id)
         amount = int(float(payment.amount.value))
         try:
-            finalize_with_referral_bonus(
-                caller.user_id,
-                amount,
+            result = finalize_with_referral_bonus(
+                caller.user_id, amount,
                 payment_id=payment_id,
                 source_type=caller.source_type,
                 source_app_id=caller.source_app_id,
@@ -133,6 +136,19 @@ async def refill_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="user not in bot DB; /start the bot first",
             )
+
+        # Уведомления только при реальном переходе — иначе крон/TG-handler уже отправили.
+        if result.was_newly_finalized:
+            from services.payment_notifications import (
+                notify_admins_success, notify_user_success, notify_referrer,
+            )
+            await notify_user_success(caller.user_id, amount, result.user_balance)
+            await notify_admins_success(caller.user_id, amount, result.user_balance)
+            if result.referrer_bonus > 0 and result.referrer_id is not None:
+                await notify_referrer(result.referrer_id, result.referrer_bonus,
+                                      result.referrer_new_balance or 0)
+            logger.info("payment success: user_id=%s amount=%s (web-status)",
+                        caller.user_id, amount)
         simplified = "succeeded"
     elif yookassa_status in {"canceled", "expired", "rejected"}:
         simplified = "failed"

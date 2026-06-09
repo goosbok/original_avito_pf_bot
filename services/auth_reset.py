@@ -50,7 +50,7 @@ def forgot_password(email: str) -> None:
 
     from services.email_sender import send_email
 
-    subject = "авито.пф — сброс пароля"
+    subject = "сброс пароля"
     body = (
         f"Для сброса пароля перейдите по ссылке:\n{reset_url}\n\n"
         f"Ссылка действительна {RESET_TOKEN_TTL_HOURS} час.\n\n"

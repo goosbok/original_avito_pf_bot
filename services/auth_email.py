@@ -107,7 +107,7 @@ def register_request(email: str, password: str, first_name: str | None = None) -
     # Send email outside the DB transaction.
     from services.email_sender import send_email
 
-    subject = "авито.пф — код подтверждения"
+    subject = "код подтверждения"
     body = (
         f"Ваш код подтверждения регистрации: {code}\n\n"
         f"Код действителен {CODE_TTL_MINUTES} минут.\n\n"
@@ -240,7 +240,7 @@ def link_email_request(user_id: int, email: str, password: str) -> None:
 
     from services.email_sender import send_email
 
-    subject = "авито.пф — код подтверждения привязки почты"
+    subject = "код подтверждения привязки почты"
     body = (
         f"Ваш код подтверждения: {code}\n\n"
         f"Код действителен {CODE_TTL_MINUTES} минут.\n\n"

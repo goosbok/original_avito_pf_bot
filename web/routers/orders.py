@@ -20,6 +20,7 @@ from services import orders as svc
 from services import identity
 from services.avito_preview import fetch_previews
 from services.balance import get_balance
+from services.notifications import notify_new_order
 from services.order_links import list_links as _list_order_links
 from services.exceptions import (
     InsufficientBalance,
@@ -198,6 +199,7 @@ async def pay(
             raise HTTPException(409, str(exc))
         except PaymentExpired:
             raise HTTPException(409, "Срок оплаты истёк")
+        await notify_new_order(order_id, source="web")
         return OrderPayBalanceResponse(status="paid", order_id=order_id)
 
     if body.method == "yookassa":
@@ -283,6 +285,7 @@ async def payment_status(order_id: int) -> OrderPaymentStatusResponse:
             p = await asyncio.to_thread(_probe, order["payment_id"])
             if p.status == "succeeded":
                 svc.mark_paid(order_id)
+                await notify_new_order(order_id, source="web")
                 return OrderPaymentStatusResponse(status="paid", order_id=order_id)
             if p.status == "canceled":
                 svc.mark_payment_failed(order_id)
@@ -344,6 +347,7 @@ async def yookassa_return(order_id: int, request: Request):
             p = await asyncio.to_thread(_probe, order["payment_id"])
             if p.status == "succeeded":
                 svc.mark_paid(order_id)
+                await notify_new_order(order_id, source="web")
                 result = "paid"
             else:
                 # canceled / pending / waiting_for_capture — пользователь вернулся

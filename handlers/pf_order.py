@@ -28,6 +28,7 @@ from services.funnel import track_step
 from services.orders import create_unpaid, pay_with_balance, get_order as _get_order
 from services.exceptions import InsufficientBalance
 from services.order_links import list_links as _list_order_links
+from services.notifications import notify_new_order
 
 logger = logging.getLogger(__name__)
 logger.info("pf_order.py loaded — registering handlers")
@@ -246,31 +247,12 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                     await state.finish()
                     return
 
-                # 3. Build admin notification from order_links (no more order['links'])
-                ADM_MSG = get_string('str_new_order_text')
+                # 3. Push admin notification (extracted into services.notifications
+                #    so the web flow can reuse the exact same message with a
+                #    different source label).
+                await notify_new_order(order_id, source="telegram")
                 order = _get_order(order_id)
-                ord_id = order['increment']
-                f_price = format_decimal(order['price'])
-                user_str = await get_user_string_without_first_name(user)
-                pos_name = order['position_name']
-                status = order['status']
-                con_str = 'Да' if order['contacts'] else 'Нет'
-                ord_date = format_display(order['date'])
-                order_links_rows = _list_order_links(ord_id)
-                links_cnt = len(order_links_rows)
-                links_str = ""
-                for ln in order_links_rows:
-                    links_str += f"\n<code>{ln['url']}</code>"
-                ADM_MSG = ADM_MSG.format(
-                    ord_id, f_price, user_str, pos_name, status,
-                    con_str, ord_date, links_cnt, links_str,
-                )
-                if len(ADM_MSG) < 4096:
-                    await send_admins(ADM_MSG, "orders")
-                else:
-                    for msg in split_messages(ADM_MSG.split('\n'), '\n'):
-                        await send_admins(msg, "orders")
-                USR_MSG = get_string('str_order_confirm').format(ord_id)
+                USR_MSG = get_string('str_order_confirm').format(order['increment'])
                 await call.message.answer(USR_MSG, reply_markup=get_menu_kb())
                 logger.info(
                     "order placed: user_id=%s price=%s days=%s fix=%s",

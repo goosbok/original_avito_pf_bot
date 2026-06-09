@@ -147,3 +147,73 @@ async def notify_order_status_changed(
     if text is None:
         return
     await push_tg_notification(user_id=user_id, text=text)
+
+
+# === Admin "new order" push ===
+
+_NEW_ORDER_SOURCE_LABEL: dict[str, str] = {
+    "telegram": "🤖 Бот",
+    "web": "🌐 Веб",
+    "api": "🔌 API",
+}
+
+
+async def notify_new_order(order_id: int, *, source: str) -> None:
+    """Push a 'new order placed' message to the admin orders chat.
+
+    `source` ∈ {'telegram', 'web', 'api'} — appended as a postfix line so the
+    admin chat can tell where the order came from. Not persisted; known at the
+    call site (TG handler vs web route).
+
+    Best-effort: any exception is logged and swallowed — callers should not
+    block on this. Schedule AFTER the order has flipped to 'paid'.
+    """
+    from utils.sender import send_admins
+    from utils.other import (
+        format_decimal,
+        get_user_string_without_first_name,
+        split_messages,
+    )
+    from utils.dates import format_display
+    from utils.sqlite3 import get_user, get_string
+    from services.orders import get_order
+    from services.order_links import list_links as _list_links
+
+    try:
+        order = get_order(order_id)
+        user = get_user(id=int(order["user_id"]))
+        if not user:
+            logger.warning(
+                "notify_new_order: user %s not found for order %s",
+                order["user_id"], order_id,
+            )
+            return
+
+        ord_id = order["increment"]
+        f_price = format_decimal(order["price"])
+        user_str = await get_user_string_without_first_name(user)
+        pos_name = order["position_name"]
+        status = order["status"]
+        con_str = "Да" if order["contacts"] else "Нет"
+        ord_date = format_display(order["date"])
+        link_rows = _list_links(ord_id)
+        links_cnt = len(link_rows)
+        links_str = "".join(f"\n<code>{ln['url']}</code>" for ln in link_rows)
+
+        tpl = get_string("str_new_order_text")
+        msg = tpl.format(
+            ord_id, f_price, user_str, pos_name, status,
+            con_str, ord_date, links_cnt, links_str,
+        )
+        msg += f"\n📍 Источник: {_NEW_ORDER_SOURCE_LABEL.get(source, source)}"
+
+        if len(msg) < 4096:
+            await send_admins(msg, "orders")
+        else:
+            for chunk in split_messages(msg.split("\n"), "\n"):
+                await send_admins(chunk, "orders")
+    except Exception:
+        logger.warning(
+            "notify_new_order failed for order=%s source=%s",
+            order_id, source, exc_info=True,
+        )

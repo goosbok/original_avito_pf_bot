@@ -958,6 +958,15 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "FOREIGN KEY (order_id) REFERENCES orders(increment))",
             12,
         ),
+        (
+            "avito_ad_phrase_cache",
+            "CREATE TABLE IF NOT EXISTS avito_ad_phrase_cache("
+            "ad_id TEXT PRIMARY KEY,"
+            "search_link TEXT NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "cached_at TIMESTAMP NOT NULL)",
+            4,  # column count
+        ),
     ]
 
 
@@ -976,6 +985,8 @@ def get_index_statements() -> list[str]:
         "ON order_links(order_id)",
         "CREATE INDEX IF NOT EXISTS idx_order_links_deadline "
         "ON order_links(status, deadline_at) WHERE status = 'in_work'",
+        "CREATE INDEX IF NOT EXISTS idx_apc_cached_at "
+        "ON avito_ad_phrase_cache(cached_at)",
     ]
 
 

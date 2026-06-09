@@ -60,6 +60,20 @@ def _make_config_stub() -> types.ModuleType:
     stub.BOT_HTTP_API_BASE = "https://api.telegram.org"
     stub.AVITO_PROXY_URL = "https://lk.pf-bot.com"
     stub.AVITO_PROXY_SECRET = ""
+    # Biznesklondaik PF executor (auto-mode) — keep stub in sync with
+    # data/config.py so services.biznesklondaik_client and friends don't
+    # AttributeError when imported in unit tests.
+    stub.BIZA_API_KEY = ""
+    stub.BIZA_LOGIN = ""
+    stub.BIZA_PASSWORD = ""
+    stub.BIZA_API_BASE_URL = "https://biznesklondaik.test/api"
+    stub.BIZA_DASHBOARD_BASE_URL = "https://biznesklondaik.test/pf-avito"
+    stub.PF_PHRASE_CACHE_REFRESH_ENABLED = False
+    stub.PF_AUTO_DISPATCH_ENABLED = False
+    stub.PF_PHRASE_CACHE_CHUNK_DAYS = 4
+    stub.PF_PHRASE_CACHE_REFRESH_INTERVAL_H = 24
+    stub.PF_AUTO_RATE_METRIC_INTERVAL_H = 1
+    stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
     return stub
 
 

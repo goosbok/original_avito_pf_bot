@@ -71,3 +71,36 @@ BOT_HTTP_API_BASE: str = os.getenv("BOT_HTTP_API_BASE", "https://api.telegram.or
 # The proxy is a single nginx location with a shared-secret header check.
 AVITO_PROXY_URL: str = os.getenv("AVITO_PROXY_URL", "https://lk.pf-bot.com")
 AVITO_PROXY_SECRET: str = os.getenv("AVITO_PROXY_SECRET", "")
+
+# === Biznesklondaik PF executor (auto-mode) ===
+BIZA_API_KEY: str = os.getenv("BIZA_API_KEY", "")
+BIZA_LOGIN: str = os.getenv("BIZA_LOGIN", "")
+BIZA_PASSWORD: str = os.getenv("BIZA_PASSWORD", "")
+BIZA_API_BASE_URL: str = os.getenv(
+    "BIZA_API_BASE_URL",
+    "https://biznesklondaik.ru/fwdrjjkigor_new/api",
+).rstrip("/")
+BIZA_DASHBOARD_BASE_URL: str = os.getenv(
+    "BIZA_DASHBOARD_BASE_URL",
+    "https://biznesklondaik.ru/fwdrjjkigor_new/pf-avito",
+).rstrip("/")
+
+PF_PHRASE_CACHE_REFRESH_ENABLED: bool = (
+    os.getenv("PF_PHRASE_CACHE_REFRESH_ENABLED", "false").lower() in ("1", "true", "yes")
+)
+PF_AUTO_DISPATCH_ENABLED: bool = (
+    os.getenv("PF_AUTO_DISPATCH_ENABLED", "false").lower() in ("1", "true", "yes")
+)
+
+PF_PHRASE_CACHE_CHUNK_DAYS: int = int(
+    os.getenv("PF_PHRASE_CACHE_CHUNK_DAYS", "4")
+)
+PF_PHRASE_CACHE_REFRESH_INTERVAL_H: int = int(
+    os.getenv("PF_PHRASE_CACHE_REFRESH_INTERVAL_H", "24")
+)
+PF_DASHBOARD_REQUEST_DELAY_SEC: int = int(
+    os.getenv("PF_DASHBOARD_REQUEST_DELAY_SEC", "3")
+)
+PF_AUTO_RATE_METRIC_INTERVAL_H: int = int(
+    os.getenv("PF_AUTO_RATE_METRIC_INTERVAL_H", "1")
+)

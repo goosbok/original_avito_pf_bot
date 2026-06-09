@@ -39,7 +39,7 @@ def test_dispatch_classifier_auto_api_success_sets_in_work(tmp_db):
     order_id = _seed_paid_order(tmp_db, n_links=1)
 
     with patch("services.order_links_dispatcher.classify",
-               return_value="auto"), \
+               return_value=("auto", "купить квартиру")), \
          patch("services.order_links_dispatcher.submit_link",
                return_value="ext-123"):
         dispatch_pending_links(order_id)
@@ -58,7 +58,7 @@ def test_dispatch_classifier_auto_api_rejected_falls_back_to_manual(tmp_db):
     order_id = _seed_paid_order(tmp_db, n_links=1)
 
     with patch("services.order_links_dispatcher.classify",
-               return_value="auto"), \
+               return_value=("auto", "купить квартиру")), \
          patch("services.order_links_dispatcher.submit_link",
                side_effect=ExecutorAPIRejected("nope")):
         dispatch_pending_links(order_id)
@@ -75,7 +75,7 @@ def test_dispatch_classifier_auto_api_error_keeps_pending_for_retry(tmp_db):
     order_id = _seed_paid_order(tmp_db, n_links=1)
 
     with patch("services.order_links_dispatcher.classify",
-               return_value="auto"), \
+               return_value=("auto", "купить квартиру")), \
          patch("services.order_links_dispatcher.submit_link",
                side_effect=ExecutorAPIError("timeout")):
         dispatch_pending_links(order_id)

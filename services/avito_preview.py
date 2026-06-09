@@ -55,17 +55,19 @@ def _parse_og(html: str) -> tuple[Optional[str], Optional[str]]:
     return image, title
 
 
-def _proxy_params(target_url: str) -> dict:
-    """Build query string for the nginx proxy location (`/_internal/avito-fetch`)."""
+def _proxy_url(target_url: str) -> str:
+    """Build full proxy URL for the nginx location (`/_internal/avito-fetch`).
+
+    We build the URL as a STRING (not via httpx `params=`) on purpose: httpx
+    percent-encodes `/` in query values to `%2F`, which our nginx regex check
+    (`^/[A-Za-z0-9._/?&=%~,+:!*'()@$;-]+$`) then rejects with 400. Passing a
+    pre-built URL keeps `/` literal.
+    """
     parsed = urlparse(target_url)
-    # Reassemble path + query into a single string the nginx side will append to
-    # `https://www.avito.ru`. CDN signed URLs carry `?cqp=...` so we MUST preserve
-    # the query — nginx-side `$arg_path` only captures up to first '?', so we send
-    # the path-with-query as a separate header instead.
     path_with_query = parsed.path
     if parsed.query:
         path_with_query += "?" + parsed.query
-    return {"path": path_with_query}
+    return f"{AVITO_PROXY_URL}/_internal/avito-fetch?path={path_with_query}"
 
 
 def _proxy_headers() -> dict:
@@ -77,8 +79,7 @@ async def _fetch_one(url: str, client: httpx.AsyncClient) -> dict:
     base = {"url": url, "status": "fetch_failed", "image_url": None, "title": None}
     try:
         html_resp = await client.get(
-            f"{AVITO_PROXY_URL}/_internal/avito-fetch",
-            params=_proxy_params(url),
+            _proxy_url(url),
             headers=_proxy_headers(),
         )
         if html_resp.status_code != 200:
@@ -93,8 +94,7 @@ async def _fetch_one(url: str, client: httpx.AsyncClient) -> dict:
         cdn_url = image
         try:
             head_resp = await client.head(
-                f"{AVITO_PROXY_URL}/_internal/avito-fetch",
-                params=_proxy_params(image),
+                _proxy_url(image),
                 headers=_proxy_headers(),
             )
             if 300 <= head_resp.status_code < 400:

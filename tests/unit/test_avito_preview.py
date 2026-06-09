@@ -35,16 +35,23 @@ def test_parse_og_returns_none_when_missing():
     assert title is None
 
 
-def test_proxy_params_preserves_query_string():
+def test_proxy_url_preserves_query_string():
     """CDN signed URLs carry `?cqp=...` — nginx needs the full path-with-query."""
-    p = avito_preview._proxy_params("https://www.avito.ru/img/share/auto/123?cqp=sig&t=1")
-    assert p == {"path": "/img/share/auto/123?cqp=sig&t=1"}
+    u = avito_preview._proxy_url("https://www.avito.ru/img/share/auto/123?cqp=sig&t=1")
+    assert u == "https://lk.pf-bot.com/_internal/avito-fetch?path=/img/share/auto/123?cqp=sig&t=1"
 
 
-def test_proxy_params_handles_no_query():
+def test_proxy_url_handles_no_query():
     """Path-only URLs don't get a trailing '?'."""
-    p = avito_preview._proxy_params("https://www.avito.ru/ekaterinburg/telefony/iphone")
-    assert p == {"path": "/ekaterinburg/telefony/iphone"}
+    u = avito_preview._proxy_url("https://www.avito.ru/ekaterinburg/telefony/iphone")
+    assert u == "https://lk.pf-bot.com/_internal/avito-fetch?path=/ekaterinburg/telefony/iphone"
+
+
+def test_proxy_url_keeps_slashes_literal():
+    """Critical: httpx-style %-encoding of '/' would trip the nginx regex check."""
+    u = avito_preview._proxy_url("https://www.avito.ru/a/b/c")
+    assert "/a/b/c" in u
+    assert "%2F" not in u
 
 
 def test_proxy_headers_returns_shared_secret():

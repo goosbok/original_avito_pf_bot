@@ -270,8 +270,6 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
         <h2 className="auth-card__title">Регистрация</h2>
         <p className="auth-card__sub">Выберите способ</p>
 
-        {error && <div className="alert alert--error">{error}</div>}
-
         <div className={`method-row${activeMethod ? ' has-active' : ''}`}>
           {TG_AUTH_ENABLED && (
             <>
@@ -357,6 +355,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
           </button>
           {activeMethod === 'email' && (
             <div className="method-form">
+              {error && <div className="alert alert--error">{error}</div>}
               {success && regStep === 'code' && <div className="alert alert--success">{success}</div>}
               {regStep === 'form' ? (
                 <>

@@ -9,27 +9,21 @@ from web.schemas import (
 )
 
 
-def test_email_register_passwords_match():
-    obj = EmailRegisterRequest(
-        email="a@b.com",
-        password="password123",
-        password_confirm="password123",
-    )
+def test_email_register_accepts_minimal_payload():
+    """Registration form only sends email + password (+ optional first_name)."""
+    obj = EmailRegisterRequest(email="a@b.com", password="password123")
     assert obj.password == "password123"
+    assert obj.first_name is None
 
 
-def test_email_register_passwords_mismatch_raises():
-    with pytest.raises(ValidationError, match="passwords do not match"):
-        EmailRegisterRequest(
-            email="a@b.com",
-            password="password123",
-            password_confirm="different",
-        )
+def test_email_register_accepts_first_name():
+    obj = EmailRegisterRequest(email="a@b.com", password="password123", first_name="Alex")
+    assert obj.first_name == "Alex"
 
 
-def test_email_register_missing_confirm_raises():
+def test_email_register_rejects_short_password():
     with pytest.raises(ValidationError):
-        EmailRegisterRequest(email="a@b.com", password="password123")
+        EmailRegisterRequest(email="a@b.com", password="short")
 
 
 def test_link_email_step1_passwords_match():

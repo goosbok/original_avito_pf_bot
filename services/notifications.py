@@ -205,7 +205,12 @@ async def notify_new_order(order_id: int, *, source: str) -> None:
             ord_id, f_price, user_str, pos_name, status,
             con_str, ord_date, links_cnt, links_str,
         )
-        msg += f"\n📍 Источник: {_NEW_ORDER_SOURCE_LABEL.get(source, source)}"
+        # Inject source as the SECOND line — after the header ("📦 Новый заказ…"
+        # or "💰 Поступил новый заказ!" in prod), before the body. Robust to
+        # whatever the prod DB template's header text happens to be.
+        source_line = f"📍 Источник: {_NEW_ORDER_SOURCE_LABEL.get(source, source)}"
+        head, sep, tail = msg.partition("\n")
+        msg = f"{head}\n{source_line}{sep}{tail}" if sep else f"{msg}\n{source_line}"
 
         if len(msg) < 4096:
             await send_admins(msg, "orders")

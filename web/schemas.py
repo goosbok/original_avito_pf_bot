@@ -226,7 +226,7 @@ class OrderDetailResponse(BaseModel):
     status: str
     price: int
     position_name: str
-    links: str
+    links: list[str] = []
     contacts: bool
     date: Optional[str] = None
     payment_method: Optional[str] = None
@@ -238,7 +238,7 @@ class OrderItem(BaseModel):
     price: int
     position_name: str
     status: str
-    links: str
+    links: list[str] = []
     date: str
     contacts: bool
 
@@ -310,7 +310,7 @@ class AdminOrderItem(BaseModel):
     price: int
     position_name: str
     status: str
-    links: str
+    links: list[str] = []
     date: str
     contacts: bool
     is_guest: bool = False

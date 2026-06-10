@@ -54,8 +54,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
 
-def _render_links_str(order_id: int) -> str:
-    """Return newline-joined URLs from order_links (orders.links is NULL for new orders).
+def _get_order_links(order_id: int) -> list[str]:
+    """Return URLs for the order from order_links (orders.links is NULL for new orders).
 
     NOTE: adds one extra DB query per order shown (N+1). Acceptable for
     paginated lists of ≤20 orders; can be batched later if needed.
@@ -63,8 +63,8 @@ def _render_links_str(order_id: int) -> str:
     try:
         rows = _list_order_links(int(order_id))
     except Exception:
-        return ""
-    return "\n".join(r["url"] for r in rows if r.get("url"))
+        return []
+    return [r["url"] for r in rows if r.get("url")]
 
 
 def _available_methods(user_id: Optional[int], price: int) -> list[str]:
@@ -106,7 +106,7 @@ async def list_orders(
                 price=int(o["price"] or 0),
                 position_name=str(o["position_name"] or ""),
                 status=str(o["status"] or ""),
-                links=_render_links_str(o["increment"]),
+                links=_get_order_links(o["increment"]),
                 date=str(o["date"] or ""),
                 contacts=bool(o["contacts"]),
             )
@@ -252,7 +252,7 @@ async def get_order_detail(order_id: int) -> OrderDetailResponse:
         status=str(order["status"] or ""),
         price=int(order["price"] or 0),
         position_name=str(order["position_name"] or ""),
-        links=_render_links_str(int(order["increment"])),
+        links=_get_order_links(int(order["increment"])),
         contacts=bool(order["contacts"]),
         date=str(order["date"]) if order["date"] else None,
         payment_method=str(order["payment_method"]) if order["payment_method"] else None,

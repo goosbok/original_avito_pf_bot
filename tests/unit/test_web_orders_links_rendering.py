@@ -36,53 +36,48 @@ def _seed_paid_order_with_links(tmp_db: Path, urls: list[str]) -> int:
 
 
 def test_get_order_detail_returns_links_from_order_links(tmp_db: Path):
-    """orders.links=NULL but order_links has rows → _render_links_str returns joined URLs."""
-    from web.routers.orders import _render_links_str
+    """orders.links=NULL but order_links has rows → _get_order_links returns URL list."""
+    from web.routers.orders import _get_order_links
 
     order_id = _seed_paid_order_with_links(
         tmp_db, ["https://avito.ru/a", "https://avito.ru/b"]
     )
-    result = _render_links_str(order_id)
-    assert "https://avito.ru/a" in result
-    assert "https://avito.ru/b" in result
+    assert _get_order_links(order_id) == ["https://avito.ru/a", "https://avito.ru/b"]
 
 
-def test_order_with_no_links_returns_empty_string(tmp_db: Path):
-    """Order exists in order_links with zero rows → empty string (not crash)."""
-    from web.routers.orders import _render_links_str
+def test_order_with_no_links_returns_empty_list(tmp_db: Path):
+    """Order exists in order_links with zero rows → empty list (not crash)."""
+    from web.routers.orders import _get_order_links
 
     order_id = _seed_paid_order_with_links(tmp_db, [])
-    assert _render_links_str(order_id) == ""
+    assert _get_order_links(order_id) == []
 
 
-def test_admin_orders_renders_links_from_order_links(tmp_db: Path):
-    """admin_orders._render_links_str reads from order_links, not orders.links."""
-    from web.routers.admin_orders import _render_links_str
+def test_admin_orders_returns_links_from_order_links(tmp_db: Path):
+    """admin_orders._get_order_links reads from order_links, not orders.links."""
+    from web.routers.admin_orders import _get_order_links
 
     order_id = _seed_paid_order_with_links(tmp_db, ["https://avito.ru/admin"])
-    result = _render_links_str(order_id)
-    assert "https://avito.ru/admin" in result
+    assert _get_order_links(order_id) == ["https://avito.ru/admin"]
 
 
-def test_admin_users_renders_links_from_order_links(tmp_db: Path):
-    """admin_users._render_links_str reads from order_links, not orders.links."""
-    from web.routers.admin_users import _render_links_str
+def test_admin_users_returns_links_from_order_links(tmp_db: Path):
+    """admin_users._get_order_links reads from order_links, not orders.links."""
+    from web.routers.admin_users import _get_order_links
 
     order_id = _seed_paid_order_with_links(tmp_db, ["https://avito.ru/users"])
-    result = _render_links_str(order_id)
-    assert "https://avito.ru/users" in result
+    assert _get_order_links(order_id) == ["https://avito.ru/users"]
 
 
-def test_multiple_links_joined_by_newline(tmp_db: Path):
-    """Multiple URLs in order_links are joined with newline."""
-    from web.routers.orders import _render_links_str
+def test_multiple_links_preserve_order(tmp_db: Path):
+    """Multiple URLs are returned in insertion order."""
+    from web.routers.orders import _get_order_links
 
     order_id = _seed_paid_order_with_links(
         tmp_db, ["https://avito.ru/x", "https://avito.ru/y", "https://avito.ru/z"]
     )
-    result = _render_links_str(order_id)
-    parts = result.split("\n")
-    assert len(parts) == 3
-    assert parts[0] == "https://avito.ru/x"
-    assert parts[1] == "https://avito.ru/y"
-    assert parts[2] == "https://avito.ru/z"
+    assert _get_order_links(order_id) == [
+        "https://avito.ru/x",
+        "https://avito.ru/y",
+        "https://avito.ru/z",
+    ]

@@ -13,13 +13,6 @@ const STATUS_FILTERS = [
 
 const PAGE_SIZE = 20;
 
-function parseLinksStr(s) {
-  if (!s) return [];
-  return String(s).split(',')
-    .map(l => l.trim().replace(/^['"\[\] ]+|['"\[\] ]+$/g, ''))
-    .filter(l => l.startsWith('http'));
-}
-
 function OrderMobileCard({ order: o, onNavigate }) {
   return (
     <div style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}
@@ -128,7 +121,7 @@ function OrdersPage({ onNavigate }) {
                   </thead>
                   <tbody>
                     {filtered.map(o => {
-                      const links = parseLinksStr(o.links);
+                      const links = o.links || [];
                       return (
                         <tr key={o.order_id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
                           <td style={{ color: 'var(--text-3)', fontWeight: 600 }}>#{o.order_id}</td>

@@ -3,13 +3,6 @@
 // Terminal statuses show "Повторить заказ" with prefill.
 const { useState: useODState, useEffect: useODEffect, useRef: useODRef } = React;
 
-function odParseLinks(s) {
-  if (!s) return [];
-  return String(s).split(',')
-    .map(l => l.trim().replace(/^['"\[\] ]+|['"\[\] ]+$/g, ''))
-    .filter(l => l.startsWith('http'));
-}
-
 function detectServiceType(order) {
   const pn = String(order.position_name || '');
   if (/^\d+\/\d+$/.test(pn)) return 'avito-pf';
@@ -26,7 +19,7 @@ const TERMINAL_STATUSES = ['done', 'failed', 'payment_failed', 'cancelled'];
 
 // --- Avito PF specific details ---
 function AvitoPFDetail({ order }) {
-  const links = odParseLinks(order.links);
+  const links = order.links || [];
   const m = String(order.position_name || '').match(/^(\d+)\/(\d+)$/);
   const days = m ? Number(m[1]) : null;
   const viewsPerDay = m ? Number(m[2]) : null;
@@ -91,7 +84,7 @@ function AvitoPFDetail({ order }) {
 
 // --- Fallback for unknown services ---
 function GenericDetail({ order }) {
-  const links = odParseLinks(order.links);
+  const links = order.links || [];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ padding: '20px 24px' }}>
@@ -255,7 +248,7 @@ function OrderDetailPage({ order: payload, orderId: orderIdProp, user, balance, 
 
   const handleRepeat = () => {
     try {
-      const linksArr = odParseLinks(order.links);
+      const linksArr = order.links || [];
       const m = String(order.position_name || '').match(/^(\d+)\/(\d+)$/);
       const daysVal = m ? Number(m[1]) : null;
       const fixVal = m ? Number(m[2]) : 30;

@@ -395,3 +395,23 @@ async def test_confirm_calls_answer_to_kill_spinner(tmp_db):
     await test_auto_dispatch_confirm(call, state)
 
     call.answer.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cancel_clears_state_and_edits_message(tmp_db):
+    """Cancel callback → preview edited на «Отменено», state cleared."""
+    from handlers.admin_orders import test_auto_dispatch_cancel
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    call.message.answer = AsyncMock()
+    call.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_cancel(call, state)
+
+    state.finish.assert_awaited()
+    call.message.edit_text.assert_awaited()
+    text = call.message.edit_text.call_args[0][0]
+    assert "Отменено" in text

@@ -1231,3 +1231,17 @@ async def _safe_edit(message, text: str, parse_mode: str | None = None):
         await message.answer(text[:4000], parse_mode=parse_mode)
     except Exception:  # noqa: BLE001
         logger.exception("_safe_edit: fallback answer() also failed")
+
+
+@dp.callback_query_handler(text="test_auto_dispatch_cancel",
+                            state=TestAutoDispatch.confirm)
+async def test_auto_dispatch_cancel(call: types.CallbackQuery,
+                                     state: FSMContext):
+    """Cancel — отменяет тестовую отправку, edit preview на короткое
+    сообщение."""
+    try:
+        await call.answer()
+    except Exception:  # noqa: BLE001
+        pass
+    await state.finish()
+    await _safe_edit(call.message, "❌ Отменено.")

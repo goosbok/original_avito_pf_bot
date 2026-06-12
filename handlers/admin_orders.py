@@ -1158,14 +1158,76 @@ async def fail_order_confirm(message: types.Message, state: FSMContext):
                             state=TestAutoDispatch.confirm)
 async def test_auto_dispatch_confirm(call: types.CallbackQuery,
                                       state: FSMContext):
-    """Шаг 3: подтверждено — force_dispatch + result message."""
-    data = await state.get_data()
-    order_id = int(data["order_id"])
-    auto_link_ids = list(data["auto_link_ids"])
-    previews = _deserialize_previews(data["previews_serialized"])
+    """Шаг 3: подтверждено — force_dispatch + result message.
 
-    results = force_dispatch(order_id, link_ids=auto_link_ids)
+    Защищаемся от 3 классов ошибок:
+      - state desync (bot restart) → KeyError на data[...]
+      - force_dispatch.OrderNotFound (заказ удалили посреди flow)
+      - edit_text Telegram errors (msg too long / not modified / not found)
+    """
+    # Гасим loading-spinner на кнопке сразу.
+    try:
+        await call.answer()
+    except Exception:  # noqa: BLE001
+        pass  # best-effort
+
+    data = await state.get_data()
+    try:
+        order_id = int(data["order_id"])
+        auto_link_ids = list(data["auto_link_ids"])
+        previews = _deserialize_previews(data["previews_serialized"])
+    except (KeyError, TypeError, ValueError):
+        logger.warning("test_auto_dispatch_confirm: state desync data=%r",
+                       data)
+        await _safe_edit(call.message,
+                         "⚠️ Сессия истекла, начните заново.")
+        await state.finish()
+        return
+
+    try:
+        results = force_dispatch(order_id, link_ids=auto_link_ids)
+    except _OrderNotFound:
+        logger.warning(
+            "test_auto_dispatch_confirm: order %s deleted mid-flow",
+            order_id,
+        )
+        await _safe_edit(
+            call.message,
+            f"⚠️ Заказ {order_id} был удалён, отправлять некуда.",
+        )
+        await state.finish()
+        return
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "test_auto_dispatch_confirm: force_dispatch crashed for order %s",
+            order_id,
+        )
+        await _safe_edit(
+            call.message,
+            f"❌ Ошибка отправки. См. логи (order_id={order_id}).",
+        )
+        await state.finish()
+        return
 
     text = format_result(order_id=order_id, previews=previews, results=results)
-    await call.message.edit_text(text, parse_mode="HTML")
+    await _safe_edit(call.message, text, parse_mode="HTML")
     await state.finish()
+
+
+async def _safe_edit(message, text: str, parse_mode: str | None = None):
+    """edit_text с подавлением Telegram-specific ошибок.
+
+    На MessageToEditNotFound / MessageNotModified / MessageIsTooLong и
+    прочие aiogram exceptions — fallback на answer() с тем же текстом
+    (truncated до 4000 chars если надо).
+    """
+    try:
+        await message.edit_text(text, parse_mode=parse_mode)
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    # Fallback: новый message.
+    try:
+        await message.answer(text[:4000], parse_mode=parse_mode)
+    except Exception:  # noqa: BLE001
+        logger.exception("_safe_edit: fallback answer() also failed")

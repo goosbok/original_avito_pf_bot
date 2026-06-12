@@ -280,6 +280,8 @@ async def test_confirm_runs_force_dispatch_and_edits_message(tmp_db):
     assert "357901" in text
     assert "1 / 1" in text
     state.finish.assert_awaited()
+    # parse_mode HTML обязательно для format_result (escapes есть в TA4)
+    assert call.message.edit_text.call_args.kwargs.get("parse_mode") == "HTML"
 
 
 @pytest.mark.asyncio
@@ -322,3 +324,74 @@ async def test_confirm_shows_failure_message(tmp_db):
     text = call.message.edit_text.call_args[0][0]
     assert "API отказал" in text
     assert "0 / 1" in text
+    # parse_mode HTML обязательно для format_result (escapes есть в TA4)
+    assert call.message.edit_text.call_args.kwargs.get("parse_mode") == "HTML"
+
+
+@pytest.mark.asyncio
+async def test_confirm_handles_state_desync(tmp_db):
+    """Пустой state (bot restart между preview и confirm) → friendly msg."""
+    from handlers.admin_orders import test_auto_dispatch_confirm
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    call.message.answer = AsyncMock()
+    call.answer = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={})  # пусто
+
+    await test_auto_dispatch_confirm(call, state)
+
+    state.finish.assert_awaited()
+    # edit_text был вызван с msg о session expired
+    text = call.message.edit_text.call_args[0][0]
+    assert "истекла" in text or "Сессия" in text
+
+
+@pytest.mark.asyncio
+async def test_confirm_handles_order_deleted_mid_flow(tmp_db):
+    """force_dispatch raises OrderNotFound → friendly msg, no crash."""
+    from handlers.admin_orders import test_auto_dispatch_confirm
+    from services.exceptions import OrderNotFound
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    call.message.answer = AsyncMock()
+    call.answer = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={
+        "order_id": 12345,
+        "auto_link_ids": [1],
+        "previews_serialized": [{
+            "link_id": 1, "url": "https://avito.ru/x_1234567890",
+            "ad_id": "1234567890", "decision": "auto", "reason": "cache_hit",
+            "phrase": "x", "deadline_at": "2026-06-12T00:00:00+00:00",
+        }],
+    })
+
+    with patch("handlers.admin_orders.force_dispatch",
+               side_effect=OrderNotFound("order_id=12345")):
+        await test_auto_dispatch_confirm(call, state)
+
+    state.finish.assert_awaited()
+    text = call.message.edit_text.call_args[0][0]
+    assert "удалён" in text or "12345" in text
+
+
+@pytest.mark.asyncio
+async def test_confirm_calls_answer_to_kill_spinner(tmp_db):
+    """call.answer() должен быть вызван чтобы убрать loading на кнопке."""
+    from handlers.admin_orders import test_auto_dispatch_confirm
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    call.answer = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={})  # empty → быстрый возврат, но call.answer уже отработал
+
+    await test_auto_dispatch_confirm(call, state)
+
+    call.answer.assert_awaited()

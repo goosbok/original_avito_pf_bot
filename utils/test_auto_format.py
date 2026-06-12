@@ -7,6 +7,7 @@ Telegram-сообщения.
 from __future__ import annotations
 
 from datetime import datetime
+from html import escape as _html_escape
 
 from services.order_links_dispatcher import DispatchResult, LinkPreview
 
@@ -53,12 +54,12 @@ def format_preview(*, order_id: int, previews: list[LinkPreview]) -> str:
     for i, p in enumerate(previews, 1):
         decision_icon = "✅ AUTO" if p.decision == "auto" else "❌ MANUAL"
         reason_ru = _REASON_RU.get(p.reason, p.reason)
-        lines.append(f"{i}. <code>{_short_url(p.url)}</code>")
-        lines.append(f"   ├ ad_id: {p.ad_id or '—'}")
+        lines.append(f"{i}. <code>{_html_escape(_short_url(p.url))}</code>")
+        lines.append(f"   ├ ad_id: {_html_escape(p.ad_id) if p.ad_id else '—'}")
         lines.append(f"   ├ classifier: {decision_icon} ({reason_ru})")
         if p.decision == "auto":
             phrase = _short_url(p.phrase or "", limit=150)
-            lines.append(f"   ├ phrase: '{phrase}'")
+            lines.append(f"   ├ phrase: '{_html_escape(phrase)}'")
             lines.append(f"   └ deadline: {_fmt_deadline(p.deadline_at)}")
         else:
             lines.append(f"   └ останется pending+manual")
@@ -95,7 +96,7 @@ def format_result(
     ]
 
     for i, p in enumerate(previews, 1):
-        lines.append(f"{i}. <code>{_short_url(p.url)}</code>")
+        lines.append(f"{i}. <code>{_html_escape(_short_url(p.url))}</code>")
         if p.decision == "manual":
             lines.append(f"   ⏸ MANUAL (не отправлялось)")
         else:
@@ -104,11 +105,11 @@ def format_result(
                 lines.append(f"   ⚠️ (нет результата — баг)")
             elif r.success:
                 lines.append(
-                    f"   ✅ AUTO, external_id={r.external_id}, "
+                    f"   ✅ AUTO, external_id={_html_escape(str(r.external_id))}, "
                     f"in_work до {_fmt_deadline(p.deadline_at)}"
                 )
             else:
-                lines.append(f"   ❌ Ошибка: {r.error}")
+                lines.append(f"   ❌ Ошибка: {_html_escape(r.error or '')}")
                 lines.append(
                     "   (ссылка осталась pending+auto; если "
                     "PF_AUTO_DISPATCH_ENABLED включён, dispatcher повторит)"

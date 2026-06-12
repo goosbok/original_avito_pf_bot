@@ -150,3 +150,47 @@ def test_format_empty_cache_message():
     assert "2 ссыл" in text
     assert "backfill" in text
     assert "scripts.backfill_avito_phrase_cache" in text
+
+
+def test_format_preview_escapes_html_in_url_and_phrase():
+    """URL с & и phrase с < должны быть escape'нуты, иначе сломается parse_mode=HTML."""
+    from utils.test_auto_format import format_preview
+
+    previews = [
+        LinkPreview(
+            link_id=11,
+            url="https://avito.ru/x?param=1&other=2&q=<test>",
+            ad_id="1234567890", decision="auto", reason="cache_hit",
+            phrase="купить <дорого> & срочно",
+            deadline_at="2026-06-12T00:00:00+00:00",
+        ),
+    ]
+    text = format_preview(order_id=99431, previews=previews)
+    # Сырые '&', '<', '>' не должны попасть в HTML
+    assert "param=1&amp;other=2" in text
+    assert "&lt;test&gt;" in text
+    assert "&lt;дорого&gt;" in text
+    assert "&amp; срочно" in text
+
+
+def test_format_result_escapes_html_in_error_and_url():
+    """error и url с & должны быть escape'нуты."""
+    from utils.test_auto_format import format_result
+
+    previews = [
+        LinkPreview(
+            link_id=11,
+            url="https://avito.ru/x?a=1&b=2",
+            ad_id="1234567890", decision="auto", reason="cache_hit",
+            phrase="x", deadline_at="2026-06-12T00:00:00+00:00",
+        ),
+    ]
+    results = [
+        DispatchResult(
+            link_id=11, success=False, external_id=None,
+            error="API отказал: <html><body>Forbidden</body></html>",
+        ),
+    ]
+    text = format_result(order_id=99431, previews=previews, results=results)
+    assert "&amp;b=2" in text
+    assert "&lt;html&gt;" in text

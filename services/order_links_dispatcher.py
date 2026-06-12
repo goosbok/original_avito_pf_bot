@@ -249,3 +249,106 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
         )
 
     return previews
+
+
+@dataclass
+class DispatchResult:
+    """Per-link результат admin Test auto-dispatch."""
+    link_id: int
+    success: bool
+    external_id: str | None
+    error: str | None   # human-readable, для admin message
+
+
+def force_dispatch(
+    order_id: int, link_ids: list[int]
+) -> list[DispatchResult]:
+    """Реальный dispatch выбранного subset'а pending-ссылок заказа.
+
+    Использует штатные classify(force=True) → submit_link → mark_in_work.
+    Игнорирует PF_AUTO_DISPATCH_ENABLED только в classifier-gate;
+    submit_link и transaction guarantees — без изменений.
+
+    Ошибки на отдельных ссылках не валят остальные. На Rejected/Error
+    ссылка остаётся pending (не flip'аем в manual — Test auto это
+    диагностика, не штатный flow).
+
+    Raises OrderNotFound если order_id не существует.
+    """
+    if not link_ids:
+        return []
+
+    with connect() as con:
+        order_row = con.execute(
+            "SELECT * FROM orders WHERE increment=?", (order_id,)
+        ).fetchone()
+        if order_row is None:
+            raise OrderNotFound(f"order_id={order_id}")
+        order = dict(order_row)
+
+        placeholders = ",".join("?" for _ in link_ids)
+        rows = con.execute(
+            f"SELECT id, url, status FROM order_links "
+            f"WHERE order_id=? AND id IN ({placeholders})",
+            (order_id, *link_ids),
+        ).fetchall()
+        link_rows = [(int(r["id"]), r["url"], r["status"]) for r in rows]
+
+    results: list[DispatchResult] = []
+
+    for link_id, url, status in link_rows:
+        if status != "pending":
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=None,
+                error=f"уже не pending (текущий статус: {status})",
+            ))
+            continue
+
+        mode, phrase = classify(url, order, link_id=link_id, force=True)
+        if mode != "auto" or phrase is None:
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=None,
+                error="classifier теперь manual (кэш изменился)",
+            ))
+            continue
+
+        try:
+            external_id = submit_link(url, order, search_phrase=phrase)
+        except ExecutorAPIRejected as exc:
+            logger.warning("force_dispatch.rejected link=%s err=%s",
+                           link_id, exc)
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=None,
+                error=f"API отказал: {exc}",
+            ))
+            continue
+        except ExecutorAPIError as exc:
+            logger.warning("force_dispatch.api_error link=%s err=%s",
+                           link_id, exc)
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=None,
+                error=f"API временная ошибка: {exc}",
+            ))
+            continue
+
+        deadline = compute_deadline(order)
+        from services.order_links import mark_in_work
+        try:
+            mark_in_work(link_id, delivery_mode="auto",
+                         deadline_at=deadline, external_id=external_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "force_dispatch.mark_in_work_failed link=%s", link_id,
+            )
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=external_id,
+                error=f"submit прошёл, но mark_in_work упал: {exc}",
+            ))
+            continue
+
+        results.append(DispatchResult(
+            link_id=link_id, success=True, external_id=external_id,
+            error=None,
+        ))
+
+    return results

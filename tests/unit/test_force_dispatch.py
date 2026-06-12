@@ -141,3 +141,31 @@ def test_force_dispatch_ignores_feature_flag(tmp_db):
 
     assert results[0].success is True
     assert results[0].external_id == "ext-77"
+
+
+def test_force_dispatch_race_invalidlinktransition(tmp_db):
+    """Race: link уже не pending к моменту mark_in_work → отдельный error string.
+
+    Cимулируется через mock'инг mark_in_work с InvalidLinkTransition.
+    """
+    from services.order_links_dispatcher import force_dispatch
+    from services.exceptions import InvalidLinkTransition
+
+    _seed_phrase("1234567890", "x")
+    order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
+    link_id = list_links(order_id)[0]["id"]
+
+    with patch("services.order_links_dispatcher.submit_link",
+               return_value="ext-99"), \
+         patch("services.order_links.mark_in_work",
+               side_effect=InvalidLinkTransition(
+                   from_status="in_work", to_status="in_work"
+               )):
+        results = force_dispatch(order_id, link_ids=[link_id])
+
+    assert len(results) == 1
+    r = results[0]
+    assert r.success is False
+    assert r.external_id == "ext-99"  # API уже создала
+    assert "гонка" in r.error
+    assert "ext-99" in r.error  # внешний id виден в error для диагностики

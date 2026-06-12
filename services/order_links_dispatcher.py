@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from services.avito_phrase_cache import lookup as cache_lookup
 from services.avito_url import extract_ad_id
 from services.db import connect
-from services.exceptions import ExecutorAPIError, ExecutorAPIRejected, OrderNotFound
+from services.exceptions import (
+    ExecutorAPIError,
+    ExecutorAPIRejected,
+    InvalidLinkTransition,
+    OrderNotFound,
+)
 from services.order_links import compute_deadline
 from services.order_links_classifier import classify
 from services.pf_executor_api import submit_link
@@ -294,6 +299,8 @@ def force_dispatch(
         ).fetchall()
         link_rows = [(int(r["id"]), r["url"], r["status"]) for r in rows]
 
+    # Deadline тот же для всех auto-ссылок заказа — считаем один раз lazily.
+    deadline_cached: str | None = None
     results: list[DispatchResult] = []
 
     for link_id, url, status in link_rows:
@@ -331,11 +338,31 @@ def force_dispatch(
             ))
             continue
 
-        deadline = compute_deadline(order)
+        if deadline_cached is None:
+            deadline_cached = compute_deadline(order)
         from services.order_links import mark_in_work
         try:
             mark_in_work(link_id, delivery_mode="auto",
-                         deadline_at=deadline, external_id=external_id)
+                         deadline_at=deadline_cached, external_id=external_id)
+        except InvalidLinkTransition as exc:
+            # Race: штатный dispatcher успел забрать ссылку между нашими
+            # SELECT и UPDATE. submit_link уже создал задачу в API — у
+            # исполнителя получится дубль. Логируем warning (это
+            # ожидаемый race, не баг), результат — success=False с явной
+            # причиной.
+            logger.warning(
+                "force_dispatch.race link=%s external_id=%s err=%s",
+                link_id, external_id, exc,
+            )
+            results.append(DispatchResult(
+                link_id=link_id, success=False, external_id=external_id,
+                error=(
+                    f"гонка с штатным dispatcher'ом: ссылка уже не "
+                    f"pending (external_id={external_id} создан у "
+                    f"исполнителя, дубликат у них)"
+                ),
+            ))
+            continue
         except Exception as exc:  # noqa: BLE001
             logger.exception(
                 "force_dispatch.mark_in_work_failed link=%s", link_id,

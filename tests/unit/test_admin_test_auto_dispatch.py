@@ -195,3 +195,42 @@ async def test_collect_id_happy_path_shows_preview_with_buttons(tmp_db):
     assert "AUTO" in text
     rm = message.answer.call_args.kwargs.get("reply_markup")
     assert rm is not None
+
+
+@pytest.mark.asyncio
+async def test_collect_id_handles_order_deleted_race(tmp_db):
+    """Order был удалён между get_order и classify_for_preview → friendly msg."""
+    order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
+
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+    from services.exceptions import OrderNotFound
+
+    message = MagicMock()
+    message.text = str(order_id)
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    with patch("handlers.admin_orders.classify_for_preview",
+               side_effect=OrderNotFound(f"order_id={order_id}")):
+        await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_awaited()
+    text = message.answer.call_args[0][0]
+    assert "удалён" in text
+
+
+def test_deserialize_previews_ignores_unknown_fields():
+    """Storage может содержать поля от старой версии LinkPreview — не падаем."""
+    from handlers.admin_orders import _deserialize_previews
+
+    data = [{
+        "link_id": 1, "url": "https://avito.ru/x_1234567890",
+        "ad_id": "1234567890", "decision": "auto", "reason": "cache_hit",
+        "phrase": "x", "deadline_at": "2026-06-12T00:00:00+00:00",
+        # поле из будущей версии, которого ещё нет в LinkPreview
+        "future_field_added_in_v2": "ignored",
+    }]
+    previews = _deserialize_previews(data)
+    assert len(previews) == 1
+    assert previews[0].link_id == 1
+    assert previews[0].decision == "auto"

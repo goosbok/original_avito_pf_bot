@@ -48,6 +48,7 @@ from services.order_links_dispatcher import (
     classify_for_preview,
     force_dispatch,
 )
+from services.exceptions import OrderNotFound as _OrderNotFound
 from services.avito_phrase_cache import last_refreshed_at
 from utils.test_auto_format import (
     format_preview,
@@ -981,7 +982,17 @@ async def test_auto_dispatch_collect_id(message: types.Message,
         await state.finish()
         return
 
-    previews = classify_for_preview(order_id)
+    try:
+        previews = classify_for_preview(order_id)
+    except _OrderNotFound:
+        # Race: order был удалён между get_order() и classify_for_preview().
+        # Маловероятно но возможно — показываем friendly сообщение.
+        await message.answer(
+            f"⚠️ Заказ {order_id} был удалён, пока вы вводили ID.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
     if not previews:
         await message.answer(
             f"⚠️ У заказа {order_id} нет pending-ссылок — нечего тестить.",
@@ -1046,9 +1057,21 @@ def _serialize_previews(previews):
 
 
 def _deserialize_previews(data):
-    """Обратное преобразование dict → LinkPreview."""
+    """Обратное преобразование dict → LinkPreview.
+
+    Защищено от schema drift: если в storage'е лежит state со старой
+    схемой (после redeploy с новым полем LinkPreview), берём только
+    известные поля + дефолты вместо TypeError. Неизвестные ключи
+    игнорируем.
+    """
+    from dataclasses import fields as _dc_fields
     from services.order_links_dispatcher import LinkPreview
-    return [LinkPreview(**d) for d in data]
+
+    known = {f.name for f in _dc_fields(LinkPreview)}
+    return [
+        LinkPreview(**{k: v for k, v in d.items() if k in known})
+        for d in data
+    ]
 
 
 @dp.message_handler(state=FailOrder.order_id)

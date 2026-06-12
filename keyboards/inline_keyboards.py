@@ -1049,6 +1049,12 @@ def orders_kb():
                 callback_data="gsheets_manual"
             )
         )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="🧪 Test auto",
+                callback_data="test_auto_dispatch",
+            )
+        )
         keyboard.add(
             InlineKeyboardButton(
                 text=main_menu,

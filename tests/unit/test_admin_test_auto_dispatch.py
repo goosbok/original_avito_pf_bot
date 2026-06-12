@@ -415,3 +415,15 @@ async def test_cancel_clears_state_and_edits_message(tmp_db):
     call.message.edit_text.assert_awaited()
     text = call.message.edit_text.call_args[0][0]
     assert "Отменено" in text
+
+
+def test_orders_kb_has_test_auto_button():
+    """В orders_kb должна появиться кнопка с callback_data='test_auto_dispatch'."""
+    from keyboards.inline_keyboards import orders_kb
+    kb = orders_kb()
+    callbacks = {
+        btn.callback_data
+        for row in kb.inline_keyboard
+        for btn in row
+    }
+    assert "test_auto_dispatch" in callbacks

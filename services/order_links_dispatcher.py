@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 
+from services.avito_phrase_cache import lookup as cache_lookup
+from services.avito_url import extract_ad_id
 from services.db import connect
-from services.exceptions import ExecutorAPIError, ExecutorAPIRejected
+from services.exceptions import ExecutorAPIError, ExecutorAPIRejected, OrderNotFound
 from services.order_links import compute_deadline
 from services.order_links_classifier import classify
 from services.pf_executor_api import submit_link
@@ -158,3 +161,81 @@ async def run_dispatcher_loop() -> None:
         except Exception:  # noqa: BLE001
             logger.exception("dispatcher loop iteration failed")
         await asyncio.sleep(DISPATCHER_LOOP_INTERVAL_SECONDS)
+
+
+@dataclass
+class LinkPreview:
+    """Per-link классификация для admin Test auto preview."""
+    link_id: int
+    url: str
+    ad_id: str | None
+    decision: str       # 'auto' | 'manual'
+    reason: str         # 'cache_hit' | 'cache_miss' | 'no_ad_id'
+    phrase: str | None
+    deadline_at: str | None
+
+
+def classify_for_preview(order_id: int) -> list[LinkPreview]:
+    """Dry-run классификация всех pending-ссылок заказа.
+
+    Не трогает БД, не шлёт HTTP. Игнорирует PF_AUTO_DISPATCH_ENABLED
+    (всегда смотрит в кэш). Используется admin Test auto handler'ом
+    для preview перед confirm.
+
+    Raises OrderNotFound если order_id не существует.
+    """
+    with connect() as con:
+        order_row = con.execute(
+            "SELECT * FROM orders WHERE increment=?", (order_id,)
+        ).fetchone()
+        if order_row is None:
+            raise OrderNotFound(f"order_id={order_id}")
+        order = dict(order_row)
+
+        rows = con.execute(
+            "SELECT id, url FROM order_links "
+            "WHERE order_id=? AND status='pending' ORDER BY id",
+            (order_id,),
+        ).fetchall()
+        link_rows = [(int(r["id"]), r["url"]) for r in rows]
+
+    previews: list[LinkPreview] = []
+    for link_id, url in link_rows:
+        ad_id = extract_ad_id(url)
+        if ad_id is None:
+            previews.append(LinkPreview(
+                link_id=link_id, url=url, ad_id=None,
+                decision="manual", reason="no_ad_id",
+                phrase=None, deadline_at=None,
+            ))
+            logger.info(
+                "classifier.preview link=%s ad=none decision=manual reason=no_ad_id",
+                link_id,
+            )
+            continue
+
+        phrase = cache_lookup(ad_id)
+        if not phrase:
+            previews.append(LinkPreview(
+                link_id=link_id, url=url, ad_id=ad_id,
+                decision="manual", reason="cache_miss",
+                phrase=None, deadline_at=None,
+            ))
+            logger.info(
+                "classifier.preview link=%s ad=%s decision=manual reason=cache_miss",
+                link_id, ad_id,
+            )
+            continue
+
+        deadline = compute_deadline(order)
+        previews.append(LinkPreview(
+            link_id=link_id, url=url, ad_id=ad_id,
+            decision="auto", reason="cache_hit",
+            phrase=phrase, deadline_at=deadline,
+        ))
+        logger.info(
+            "classifier.preview link=%s ad=%s decision=auto reason=cache_hit",
+            link_id, ad_id,
+        )
+
+    return previews

@@ -1152,3 +1152,20 @@ async def fail_order_confirm(message: types.Message, state: FSMContext):
         reply_markup=admin_back_kb('orders_man'),
     )
     await state.finish()
+
+
+@dp.callback_query_handler(text="test_auto_dispatch_confirm",
+                            state=TestAutoDispatch.confirm)
+async def test_auto_dispatch_confirm(call: types.CallbackQuery,
+                                      state: FSMContext):
+    """Шаг 3: подтверждено — force_dispatch + result message."""
+    data = await state.get_data()
+    order_id = int(data["order_id"])
+    auto_link_ids = list(data["auto_link_ids"])
+    previews = _deserialize_previews(data["previews_serialized"])
+
+    results = force_dispatch(order_id, link_ids=auto_link_ids)
+
+    text = format_result(order_id=order_id, previews=previews, results=results)
+    await call.message.edit_text(text, parse_mode="HTML")
+    await state.finish()

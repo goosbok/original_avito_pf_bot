@@ -234,3 +234,91 @@ def test_deserialize_previews_ignores_unknown_fields():
     assert len(previews) == 1
     assert previews[0].link_id == 1
     assert previews[0].decision == "auto"
+
+
+@pytest.mark.asyncio
+async def test_confirm_runs_force_dispatch_and_edits_message(tmp_db):
+    """Confirm → force_dispatch вызван, message edited с результатом."""
+    _seed_phrase("1234567890", "купить")
+    order_id = _seed_paid_order(tmp_db, urls=[
+        "https://avito.ru/x_1234567890",
+    ])
+    from services.order_links import list_links
+    link_id = list_links(order_id)[0]["id"]
+
+    from handlers.admin_orders import test_auto_dispatch_confirm
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    call.message.answer = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={
+        "order_id": order_id,
+        "auto_link_ids": [link_id],
+        "previews_serialized": [{
+            "link_id": link_id,
+            "url": "https://avito.ru/x_1234567890",
+            "ad_id": "1234567890",
+            "decision": "auto", "reason": "cache_hit",
+            "phrase": "купить",
+            "deadline_at": "2026-06-12T00:00:00+00:00",
+        }],
+    })
+
+    with patch("handlers.admin_orders.force_dispatch") as fd:
+        from services.order_links_dispatcher import DispatchResult
+        fd.return_value = [DispatchResult(
+            link_id=link_id, success=True,
+            external_id="357901", error=None,
+        )]
+        await test_auto_dispatch_confirm(call, state)
+
+    fd.assert_called_once_with(order_id, link_ids=[link_id])
+    call.message.edit_text.assert_awaited()
+    text = call.message.edit_text.call_args[0][0]
+    assert "357901" in text
+    assert "1 / 1" in text
+    state.finish.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_confirm_shows_failure_message(tmp_db):
+    """Confirm + force_dispatch вернул failure → result message с ❌."""
+    _seed_phrase("1234567890", "x")
+    order_id = _seed_paid_order(tmp_db, urls=[
+        "https://avito.ru/x_1234567890",
+    ])
+    from services.order_links import list_links
+    link_id = list_links(order_id)[0]["id"]
+
+    from handlers.admin_orders import test_auto_dispatch_confirm
+
+    call = MagicMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+    state = AsyncMock()
+    state.get_data = AsyncMock(return_value={
+        "order_id": order_id,
+        "auto_link_ids": [link_id],
+        "previews_serialized": [{
+            "link_id": link_id,
+            "url": "https://avito.ru/x_1234567890",
+            "ad_id": "1234567890",
+            "decision": "auto", "reason": "cache_hit",
+            "phrase": "x",
+            "deadline_at": "2026-06-12T00:00:00+00:00",
+        }],
+    })
+
+    with patch("handlers.admin_orders.force_dispatch") as fd:
+        from services.order_links_dispatcher import DispatchResult
+        fd.return_value = [DispatchResult(
+            link_id=link_id, success=False, external_id=None,
+            error="API отказал: 400",
+        )]
+        await test_auto_dispatch_confirm(call, state)
+
+    text = call.message.edit_text.call_args[0][0]
+    assert "API отказал" in text
+    assert "0 / 1" in text

@@ -952,6 +952,105 @@ async def test_auto_dispatch_prompt(call: types.CallbackQuery,
     await TestAutoDispatch.order_id.set()
 
 
+@dp.message_handler(state=TestAutoDispatch.order_id)
+async def test_auto_dispatch_collect_id(message: types.Message,
+                                         state: FSMContext):
+    """Шаг 2: получили ID, классифицируем, показываем preview."""
+    try:
+        order_id = int(message.text.strip())
+    except (TypeError, ValueError):
+        await message.answer("⚠️ ID должен быть числом. Попробуйте снова.")
+        return
+
+    order = get_order(order_id)
+    if order is None:
+        await message.answer(
+            f"⚠️ Заказ {order_id} не найден.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    if order.get("status") != "paid":
+        await message.answer(
+            f"⚠️ Заказ {order_id} в статусе "
+            f"{order.get('status')}, "
+            f"тестировать можно только paid-заказы.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    previews = classify_for_preview(order_id)
+    if not previews:
+        await message.answer(
+            f"⚠️ У заказа {order_id} нет pending-ссылок — нечего тестить.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    n_auto = sum(1 for p in previews if p.decision == "auto")
+    cache_empty = last_refreshed_at() is None
+
+    if n_auto == 0 and cache_empty:
+        await message.answer(
+            format_empty_cache_message(order_id=order_id,
+                                        link_count=len(previews)),
+            parse_mode="HTML",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    auto_link_ids = [p.link_id for p in previews if p.decision == "auto"]
+    await state.update_data(order_id=order_id, auto_link_ids=auto_link_ids,
+                             previews_serialized=_serialize_previews(previews))
+
+    text = format_preview(order_id=order_id, previews=previews)
+
+    if n_auto == 0:
+        await message.answer(
+            text + "\n\nНечего отправлять. Выйдите назад.",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(
+            text="✅ Подтвердить и отправить",
+            callback_data="test_auto_dispatch_confirm",
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="test_auto_dispatch_cancel",
+        ),
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await TestAutoDispatch.confirm.set()
+
+
+def _serialize_previews(previews):
+    """LinkPreview → dict для FSM-state (json-сохранимо)."""
+    return [
+        {
+            "link_id": p.link_id, "url": p.url, "ad_id": p.ad_id,
+            "decision": p.decision, "reason": p.reason,
+            "phrase": p.phrase, "deadline_at": p.deadline_at,
+        }
+        for p in previews
+    ]
+
+
+def _deserialize_previews(data):
+    """Обратное преобразование dict → LinkPreview."""
+    from services.order_links_dispatcher import LinkPreview
+    return [LinkPreview(**d) for d in data]
+
+
 @dp.message_handler(state=FailOrder.order_id)
 async def fail_order_collect_id(message: types.Message, state: FSMContext):
     """Шаг 2: получили ID, спрашиваем причину."""

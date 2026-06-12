@@ -28,3 +28,170 @@ async def test_prompt_resets_state_and_asks_for_id(tmp_db):
     call.message.answer.assert_awaited()
     args, kwargs = call.message.answer.call_args
     assert "Введите ID" in (args[0] if args else kwargs.get("text", ""))
+
+
+def _seed_paid_order(tmp_db, urls, position_name="3/10"):
+    """Заказ для тестов."""
+    import sqlite3
+    from services.db import connect
+    from services.order_links import create_links
+    from utils.dates import now_iso
+
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (1, 0)")
+        cur = con.execute(
+            "INSERT INTO orders(user_id, price, position_name, status, "
+            "start_date, date) VALUES (1, 100, ?, 'paid', NULL, ?)",
+            (position_name, now_iso()),
+        )
+        order_id = int(cur.lastrowid)
+        con.commit()
+    with connect() as con:
+        create_links(con, order_id=order_id, urls=urls)
+        con.commit()
+    return order_id
+
+
+def _seed_phrase(ad_id, phrase):
+    from services.avito_phrase_cache import upsert_many
+    upsert_many([{
+        "ad_id": ad_id, "search_link": phrase,
+        "created_at": "2026-06-01 12:00",
+    }])
+
+
+@pytest.mark.asyncio
+async def test_collect_id_invalid_text_stays_in_state(tmp_db):
+    """Невалидный ID (буквы) → reply ошибка, остаёмся в state."""
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = "не_число"
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_not_awaited()
+    message.answer.assert_awaited()
+    args, kwargs = message.answer.call_args
+    assert "ID должен быть" in (args[0] if args else kwargs.get("text", ""))
+
+
+@pytest.mark.asyncio
+async def test_collect_id_order_not_found(tmp_db):
+    """Несуществующий заказ → reply ошибка, state cleared."""
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = "99999"
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_awaited()
+    message.answer.assert_awaited()
+    args, kwargs = message.answer.call_args
+    assert "не найден" in (args[0] if args else kwargs.get("text", ""))
+
+
+@pytest.mark.asyncio
+async def test_collect_id_order_not_paid(tmp_db):
+    """Заказ в unpaid → reply ошибка."""
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (1, 0)")
+        cur = con.execute(
+            "INSERT INTO orders(user_id, price, position_name, status, "
+            "start_date, date) VALUES (1, 100, '3/10', 'unpaid', NULL, ?)",
+            ("2026-06-09T00:00:00",),
+        )
+        order_id = int(cur.lastrowid)
+        con.commit()
+
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = str(order_id)
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_awaited()
+    message.answer.assert_awaited()
+    text = message.answer.call_args[0][0]
+    assert "unpaid" in text or "только paid" in text
+
+
+@pytest.mark.asyncio
+async def test_collect_id_no_pending_links(tmp_db):
+    """Заказ paid но без pending-ссылок → 'нечего тестить'."""
+    order_id = _seed_paid_order(tmp_db, urls=[])
+
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = str(order_id)
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_awaited()
+    text = message.answer.call_args[0][0]
+    assert "нечего" in text or "нет pending" in text
+
+
+@pytest.mark.asyncio
+async def test_collect_id_empty_cache_shows_fallback(tmp_db):
+    """Все manual + пустой кэш → friendly fallback message."""
+    order_id = _seed_paid_order(tmp_db, urls=[
+        "https://avito.ru/x_1234567890",
+    ])
+
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = str(order_id)
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    await test_auto_dispatch_collect_id(message, state)
+
+    state.finish.assert_awaited()
+    text = message.answer.call_args[0][0]
+    assert "backfill" in text
+    assert "scripts.backfill_avito_phrase_cache" in text
+
+
+@pytest.mark.asyncio
+async def test_collect_id_happy_path_shows_preview_with_buttons(tmp_db):
+    """Cache hit → preview + кнопки [Confirm] [Cancel], state → confirm."""
+    _seed_phrase("1234567890", "купить квартиру")
+    order_id = _seed_paid_order(tmp_db, urls=[
+        "https://avito.ru/x_1234567890",
+    ])
+
+    from handlers.admin_orders import test_auto_dispatch_collect_id
+
+    message = MagicMock()
+    message.text = str(order_id)
+    message.answer = AsyncMock()
+    state = AsyncMock()
+
+    with patch("handlers.admin_orders.TestAutoDispatch.confirm") as confirm:
+        confirm.set = AsyncMock()
+        await test_auto_dispatch_collect_id(message, state)
+
+    state.update_data.assert_awaited()
+    args, kwargs = state.update_data.call_args
+    assert "auto_link_ids" in kwargs or len(args) > 0
+
+    message.answer.assert_awaited()
+    text = message.answer.call_args[0][0]
+    assert "Test auto-dispatch" in text
+    assert "AUTO" in text
+    rm = message.answer.call_args.kwargs.get("reply_markup")
+    assert rm is not None

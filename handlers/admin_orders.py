@@ -44,6 +44,16 @@ from services.order_links import (
     fail_remaining_links,
 )
 from services.notifications import notify_order_status_changed
+from services.order_links_dispatcher import (
+    classify_for_preview,
+    force_dispatch,
+)
+from services.avito_phrase_cache import last_refreshed_at
+from utils.test_auto_format import (
+    format_preview,
+    format_result,
+    format_empty_cache_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +79,12 @@ class MarkManual(StatesGroup):
 class FailOrder(StatesGroup):
     order_id = State()
     reason = State()
+    confirm = State()
+
+
+class TestAutoDispatch(StatesGroup):
+    """FSM для админ-кнопки «🧪 Test auto-dispatch»."""
+    order_id = State()
     confirm = State()
 
 
@@ -923,6 +939,17 @@ async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
     await call.message.answer("❌ Введите ID заказа, который нужно пометить как failed:")
     await FailOrder.order_id.set()
+
+
+@dp.callback_query_handler(text="test_auto_dispatch", state='*')
+async def test_auto_dispatch_prompt(call: types.CallbackQuery,
+                                     state: FSMContext):
+    """Шаг 1: спросить ID заказа."""
+    await state.finish()
+    await call.message.answer(
+        "🧪 Введите ID заказа для тестовой auto-отправки:"
+    )
+    await TestAutoDispatch.order_id.set()
 
 
 @dp.message_handler(state=FailOrder.order_id)

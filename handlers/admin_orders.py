@@ -44,6 +44,17 @@ from services.order_links import (
     fail_remaining_links,
 )
 from services.notifications import notify_order_status_changed
+from services.order_links_dispatcher import (
+    classify_for_preview,
+    force_dispatch,
+)
+from services.exceptions import OrderNotFound as _OrderNotFound
+from services.avito_phrase_cache import last_refreshed_at
+from utils.test_auto_format import (
+    format_preview,
+    format_result,
+    format_empty_cache_message,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +80,12 @@ class MarkManual(StatesGroup):
 class FailOrder(StatesGroup):
     order_id = State()
     reason = State()
+    confirm = State()
+
+
+class TestAutoDispatch(StatesGroup):
+    """FSM для админ-кнопки «🧪 Test auto-dispatch»."""
+    order_id = State()
     confirm = State()
 
 
@@ -925,6 +942,138 @@ async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
     await FailOrder.order_id.set()
 
 
+@dp.callback_query_handler(text="test_auto_dispatch", state='*')
+async def test_auto_dispatch_prompt(call: types.CallbackQuery,
+                                     state: FSMContext):
+    """Шаг 1: спросить ID заказа."""
+    await state.finish()
+    await call.message.answer(
+        "🧪 Введите ID заказа для тестовой auto-отправки:"
+    )
+    await TestAutoDispatch.order_id.set()
+
+
+@dp.message_handler(state=TestAutoDispatch.order_id)
+async def test_auto_dispatch_collect_id(message: types.Message,
+                                         state: FSMContext):
+    """Шаг 2: получили ID, классифицируем, показываем preview."""
+    try:
+        order_id = int(message.text.strip())
+    except (TypeError, ValueError):
+        await message.answer("⚠️ ID должен быть числом. Попробуйте снова.")
+        return
+
+    order = get_order(order_id)
+    if order is None:
+        await message.answer(
+            f"⚠️ Заказ {order_id} не найден.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    if order.get("status") != "paid":
+        await message.answer(
+            f"⚠️ Заказ {order_id} в статусе "
+            f"{order.get('status')}, "
+            f"тестировать можно только paid-заказы.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    try:
+        previews = classify_for_preview(order_id)
+    except _OrderNotFound:
+        # Race: order был удалён между get_order() и classify_for_preview().
+        # Маловероятно но возможно — показываем friendly сообщение.
+        await message.answer(
+            f"⚠️ Заказ {order_id} был удалён, пока вы вводили ID.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+    if not previews:
+        await message.answer(
+            f"⚠️ У заказа {order_id} нет pending-ссылок — нечего тестить.",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    n_auto = sum(1 for p in previews if p.decision == "auto")
+    cache_empty = last_refreshed_at() is None
+
+    if n_auto == 0 and cache_empty:
+        await message.answer(
+            format_empty_cache_message(order_id=order_id,
+                                        link_count=len(previews)),
+            parse_mode="HTML",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    auto_link_ids = [p.link_id for p in previews if p.decision == "auto"]
+    await state.update_data(order_id=order_id, auto_link_ids=auto_link_ids,
+                             previews_serialized=_serialize_previews(previews))
+
+    text = format_preview(order_id=order_id, previews=previews)
+
+    if n_auto == 0:
+        await message.answer(
+            text + "\n\nНечего отправлять. Выйдите назад.",
+            parse_mode="HTML",
+            reply_markup=admin_back_kb('orders_man'),
+        )
+        await state.finish()
+        return
+
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(
+            text="✅ Подтвердить и отправить",
+            callback_data="test_auto_dispatch_confirm",
+        ),
+        InlineKeyboardButton(
+            text="❌ Отмена",
+            callback_data="test_auto_dispatch_cancel",
+        ),
+    )
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+    await TestAutoDispatch.confirm.set()
+
+
+def _serialize_previews(previews):
+    """LinkPreview → dict для FSM-state (json-сохранимо)."""
+    return [
+        {
+            "link_id": p.link_id, "url": p.url, "ad_id": p.ad_id,
+            "decision": p.decision, "reason": p.reason,
+            "phrase": p.phrase, "deadline_at": p.deadline_at,
+        }
+        for p in previews
+    ]
+
+
+def _deserialize_previews(data):
+    """Обратное преобразование dict → LinkPreview.
+
+    Защищено от schema drift: если в storage'е лежит state со старой
+    схемой (после redeploy с новым полем LinkPreview), берём только
+    известные поля + дефолты вместо TypeError. Неизвестные ключи
+    игнорируем.
+    """
+    from dataclasses import fields as _dc_fields
+    from services.order_links_dispatcher import LinkPreview
+
+    known = {f.name for f in _dc_fields(LinkPreview)}
+    return [
+        LinkPreview(**{k: v for k, v in d.items() if k in known})
+        for d in data
+    ]
+
+
 @dp.message_handler(state=FailOrder.order_id)
 async def fail_order_collect_id(message: types.Message, state: FSMContext):
     """Шаг 2: получили ID, спрашиваем причину."""
@@ -1003,3 +1152,96 @@ async def fail_order_confirm(message: types.Message, state: FSMContext):
         reply_markup=admin_back_kb('orders_man'),
     )
     await state.finish()
+
+
+@dp.callback_query_handler(text="test_auto_dispatch_confirm",
+                            state=TestAutoDispatch.confirm)
+async def test_auto_dispatch_confirm(call: types.CallbackQuery,
+                                      state: FSMContext):
+    """Шаг 3: подтверждено — force_dispatch + result message.
+
+    Защищаемся от 3 классов ошибок:
+      - state desync (bot restart) → KeyError на data[...]
+      - force_dispatch.OrderNotFound (заказ удалили посреди flow)
+      - edit_text Telegram errors (msg too long / not modified / not found)
+    """
+    # Гасим loading-spinner на кнопке сразу.
+    try:
+        await call.answer()
+    except Exception:  # noqa: BLE001
+        pass  # best-effort
+
+    data = await state.get_data()
+    try:
+        order_id = int(data["order_id"])
+        auto_link_ids = list(data["auto_link_ids"])
+        previews = _deserialize_previews(data["previews_serialized"])
+    except (KeyError, TypeError, ValueError):
+        logger.warning("test_auto_dispatch_confirm: state desync data=%r",
+                       data)
+        await _safe_edit(call.message,
+                         "⚠️ Сессия истекла, начните заново.")
+        await state.finish()
+        return
+
+    try:
+        results = force_dispatch(order_id, link_ids=auto_link_ids)
+    except _OrderNotFound:
+        logger.warning(
+            "test_auto_dispatch_confirm: order %s deleted mid-flow",
+            order_id,
+        )
+        await _safe_edit(
+            call.message,
+            f"⚠️ Заказ {order_id} был удалён, отправлять некуда.",
+        )
+        await state.finish()
+        return
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "test_auto_dispatch_confirm: force_dispatch crashed for order %s",
+            order_id,
+        )
+        await _safe_edit(
+            call.message,
+            f"❌ Ошибка отправки. См. логи (order_id={order_id}).",
+        )
+        await state.finish()
+        return
+
+    text = format_result(order_id=order_id, previews=previews, results=results)
+    await _safe_edit(call.message, text, parse_mode="HTML")
+    await state.finish()
+
+
+async def _safe_edit(message, text: str, parse_mode: str | None = None):
+    """edit_text с подавлением Telegram-specific ошибок.
+
+    На MessageToEditNotFound / MessageNotModified / MessageIsTooLong и
+    прочие aiogram exceptions — fallback на answer() с тем же текстом
+    (truncated до 4000 chars если надо).
+    """
+    try:
+        await message.edit_text(text, parse_mode=parse_mode)
+        return
+    except Exception:  # noqa: BLE001
+        pass
+    # Fallback: новый message.
+    try:
+        await message.answer(text[:4000], parse_mode=parse_mode)
+    except Exception:  # noqa: BLE001
+        logger.exception("_safe_edit: fallback answer() also failed")
+
+
+@dp.callback_query_handler(text="test_auto_dispatch_cancel",
+                            state=TestAutoDispatch.confirm)
+async def test_auto_dispatch_cancel(call: types.CallbackQuery,
+                                     state: FSMContext):
+    """Cancel — отменяет тестовую отправку, edit preview на короткое
+    сообщение."""
+    try:
+        await call.answer()
+    except Exception:  # noqa: BLE001
+        pass
+    await state.finish()
+    await _safe_edit(call.message, "❌ Отменено.")

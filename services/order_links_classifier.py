@@ -20,7 +20,9 @@ from services.avito_url import extract_ad_id
 logger = logging.getLogger(__name__)
 
 
-def classify(url: str, order: dict, *, link_id: int | None = None) \
+def classify(url: str, order: dict, *,
+             link_id: int | None = None,
+             force: bool = False) \
         -> tuple[str, str | None]:
     """Решает auto/manual для ссылки.
 
@@ -28,8 +30,11 @@ def classify(url: str, order: dict, *, link_id: int | None = None) \
     Phrase != None только когда mode='auto'.
 
     `link_id` — для логов; ничего не меняет в логике.
+    `force` — игнорировать PF_AUTO_DISPATCH_ENABLED. Используется только
+    админ-handler'ом «Test auto-dispatch». Штатный dispatcher всегда зовёт
+    с force=False (дефолт).
     """
-    if not config.PF_AUTO_DISPATCH_ENABLED:
+    if not force and not config.PF_AUTO_DISPATCH_ENABLED:
         _log(link_id, None, "manual", "feature_off")
         return "manual", None
 

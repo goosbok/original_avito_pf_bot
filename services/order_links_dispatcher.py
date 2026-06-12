@@ -182,6 +182,12 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
     (всегда смотрит в кэш). Используется admin Test auto handler'ом
     для preview перед confirm.
 
+    Note: дублирует ad_id/cache lookup из classify() осознанно — нам
+    нужно surface'ить reason code и ad_id наружу, что текущий
+    classify(url, order) -> (mode, phrase) контракт не даёт. Refactor
+    classify() под (mode, phrase, reason) тут не делаем — затронет
+    штатный dispatcher и набор тестов. Сделаем отдельной задачей.
+
     Raises OrderNotFound если order_id не существует.
     """
     with connect() as con:
@@ -199,6 +205,8 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
         ).fetchall()
         link_rows = [(int(r["id"]), r["url"]) for r in rows]
 
+    # Deadline тот же для всех auto-ссылок заказа — считаем один раз lazily.
+    deadline_cached: str | None = None
     previews: list[LinkPreview] = []
     for link_id, url in link_rows:
         ad_id = extract_ad_id(url)
@@ -209,8 +217,8 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
                 phrase=None, deadline_at=None,
             ))
             logger.info(
-                "classifier.preview link=%s ad=none decision=manual reason=no_ad_id",
-                link_id,
+                "classifier.preview link=%s ad=%s decision=manual reason=no_ad_id",
+                link_id, "none",
             )
             continue
 
@@ -227,7 +235,9 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
             )
             continue
 
-        deadline = compute_deadline(order)
+        if deadline_cached is None:
+            deadline_cached = compute_deadline(order)
+        deadline = deadline_cached
         previews.append(LinkPreview(
             link_id=link_id, url=url, ad_id=ad_id,
             decision="auto", reason="cache_hit",

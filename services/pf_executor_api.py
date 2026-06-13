@@ -137,7 +137,7 @@ def _build_avito_payload(
             "request_contact": bool(order.get("contacts")),
             "add_favorite": True,
             "direct_if_not_found": True,
-            "start_hour": 0,
+            "start_hour": int(config.PF_DEFAULT_START_HOUR),
             "enable_pauses": False,
         }],
     }

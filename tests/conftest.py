@@ -74,6 +74,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.PF_PHRASE_CACHE_REFRESH_INTERVAL_H = 24
     stub.PF_AUTO_RATE_METRIC_INTERVAL_H = 1
     stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
+    stub.PF_DEFAULT_START_HOUR = 0
     return stub
 
 

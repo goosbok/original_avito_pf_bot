@@ -104,3 +104,10 @@ PF_DASHBOARD_REQUEST_DELAY_SEC: int = int(
 PF_AUTO_RATE_METRIC_INTERVAL_H: int = int(
     os.getenv("PF_AUTO_RATE_METRIC_INTERVAL_H", "1")
 )
+# Час старта накрутки на стороне исполнителя (МСК). Маппится в start_hour
+# поля API биза (0..23). Применяется ко всем задачам которые мы отправляем
+# в add-tasks.php. Глобальная настройка; если когда-то понадобится per-order
+# — отдельная задача.
+PF_DEFAULT_START_HOUR: int = max(
+    0, min(23, int(os.getenv("PF_DEFAULT_START_HOUR", "0")))
+)

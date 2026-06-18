@@ -112,6 +112,19 @@ async def info(call: CallbackQuery, state: FSMContext):
         logger.debug("info: could not delete message")
 
 
+@dp.callback_query_handler(text_startswith="qna_avito", state='*')
+async def user_call_qna_avito(call: CallbackQuery, state: FSMContext):
+    logger.info("qna_avito callback: tg_id=%s data=%s", call.from_user.id, call.data)
+    all_qna = get_all_qna_avito()
+    try:
+        await call.message.delete()
+    except Exception:
+        logger.debug("qna_avito: could not delete message")
+    for qna in all_qna:
+        if qna['parametr'] == call.data:
+            await call.message.answer(qna['value'], reply_markup=qna_avito_kb())
+
+
 @dp.callback_query_handler(text="how_to", state='*')
 async def call_how_to(call: CallbackQuery, state: FSMContext):
     try:

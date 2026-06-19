@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeybo
 # and silently dropped _STRING_DEFAULTS fallbacks, breaking every handler.
 from utils.sqlite3 import get_user, get_string, get_string_from_base, get_setting, get_all_qna_avito, get_admins
 from design import (
-    rules, support, qna, promocodes, profile, main_menu,
+    support, qna, promocodes, profile, main_menu,
     refill_balance, list_orders,
 )
 from data import config

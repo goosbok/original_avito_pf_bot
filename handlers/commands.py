@@ -92,9 +92,6 @@ async def info(call: CallbackQuery, state: FSMContext):
     elif text == 'qna':
         STR = get_string('str_qna_text')
         await call.message.answer(STR, reply_markup=qna_avito_kb())
-    elif text == 'rules':
-        STR = get_string('str_rules_text')
-        await call.message.answer(STR, reply_markup=get_menu_kb())
     elif text == 'start':
         BTN = get_string('btn_video_guide') or '🎬 Видео-инструкция'
         button = InlineKeyboardButton(text=BTN, callback_data="how_to")

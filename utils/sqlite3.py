@@ -58,7 +58,7 @@ _STRING_DEFAULTS: dict[str, str] = {
     "btn_how_to_start": "🕐 Как начать работу",
     "btn_avito": "🚀 Накрутка ПФ Авито",
     "btn_profile": "🪪 Личный кабинет",
-    "btn_channel": "🔗 Наш телеграм канал",
+    "btn_channel": "TG канал⛓️‍💥",
     "btn_site": "🌐 Наш сайт",
     "btn_main_menu": "🧊 Главное меню",
     "btn_yes": "✅ Да",
@@ -66,7 +66,6 @@ _STRING_DEFAULTS: dict[str, str] = {
     "btn_all_completed": "✅ Выполненные",
     "btn_all_posted": "✍️ Размещённые",
     "btn_avito_cases": "🔗 Кейсы Авито",
-    "btn_rules": "🔰 Правила пользования ботом",
     "btn_support": "🧑‍💻 Тех поддержка",
     "btn_qna": "📲 FAQ / Кейсы",
     "btn_promocodes": "🔮 Промокоды",
@@ -130,7 +129,6 @@ _STRING_DEFAULTS: dict[str, str] = {
         "4. Вставьте ссылки на объявления\n"
         "5. Подтвердите заказ"
     ),
-    "str_rules_text": "📜 <b>Правила пользования ботом</b>\n\nПравила не заданы. Обратитесь к администратору.",
     "str_qna_text": "📲 <b>FAQ / Кейсы</b>\n\nВопросы и ответы не заданы.",
     "str_support_text": "🧑‍💻 Техническая поддержка: {}",
     "str_pf_text": (

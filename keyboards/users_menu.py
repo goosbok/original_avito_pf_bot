@@ -41,22 +41,22 @@ def get_menu_kb():
             callback_data='user:profile'
         )
     ),
-    keyboard.add(
+    keyboard.row(
         InlineKeyboardButton(
             text=get_string('btn_channel'),
             url=get_setting('channel_link')
+        ),
+        InlineKeyboardButton(
+            text=get_string('btn_site'),
+            url=config.LANDING_URL
         )
     )
-    keyboard.row(
-        InlineKeyboardButton(
-            text=get_string('btn_rules'),
-            callback_data='info:rules'
-        ),
+    keyboard.add(
         InlineKeyboardButton(
             text=get_string('btn_support'),
             callback_data='info:support'
         )
-    ),
+    )
     keyboard.add(
 
         InlineKeyboardButton(

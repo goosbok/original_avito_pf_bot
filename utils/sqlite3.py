@@ -594,6 +594,12 @@ def get_orders_with_links_batch(limit=1000, offset=0):
 def get_pending_manual_links_due_today():
     """Все pending+manual ссылки заказов готовых к старту (Спек §7.2).
 
+    Cutoff 04:00 МСК — та же бизнес-сутка биза, что использует
+    services.pf_executor_api._effective_start_msk при выставлении
+    `start_date` на создании заказа. Ссылка появляется в выгрузке как
+    только её бизнес-сутка началась (после 04:00 МСК соответствующей
+    календарной даты), и остаётся видна до её закрытия.
+
     user_name — live из users с фоллбэком на snapshot, см. комментарий в
     get_orders_with_links_batch.
     """
@@ -610,8 +616,14 @@ def get_pending_manual_links_due_today():
             "JOIN orders o ON o.increment = ol.order_id "
             "LEFT JOIN users u ON u.id = o.user_id "
             "WHERE ol.status='pending' AND ol.delivery_mode='manual' "
-            # MSK = UTC+3, no DST — shift 'now' so calendar date matches Moscow
-            "AND (o.start_date IS NULL OR date(o.start_date) <= date('now', '+3 hours')) "
+            # Business day cutoff 04:00 МСК:
+            #   `+3 hours` — UTC → MSK
+            #   `-4 hours` — отступаем к началу бизнес-суток (04:00 МСК)
+            #   `-1 seconds` — граница 04:00:00 МСК принадлежит ПРЕДЫДУЩЕЙ
+            #     сутке (правило «до 04:00 включительно → today batch» в
+            #     services.pf_executor_api._effective_start_msk).
+            "AND (o.start_date IS NULL OR date(o.start_date) <= "
+            "     date('now', '+3 hours', '-4 hours', '-1 seconds')) "
             "ORDER BY COALESCE(o.start_date, '9999-12-31') ASC, o.date ASC"
         )
         return con.execute(sql).fetchall()

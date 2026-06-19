@@ -84,6 +84,18 @@ def _column_letter(idx):
     return result
 
 
+def _fmt_date_only(s):
+    """`YYYY-MM-DD` → `dd.mm.yyyy`. Пусто/битый/None → ''."""
+    if not s:
+        return ''
+    try:
+        from datetime import date as _date
+        d = _date.fromisoformat(str(s).strip())
+        return d.strftime('%d.%m.%Y')
+    except (ValueError, TypeError):
+        return str(s)
+
+
 def _write_tab(tab_title, sheet_id, columns, column_widths):
     """Очищает вкладку и записывает данные + форматирование.
 
@@ -239,6 +251,7 @@ def create_sheet():
     link_status = ['Статус ссылки']
     delivery_mode = ['Mode']
     deadline = ['Дедлайн']
+    start = ['Старт']
     contacts = ['Контакты']
     position = ['Дней/ПФ']
     prices = ['Итого']
@@ -263,6 +276,7 @@ def create_sheet():
             delivery_mode.append(row['delivery_mode'] or '')
             deadline.append(format_display(row['deadline_at'])
                             if row['deadline_at'] else '')
+            start.append(_fmt_date_only(row['start_date']))
             contacts.append('Да' if row['contacts'] else 'Нет')
             position.append(row['position_name'])
             prices.append('')  # цена показывается только в первой строке заказа? Пока пусто
@@ -275,16 +289,17 @@ def create_sheet():
         (1, 3, 100),
         (3, 4, 500),
         (4, 7, 120),
-        (7, 8, 80),
-        (8, 9, 100),
-        (9, 10, 80),
-        (10, 11, 140),
-        (11, 12, 140),
+        (7, 8, 80),    # Дедлайн
+        (8, 9, 80),    # Старт
+        (9, 10, 100),  # Контакты
+        (10, 11, 80),  # Дней/ПФ
+        (11, 12, 140), # Итого
+        (12, 13, 140), # Статус заказа + Дата
     ]
     url = _write_tab(
         TAB_ALL_ORDERS, sheet_id,
         [no, ids, logins, links, link_status, delivery_mode, deadline,
-         contacts, position, prices, status, dates],
+         start, contacts, position, prices, status, dates],
         column_widths,
     )
     logger.info("gsheets: 'Все заказы' updated, %d rows, url=%s",
@@ -310,6 +325,7 @@ def create_orders_report(user_id):
     position_name = ['Тариф']
     prices = ['Итого']
     status = ['Статус']
+    start = ['Старт']
     reg_date = ['Дата']
 
     DB_BATCH_SIZE = 1000
@@ -344,6 +360,7 @@ def create_orders_report(user_id):
             position_name.append(order['position_name'])
             prices.append(order['price'])
             status.append(_order_status_ru(order['status']))
+            start.append(_fmt_date_only(order.get('start_date')))
             reg_date.append(format_display(order['date']))
         db_offset += DB_BATCH_SIZE
 
@@ -355,11 +372,12 @@ def create_orders_report(user_id):
         (5, 6, 140),
         (6, 7, 80),
         (7, 8, 80),
-        (8, 9, 140),
+        (8, 9, 80),    # Старт
+        (9, 10, 140),  # Дата
     ]
     url = _write_tab(
         TAB_USER_ORDERS, sheet_id,
-        [no, ids, logins, links, contacts, position_name, prices, status, reg_date],
+        [no, ids, logins, links, contacts, position_name, prices, status, start, reg_date],
         column_widths,
     )
     logger.info("gsheets: '%s' updated, %d rows, scope=%s", TAB_USER_ORDERS, len(no) - 1, scope_ids)
@@ -441,7 +459,7 @@ def create_manual_tasks_sheet():
         deadline.append(row['deadline_at'] or '')
         contacts.append('Да' if row['contacts'] else 'Нет')
         position.append(row['position_name'])
-        start.append(row['start_date'] or '')
+        start.append(_fmt_date_only(row['start_date']))
         dates.append(format_display(row['order_date']))
 
     column_widths = [

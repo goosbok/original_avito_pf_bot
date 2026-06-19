@@ -96,6 +96,22 @@ def _fmt_date_only(s):
         return str(s)
 
 
+def _start_or_order_date(start_date, order_date):
+    """Колонка «Старт» в выгрузках.
+
+    Если у заказа явно проставлен `start_date` — используем его.
+    Если NULL (юзер не выбрал и сработал дефолт «сегодня») — fallback'аем
+    на дату создания заказа: для ISO-timestamp'ов берём первые 10 символов,
+    для legacy `dd.mm.YYYY HH:MM` — формат и так подходит.
+    """
+    if start_date:
+        return _fmt_date_only(start_date)
+    if not order_date:
+        return ''
+    s = str(order_date).strip()
+    return _fmt_date_only(s[:10])
+
+
 def _write_tab(tab_title, sheet_id, columns, column_widths):
     """Очищает вкладку и записывает данные + форматирование.
 
@@ -276,7 +292,8 @@ def create_sheet():
             delivery_mode.append(row['delivery_mode'] or '')
             deadline.append(format_display(row['deadline_at'])
                             if row['deadline_at'] else '')
-            start.append(_fmt_date_only(row['start_date']))
+            start.append(_start_or_order_date(row['start_date'],
+                                              row['order_date']))
             contacts.append('Да' if row['contacts'] else 'Нет')
             position.append(row['position_name'])
             prices.append('')  # цена показывается только в первой строке заказа? Пока пусто
@@ -360,7 +377,8 @@ def create_orders_report(user_id):
             position_name.append(order['position_name'])
             prices.append(order['price'])
             status.append(_order_status_ru(order['status']))
-            start.append(_fmt_date_only(order.get('start_date')))
+            start.append(_start_or_order_date(order.get('start_date'),
+                                              order.get('date')))
             reg_date.append(format_display(order['date']))
         db_offset += DB_BATCH_SIZE
 
@@ -459,7 +477,7 @@ def create_manual_tasks_sheet():
         deadline.append(row['deadline_at'] or '')
         contacts.append('Да' if row['contacts'] else 'Нет')
         position.append(row['position_name'])
-        start.append(_fmt_date_only(row['start_date']))
+        start.append(_start_or_order_date(row['start_date'], row['order_date']))
         dates.append(format_display(row['order_date']))
 
     column_widths = [

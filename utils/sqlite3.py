@@ -59,6 +59,7 @@ _STRING_DEFAULTS: dict[str, str] = {
     "btn_avito": "🚀 Накрутка ПФ Авито",
     "btn_profile": "🪪 Личный кабинет",
     "btn_channel": "🔗 Наш телеграм канал",
+    "btn_site": "🌐 Наш сайт",
     "btn_main_menu": "🧊 Главное меню",
     "btn_yes": "✅ Да",
     "btn_no": "❎ Нет",

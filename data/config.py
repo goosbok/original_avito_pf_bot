@@ -72,6 +72,10 @@ BOT_HTTP_API_BASE: str = os.getenv("BOT_HTTP_API_BASE", "https://api.telegram.or
 AVITO_PROXY_URL: str = os.getenv("AVITO_PROXY_URL", "https://lk.pf-bot.com")
 AVITO_PROXY_SECRET: str = os.getenv("AVITO_PROXY_SECRET", "")
 
+# Public landing URL — shown in TG bot main menu as "🌐 Наш сайт" next to the
+# channel link. Override via env if landing moves to another host.
+LANDING_URL: str = os.getenv("LANDING_URL", "https://pf-bot.com")
+
 # === Biznesklondaik PF executor (auto-mode) ===
 BIZA_API_KEY: str = os.getenv("BIZA_API_KEY", "")
 BIZA_LOGIN: str = os.getenv("BIZA_LOGIN", "")

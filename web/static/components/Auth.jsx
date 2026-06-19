@@ -1,10 +1,10 @@
 // Auth screens: Email login, Telegram OTP login, Email register
 const { useState, useEffect } = React;
 
-// TG auth temporarily disabled (2026-06-09): keep only Email-based auth for now.
-// To re-enable: flip to true; backend endpoints (/api/auth/telegram/*) and bot
-// integration are still wired and ready.
-const TG_AUTH_ENABLED = false;
+// TG-регистрация: вкл с 2026-06-19. Backend endpoints (/api/auth/telegram/*)
+// и интеграция с ботом готовы; разделяем register/login через единый флаг.
+// Чтобы снова спрятать TG-регистрацию — flip в false.
+const TG_AUTH_ENABLED = true;
 
 const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToken }) => {
   const [mode, setMode] = useState(initialMode || 'login');

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 import requests
 
@@ -17,6 +17,29 @@ logger = logging.getLogger(__name__)
 
 _MSK = timezone(timedelta(hours=3))
 _session = requests.Session()
+
+
+def _now_msk() -> datetime:
+    """Текущее время в МСК (UTC+3). Hookable из тестов через patch."""
+    return datetime.now(timezone.utc).astimezone(_MSK)
+
+
+def _effective_start_msk(now_msk: datetime) -> date:
+    """Дата начала запуска задачи в biza с учётом cutoff 04:00 МСК.
+
+    Бизнес-сутка биза начинается в 04:00 МСК (start_hour=10 идёт следом).
+    Заказы до 04:00 МСК **включительно** запускаются в эту же дату;
+    заказы строго после 04:00 МСК переносятся на следующий календарный
+    день. Все заказы интервала (T-1).04:01 .. T.04:00 МСК попадают в одну
+    партию запуска — T в 10:00 МСК.
+
+    Пример: оплата 11.12 в 23:53 МСК → effective_start = 12.12.
+    """
+    if now_msk.tzinfo is None:
+        raise ValueError("now_msk must be timezone-aware (МСК)")
+    if now_msk.time() > time(4, 0):
+        return now_msk.date() + timedelta(days=1)
+    return now_msk.date()
 
 
 def submit_link(
@@ -111,17 +134,24 @@ def _build_avito_payload(
             f"invalid fix_count from position_name={raw!r}"
         )
 
-    today = datetime.now(timezone.utc).astimezone(_MSK).date()
+    # Cutoff 04:00 МСК: всё, что оформлено после 04:00 — стартует с
+    # завтрашней даты в 10:00 МСК. Иначе биза не успевает за остаток дня
+    # и закрывает task'и как `ostanovleno` с 0 просмотрами (issue
+    # обнаружен после рейда по бизе 19.06: 14 заказов на 4800₽ так
+    # потерялись).
+    effective_start = _effective_start_msk(_now_msk())
     start_str = order.get("start_date")
-    start = today
+    start = effective_start
     if start_str:
         try:
             start = date.fromisoformat(str(start_str))
         except ValueError:
-            logger.warning("biza.payload.bad_start_date %r → today",
+            logger.warning("biza.payload.bad_start_date %r → effective_start",
                            start_str)
-            start = today
-    start = max(start, today)
+            start = effective_start
+    # Юзерский start_date не может быть раньше effective_start — иначе
+    # биза не успеет в свою бизнес-сутку и задача провалится.
+    start = max(start, effective_start)
 
     dates = [_fmt_date(start + timedelta(days=i)) for i in range(days)]
 

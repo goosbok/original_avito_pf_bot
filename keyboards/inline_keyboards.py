@@ -55,16 +55,12 @@ def get_menu_kb():
             url=config.LANDING_URL
         )
     )
-    keyboard.row(
-        InlineKeyboardButton(
-            text=rules,
-            callback_data='info:rules'
-        ),
+    keyboard.add(
         InlineKeyboardButton(
             text=support,
             callback_data='info:support'
         )
-    ),
+    )
     keyboard.add(
 
         InlineKeyboardButton(

@@ -95,6 +95,27 @@ def _write_tab(tab_title, sheet_id, columns, column_widths):
     num_cols = len(columns)
     row_cnt = len(columns[0]) if columns else 1
 
+    # 0) расширить сетку под текущее количество колонок/строк, если таб
+    # существовал со старой схемой (например, до 47a9595 «Все заказы»
+    # был 9-колоночным, а после стало 12 → запись в J падала с
+    # «Range … exceeds grid limits. Max columns: 9»). Google sheets API
+    # не растягивает grid автоматически — нужен явный updateSheetProperties.
+    service.spreadsheets().batchUpdate(
+        spreadsheetId=GSHEETS_TARGET_SHEET_ID,
+        body={'requests': [{
+            'updateSheetProperties': {
+                'properties': {
+                    'sheetId': sheet_id,
+                    'gridProperties': {
+                        'columnCount': max(num_cols, 1),
+                        'rowCount': max(row_cnt, 1),
+                    },
+                },
+                'fields': 'gridProperties.columnCount,gridProperties.rowCount',
+            }
+        }]},
+    ).execute()
+
     # 1) очистить старое содержимое
     service.spreadsheets().values().clear(
         spreadsheetId=GSHEETS_TARGET_SHEET_ID,

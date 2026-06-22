@@ -123,3 +123,48 @@ def test_send_admins_rejects_unknown_category(monkeypatch):
     from utils import sender
     with pytest.raises(ValueError, match="unknown category"):
         asyncio.run(sender.send_admins("nope", "not_a_category"))  # type: ignore[arg-type]
+
+
+def test_send_admins_routes_orders_web_to_thread(monkeypatch):
+    """orders_web category uses SUPPORT_THREAD_ORDERS_WEB when set."""
+    mock_send = _patch_common(monkeypatch)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ORDERS_WEB", 11)
+
+    from utils import sender
+    asyncio.run(sender.send_admins("web order", "orders_web"))
+
+    mock_send.assert_called_once()
+    assert mock_send.call_args.kwargs["message_thread_id"] == 11
+
+
+def test_send_admins_orders_web_falls_back_to_orders_when_unset(monkeypatch):
+    """When SUPPORT_THREAD_ORDERS_WEB is unset, routes to SUPPORT_THREAD_ORDERS silently."""
+    mock_send = _patch_common(monkeypatch)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ORDERS_WEB", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ORDERS", 5)
+
+    from utils import sender
+    result = asyncio.run(sender.send_admins("web order", "orders_web"))
+
+    assert result == "sent-message-sentinel"
+    mock_send.assert_called_once()
+    kwargs = mock_send.call_args.kwargs
+    assert kwargs["message_thread_id"] == 5
+    assert "Не задан топик" not in kwargs["text"]  # transparent, no prefix
+
+
+def test_send_admins_orders_web_falls_back_to_errors_when_both_orders_unset(monkeypatch):
+    """When both SUPPORT_THREAD_ORDERS_WEB and SUPPORT_THREAD_ORDERS are unset, routes to errors."""
+    mock_send = _patch_common(monkeypatch)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ORDERS_WEB", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ORDERS", 0)
+    monkeypatch.setattr("data.config.SUPPORT_THREAD_ERRORS", 7)
+
+    from utils import sender
+    result = asyncio.run(sender.send_admins("web order", "orders_web"))
+
+    assert result == "sent-message-sentinel"
+    mock_send.assert_called_once()
+    kwargs = mock_send.call_args.kwargs
+    assert kwargs["message_thread_id"] == 7
+    assert "Не задан топик для orders_web" in kwargs["text"]

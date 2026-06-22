@@ -8,13 +8,20 @@ from aiogram.types import Message
 import data.config as config
 from data.loader import bot
 
-Category = Literal["questions", "orders", "errors", "new_users"]
+Category = Literal["questions", "orders", "orders_web", "errors", "new_users"]
 
 _CATEGORY_TO_CONFIG_ATTR: dict[str, str] = {
-    "questions": "SUPPORT_THREAD_QUESTIONS",
-    "orders":    "SUPPORT_THREAD_ORDERS",
-    "errors":    "SUPPORT_THREAD_ERRORS",
-    "new_users": "SUPPORT_THREAD_NEW_USERS",
+    "questions":  "SUPPORT_THREAD_QUESTIONS",
+    "orders":     "SUPPORT_THREAD_ORDERS",
+    "orders_web": "SUPPORT_THREAD_ORDERS_WEB",
+    "errors":     "SUPPORT_THREAD_ERRORS",
+    "new_users":  "SUPPORT_THREAD_NEW_USERS",
+}
+
+# Transparent (no prefix) fallback chain when a category's topic is unset.
+# orders_web → orders → errors (the final errors fallback is handled below).
+_CATEGORY_FALLBACK: dict[str, str] = {
+    "orders_web": "orders",
 }
 
 
@@ -33,11 +40,12 @@ async def send_admins(
 ) -> Optional[Message]:
     """Send `msg` to the support group's forum topic for `category`.
 
-    If the category's topic is not configured (thread id == 0), the message is
-    rerouted into the errors topic with an explanatory prefix so admins can still
-    see it. Returns the sent Message, or None if neither the requested topic nor
-    the errors topic is configured (so callers can decide whether to persist
-    message_id).
+    Fallback chain when the primary topic is unset (thread id == 0):
+    1. If the category has a transparent fallback (see _CATEGORY_FALLBACK), try
+       that category's topic silently — no warning prefix.
+    2. Otherwise reroute into the errors topic with an explanatory prefix so
+       admins can still see it.
+    Returns the sent Message, or None if no usable topic was found.
     """
     thread_id = _resolve_thread_id(category)
     if thread_id != 0:
@@ -49,7 +57,20 @@ async def send_admins(
             disable_web_page_preview=True,
         )
 
-    # Fallback: requested topic unset. Reroute into the errors topic with prefix.
+    # Step 1: transparent intermediate fallback (e.g. orders_web → orders).
+    if category in _CATEGORY_FALLBACK:
+        intermediate = _CATEGORY_FALLBACK[category]
+        intermediate_thread = _resolve_thread_id(intermediate)
+        if intermediate_thread != 0:
+            return await bot.send_message(
+                chat_id=config.SUPPORT_CHAT_ID,
+                text=msg,
+                message_thread_id=intermediate_thread,
+                parse_mode=parse_mode,
+                disable_web_page_preview=True,
+            )
+
+    # Step 2: final fallback — errors topic with prefix.
     if category == "errors":
         return None  # cannot fall back to ourselves
     errors_thread = int(getattr(config, "SUPPORT_THREAD_ERRORS", 0) or 0)
@@ -95,6 +116,8 @@ async def warn_missing_support_topics() -> None:
     for category, attr in _CATEGORY_TO_CONFIG_ATTR.items():
         if category == "errors":
             continue
+        if category in _CATEGORY_FALLBACK:
+            continue  # optional — silently uses fallback when unset
         if int(getattr(config, attr, 0) or 0) == 0:
             try:
                 await send_admins(

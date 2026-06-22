@@ -212,11 +212,12 @@ async def notify_new_order(order_id: int, *, source: str) -> None:
         head, sep, tail = msg.partition("\n")
         msg = f"{head}\n{source_line}{sep}{tail}" if sep else f"{msg}\n{source_line}"
 
+        category = "orders_web" if source == "web" else "orders"
         if len(msg) < 4096:
-            await send_admins(msg, "orders")
+            await send_admins(msg, category)
         else:
             for chunk in split_messages(msg.split("\n"), "\n"):
-                await send_admins(chunk, "orders")
+                await send_admins(chunk, category)
     except Exception:
         logger.warning(
             "notify_new_order failed for order=%s source=%s",

@@ -17,6 +17,14 @@ function parseAvitoUrls(text) {
 }
 
 function SliderField({ label, min, max, step, value, onChange, suffix = '', hint }) {
+  const [draft, setDraft] = React.useState(String(value));
+  React.useEffect(() => { setDraft(String(value)); }, [value]);
+  function commitDraft(raw) {
+    const n = Number(raw);
+    const committed = (!raw || isNaN(n)) ? min : Math.min(max, Math.max(min, n));
+    setDraft(String(committed));
+    onChange(committed);
+  }
   return (
     <div className="form-field">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -26,8 +34,10 @@ function SliderField({ label, min, max, step, value, onChange, suffix = '', hint
       <div className="slider-row">
         <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
         <input
-          type="number" className="slider-num" min={min} max={max} step={step} value={value}
-          onChange={e => { let v = Number(e.target.value); if (v < min) v = min; if (v > max) v = max; onChange(v); }}
+          type="number" className="slider-num" min={min} max={max} step={step} value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={e => commitDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commitDraft(e.target.value); e.target.blur(); } }}
         />
       </div>
       <div className="slider-labels"><span>{min}{suffix}</span><span>{max}{suffix}</span></div>

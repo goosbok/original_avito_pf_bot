@@ -153,7 +153,7 @@ def extract_avito_links(text: str) -> list:
     # Склеиваем перенос ВНУТРИ URL, но не если следующая строка — новый https://
     normalized = re.sub(r'(?<=\S)[\r\n]+(?!https?://)(?=\S)', '', text)
     # Регекс стопится перед следующим https:// даже если нет пробела между URL
-    raw_urls = re.findall(r'https?://(?:www\.)?avito\.ru/(?:(?!https?://)\S)+', normalized)
+    raw_urls = re.findall(r'https?://(?:(?:www|m)\.)?avito\.ru/(?:(?!https?://)\S)+', normalized)
 
     seen = set()
     unique_links = []

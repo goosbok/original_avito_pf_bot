@@ -79,3 +79,14 @@ def test_empty_input_returns_empty_list(tmp_db):
 def test_non_avito_urls_are_ignored(tmp_db):
     text = "https://example.com/foo https://avito.ru/moskva/aaa_111"
     assert _fn()(text) == ["https://avito.ru/moskva/aaa_111"]
+
+
+def test_mobile_avito_links_are_accepted(tmp_db):
+    text = (
+        "https://m.avito.ru/moskva/vakansii/aaa_111\n"
+        "https://avito.ru/spb/vakansii/bbb_222"
+    )
+    assert _fn()(text) == [
+        "https://m.avito.ru/moskva/vakansii/aaa_111",
+        "https://avito.ru/spb/vakansii/bbb_222",
+    ]

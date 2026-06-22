@@ -107,12 +107,15 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
     return 7;
   });
   const [contacts, setContacts] = useOrderState(() => !!prefilledFrom?.contacts);
-  // start_date: ISO "YYYY-MM-DD". По умолчанию = сегодня (Москва).
-  const _todayISO = () => {
+  // Минимальная дата с учётом cutoff 04:00 МСК (UTC+3):
+  // заказы после 04:00 МСК попадают в следующую бизнес-сутку исполнителя.
+  const _minStartISO = () => {
     const d = new Date();
+    const mskHour = (d.getUTCHours() + 3) % 24;
+    if (mskHour >= 4) d.setDate(d.getDate() + 1);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   };
-  const [startDate, setStartDate] = useOrderState(() => prefilledFrom?.start_date || _todayISO());
+  const [startDate, setStartDate] = useOrderState(() => prefilledFrom?.start_date || _minStartISO());
 
   // Wizard state
   const [step, setStep] = useOrderState(1);
@@ -511,13 +514,13 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                 <div className="form-field">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
                     <label className="form-label" style={{ margin: 0 }}>Дата старта</label>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>можно с сегодня</span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>с {_minStartISO().split('-').reverse().join('.')}</span>
                   </div>
                   <input
                     type="date"
                     className="input"
                     value={startDate}
-                    min={_todayISO()}
+                    min={_minStartISO()}
                     onChange={e => setStartDate(e.target.value)}
                   />
                   <div className="form-hint">Когда начать показы — исполнитель стартует в этот день</div>

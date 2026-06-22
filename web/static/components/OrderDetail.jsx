@@ -40,28 +40,41 @@ function AvitoPFDetail({ order }) {
   const startIso = order.start_date || null;
   const endIso = startIso && days != null ? _addDays(startIso, days - 1) : null;
 
-  const params = [
-    days != null && { label: 'Дней накрутки', value: `${days}` },
-    viewsPerDay != null && { label: 'Просмотров в день', value: `${viewsPerDay}` },
-    startIso && { label: 'Дата запуска', value: _fmtDate(startIso) },
-    endIso && { label: 'Дата завершения', value: endIso },
-    { label: 'Запросы контактов', value: order.contacts ? 'Да' : 'Нет' },
-    links.length > 0 && { label: 'Объявлений в заказе', value: `${links.length}` },
-    totalViews != null && { label: 'Всего просмотров', value: totalViews.toLocaleString('ru-RU') },
-    { label: 'Цена за просмотр', value: (viewsPerDay && days && links.length)
-        ? `${Math.round(order.price / totalViews)} ₽`
-        : '—' },
-  ].filter(Boolean);
+  const groups = [
+    [
+      startIso && { label: 'Дата запуска', value: _fmtDate(startIso) },
+      endIso && { label: 'Дата завершения', value: endIso },
+      days != null && { label: 'Дней накрутки', value: `${days}` },
+      viewsPerDay != null && { label: 'Просмотров в день', value: `${viewsPerDay}` },
+    ].filter(Boolean),
+    [
+      links.length > 0 && { label: 'Объявлений в заказе', value: `${links.length}` },
+      totalViews != null && { label: 'Всего просмотров', value: totalViews.toLocaleString('ru-RU') },
+      { label: 'Запросы контактов', value: order.contacts ? 'Да' : 'Нет' },
+      { label: 'Цена за просмотр', value: (viewsPerDay && days && links.length)
+          ? `${Math.round(order.price / totalViews)} ₽`
+          : '—' },
+    ].filter(Boolean),
+  ].filter(g => g.length > 0);
+
+  const ParamCell = ({ label, value }) => (
+    <div>
+      <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>{value}</div>
+    </div>
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="card" style={{ padding: '20px 24px' }}>
         <h3 style={{ marginBottom: 16, fontSize: '1rem' }}>Параметры накрутки</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-          {params.map((p, i) => (
-            <div key={i}>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, fontWeight: 600 }}>{p.label}</div>
-              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-1)' }}>{p.value}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {groups.map((group, gi) => (
+            <div key={gi}>
+              {gi > 0 && <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
+                {group.map((p, i) => <ParamCell key={i} label={p.label} value={p.value} />)}
+              </div>
             </div>
           ))}
         </div>

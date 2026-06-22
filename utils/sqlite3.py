@@ -927,16 +927,6 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             6,
         ),
         (
-            "password_reset_tokens",
-            "CREATE TABLE IF NOT EXISTS password_reset_tokens("
-            "token_hash TEXT PRIMARY KEY,"
-            "email TEXT NOT NULL,"
-            "expires_at TIMESTAMP NOT NULL,"
-            "used_at TIMESTAMP,"
-            "created_at TIMESTAMP NOT NULL)",
-            5,
-        ),
-        (
             "funnel_events",
             "CREATE TABLE IF NOT EXISTS funnel_events("
             "id INTEGER PRIMARY KEY AUTOINCREMENT,"

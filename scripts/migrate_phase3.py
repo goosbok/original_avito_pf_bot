@@ -1,4 +1,4 @@
-"""One-shot migration Phase 3: add pending_email_links and password_reset_tokens.
+"""One-shot migration Phase 3: add pending_email_links.
 
 Idempotent — safe to run multiple times.
 Run AFTER deploying the new code: python scripts/migrate_phase3.py
@@ -28,16 +28,8 @@ def main() -> None:
             "created_at TIMESTAMP NOT NULL,"
             "FOREIGN KEY (user_id) REFERENCES users(id))"
         )
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS password_reset_tokens("
-            "token_hash TEXT PRIMARY KEY,"
-            "email TEXT NOT NULL,"
-            "expires_at TIMESTAMP NOT NULL,"
-            "used_at TIMESTAMP,"
-            "created_at TIMESTAMP NOT NULL)"
-        )
         con.commit()
-        print("migrate_phase3: done — pending_email_links and password_reset_tokens created")
+        print("migrate_phase3: done — pending_email_links created")
     finally:
         con.close()
 

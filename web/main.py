@@ -115,7 +115,19 @@ app.include_router(legal_router)
 
 from pathlib import Path  # noqa: E402
 
-from fastapi.staticfiles import StaticFiles  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
-app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+_INDEX_HTML = _STATIC_DIR / "index.html"
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    try:
+        target = (_STATIC_DIR / full_path).resolve()
+        target.relative_to(_STATIC_DIR.resolve())
+    except ValueError:
+        return FileResponse(_INDEX_HTML)
+    if target.is_file():
+        return FileResponse(target)
+    return FileResponse(_INDEX_HTML)

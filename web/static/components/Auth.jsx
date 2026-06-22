@@ -6,7 +6,7 @@ const { useState, useEffect } = React;
 // Чтобы снова спрятать TG-регистрацию — flip в false.
 const TG_AUTH_ENABLED = true;
 
-const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToken }) => {
+const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
   const [mode, setMode] = useState(initialMode || 'login');
 
   // Keep internal mode in sync when parent navigates between auth sub-modes
@@ -21,7 +21,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     setRegStep('form'); setRegCode('');
     setOtpSent(false); setOtpCode('');
     setNeedsConnect(false);
-    setForgotEmail(''); setForgotSent(false);
+    setForgotEmail(''); setForgotStep('email'); setForgotCode('');
     setResetNew(''); setResetConfirm(''); setResetDone(false);
     setActiveMethod(null);
   }, [mode]);
@@ -40,7 +40,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
   const [regCode, setRegCode] = useState('');
   const [needsConnect, setNeedsConnect] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
-  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotStep, setForgotStep] = useState('email'); // 'email' | 'code'
+  const [forgotCode, setForgotCode] = useState('');
   const [resetNew, setResetNew] = useState('');
   const [resetConfirm, setResetConfirm] = useState('');
   const [resetDone, setResetDone] = useState(false);
@@ -193,29 +194,29 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     setLoading(true); setError('');
     try {
       await api.post('/api/auth/email/forgot-password', { email: forgotEmail });
-    } catch (_) {
-      // Always show success to prevent email enumeration
+      setForgotStep('code');
+    } catch (e) {
+      setError(e.message || 'Ошибка');
     } finally {
       setLoading(false);
     }
-    setForgotSent(true);
   };
 
   const handleResetPassword = async () => {
+    if (!forgotCode || forgotCode.length !== 6) return setError('Введите 6-значный код');
     if (!resetNew || resetNew.length < 8) return setError('Пароль — минимум 8 символов');
     if (resetNew !== resetConfirm) return setError('Пароли не совпадают');
     setLoading(true); setError('');
     try {
       await api.post('/api/auth/email/reset-password', {
-        token: resetToken,
+        email: forgotEmail,
+        code: forgotCode,
         new_password: resetNew,
         new_password_confirm: resetConfirm,
       });
       setResetDone(true);
-      window.history.replaceState({}, '', '/');
     } catch (e) {
-      if (e.status === 410) setError('Ссылка истекла — запросите новую');
-      else setError(e.message || 'Ошибка сброса пароля');
+      setError(e.message || 'Ошибка');
     } finally {
       setLoading(false);
     }
@@ -225,41 +226,6 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
       <img src="/logo.png" alt="авито.пф" width="48" height="48"
         style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', background: '#000' }} />
-    </div>
-  );
-
-  if (mode === 'reset') return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h2 style={{ marginBottom: 6 }}>Новый пароль</h2>
-        {resetDone ? (
-          <>
-            <div className="alert alert--success" style={{ marginBottom: 16 }}>
-              Пароль изменён — войдите с новым паролем
-            </div>
-            <button className="btn btn--primary" onClick={() => onNavigate('login')}>
-              Войти
-            </button>
-          </>
-        ) : (
-          <>
-            {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
-            <div className="form-field" style={{ marginBottom: 12 }}>
-              <label className="form-label">Новый пароль</label>
-              <input className="input" type="password" placeholder="Минимум 8 символов"
-                value={resetNew} onChange={e => setResetNew(e.target.value)} />
-            </div>
-            <div className="form-field" style={{ marginBottom: 16 }}>
-              <label className="form-label">Повторите пароль</label>
-              <input className="input" type="password" placeholder="Повторите пароль"
-                value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} />
-            </div>
-            <button className="btn btn--primary" onClick={handleResetPassword} disabled={loading}>
-              {loading ? 'Сохраняем...' : 'Сохранить'}
-            </button>
-          </>
-        )}
-      </div>
     </div>
   );
 
@@ -439,18 +405,18 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
 
   if (mode === 'forgot') return (
     <div className="auth-wrap">
-      <div className="auth-card">
+      <div className="card auth-card">
         <h2 style={{ marginBottom: 6 }}>Восстановление пароля</h2>
-        {forgotSent ? (
+        {resetDone ? (
           <>
             <div className="alert alert--success" style={{ marginBottom: 16 }}>
-              Если аккаунт существует, письмо с инструкцией отправлено
+              Пароль изменён — войдите с новым паролем
             </div>
-            <button className="btn btn--ghost" onClick={() => onNavigate('login')}>
-              ← Назад ко входу
+            <button className="btn btn--primary" onClick={() => onNavigate('login')}>
+              Войти
             </button>
           </>
-        ) : (
+        ) : forgotStep === 'email' ? (
           <>
             {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
             <div className="form-field" style={{ marginBottom: 12 }}>
@@ -459,12 +425,45 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 value={forgotEmail} onChange={e => setForgotEmail(e.target.value)} />
             </div>
             <button className="btn btn--primary" onClick={handleForgotPassword} disabled={loading}>
-              {loading ? 'Отправляем...' : 'Отправить ссылку'}
+              {loading ? 'Отправляем...' : 'Отправить код'}
             </button>
             <div style={{ textAlign: 'center', marginTop: 12 }}>
               <button className="btn btn--ghost btn--sm" onClick={() => onNavigate('login')}
                 style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
                 ← Назад ко входу
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-2)', marginBottom: 12 }}>
+              Код отправлен на {forgotEmail}
+            </p>
+            {error && <div className="alert alert--error" style={{ marginBottom: 12 }}>{error}</div>}
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-label">Код из письма</label>
+              <input className="input" type="text" inputMode="numeric" maxLength={6}
+                placeholder="000000" value={forgotCode}
+                onChange={e => setForgotCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+            </div>
+            <div className="form-field" style={{ marginBottom: 12 }}>
+              <label className="form-label">Новый пароль</label>
+              <input className="input" type="password" placeholder="Минимум 8 символов"
+                value={resetNew} onChange={e => setResetNew(e.target.value)} />
+            </div>
+            <div className="form-field" style={{ marginBottom: 16 }}>
+              <label className="form-label">Повторите пароль</label>
+              <input className="input" type="password" placeholder="Повторите пароль"
+                value={resetConfirm} onChange={e => setResetConfirm(e.target.value)} />
+            </div>
+            <button className="btn btn--primary" onClick={handleResetPassword} disabled={loading}>
+              {loading ? 'Сохраняем...' : 'Сбросить пароль'}
+            </button>
+            <div style={{ textAlign: 'center', marginTop: 12 }}>
+              <button className="btn btn--ghost btn--sm"
+                onClick={() => { setForgotStep('email'); setForgotCode(''); setError(''); }}
+                style={{ fontSize: '0.85rem', color: 'var(--text-2)' }}>
+                ← Ввести другой email
               </button>
             </div>
           </>
@@ -584,7 +583,7 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig, resetToke
                 {loading ? 'Вход...' : 'Войти'}
               </button>
               <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.85rem' }}>
-                <span onClick={() => setMode('forgot')} style={{ color: 'var(--primary)', cursor: 'pointer' }}>
+                <span onClick={() => onNavigate('forgot')} style={{ color: 'var(--primary)', cursor: 'pointer' }}>
                   Забыл пароль?
                 </span>
               </div>

@@ -9,8 +9,9 @@ const TWEAK_DEFAULTS = {
 };
 
 function App() {
-  const _resetToken = new URLSearchParams(window.location.search).get('token');
-  const _isResetRoute = window.location.pathname === '/reset-password' && !!_resetToken;
+  if (window.location.pathname === '/reset-password') {
+    window.history.replaceState(null, '', '/');
+  }
   // YooKassa redirect → /api/orders/pf/{id}/return → этот URL.
   // ?yookassa_return=paid|failed|unknown + ?order_id=N
   const _qs = new URLSearchParams(window.location.search);
@@ -34,7 +35,6 @@ function App() {
   // Логин ещё не восстановлен — для failed-случая откладываем решение
   // до loaderssession-restore useEffect ниже.
   const _initialRoute = (() => {
-    if (_isResetRoute) return 'auth';
     if (_authParam) return 'auth';
     if (_yookassaResult === 'paid') return 'order-detail';
     if (_yookassaResult === 'failed') return 'order-new';  // переопределим если залогинен
@@ -44,10 +44,7 @@ function App() {
 
   const [tweaks, setTweaks] = useState(TWEAK_DEFAULTS);
   const [route, setRoute] = useState(_initialRoute);
-  const [authMode, setAuthMode] = useState(
-    _isResetRoute ? 'reset' : (_authParam || 'login')
-  );
-  const [resetToken] = useState(_isResetRoute ? _resetToken : null);
+  const [authMode, setAuthMode] = useState(_authParam || 'login');
   const [user, setUser] = useState(null);
   const [balance, setBalance] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
@@ -277,7 +274,7 @@ function App() {
       }
     }
     switch (route) {
-      case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} resetToken={resetToken} />;
+      case 'auth':     return <AuthPage mode={authMode} onLogin={handleLogin} onNavigate={handleNavigate} botConfig={botConfig} />;
       case 'cabinet':  return <CabinetPage user={user} balance={balance} setBalance={setBalance} refreshBalance={refreshBalance} onNavigate={handleNavigate} />;
       case 'order-new':
         return <OrderFormPage

@@ -54,13 +54,10 @@ def test_login_unknown_email_401(client):
     assert r.status_code == 401
 
 
-# ── password reset endpoint tests ─────────────────────────────────────────────
+# ── /forgot-password & /reset-password (OTP-based) ────────────────────────
 
-import re as _re
-
-
-def _register_and_get_reset_token(client, monkeypatch, email: str) -> str:
-    """Register a user, call forgot-password, return the raw token from the email."""
+def _register_and_get_reset_code(client, monkeypatch, email: str) -> str:
+    """Register user, trigger forgot-password, return the 6-digit OTP code."""
     captured = {}
 
     import services.email_sender as es
@@ -71,8 +68,9 @@ def _register_and_get_reset_token(client, monkeypatch, email: str) -> str:
     from services import auth_email as _ae
     _ae.register(email, "password123")
     client.post("/api/auth/email/forgot-password", json={"email": email})
-    m = _re.search(r"token=([^\s\n]+)", captured["body"])
-    assert m, "no token in reset email"
+    import re
+    m = re.search(r"пароля:\s*(\d{6})", captured.get("body", ""))
+    assert m, f"no 6-digit code in reset email body: {captured.get('body')!r}"
     return m.group(1)
 
 
@@ -95,14 +93,14 @@ def test_forgot_password_sends_email_for_known_address(client, monkeypatch):
 
 
 def test_reset_password_success_204(client, tmp_db, monkeypatch):
-    raw_token = _register_and_get_reset_token(client, monkeypatch, "newpw@example.com")
+    code = _register_and_get_reset_code(client, monkeypatch, "newpw@example.com")
     r = client.post("/api/auth/email/reset-password", json={
-        "token": raw_token,
+        "email": "newpw@example.com",
+        "code": code,
         "new_password": "newpassword123",
         "new_password_confirm": "newpassword123",
     })
     assert r.status_code == 204
-    # Can now log in with new password
     r2 = client.post("/api/auth/email/login", json={
         "email": "newpw@example.com",
         "password": "newpassword123",
@@ -112,20 +110,41 @@ def test_reset_password_success_204(client, tmp_db, monkeypatch):
 
 def test_reset_password_mismatch_422(client):
     r = client.post("/api/auth/email/reset-password", json={
-        "token": "anytoken",
+        "email": "x@example.com",
+        "code": "123456",
         "new_password": "password123",
         "new_password_confirm": "different123",
     })
     assert r.status_code == 422
 
 
-def test_reset_password_invalid_token_400(client, tmp_db):
+def test_reset_password_wrong_code_401(client, tmp_db, monkeypatch):
+    _register_and_get_reset_code(client, monkeypatch, "wrongcode@example.com")
     r = client.post("/api/auth/email/reset-password", json={
-        "token": "invalidtoken",
+        "email": "wrongcode@example.com",
+        "code": "000000",
         "new_password": "password123",
         "new_password_confirm": "password123",
     })
-    assert r.status_code == 400
+    assert r.status_code == 401
+
+
+def test_reset_password_expired_code_410(client, tmp_db, monkeypatch):
+    import sqlite3
+    code = _register_and_get_reset_code(client, monkeypatch, "expired@example.com")
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "UPDATE otp_codes SET expires_at = '2000-01-01T00:00:00+00:00' "
+            "WHERE destination = 'expired@example.com' AND purpose = 'password_reset'"
+        )
+        con.commit()
+    r = client.post("/api/auth/email/reset-password", json={
+        "email": "expired@example.com",
+        "code": code,
+        "new_password": "newpassword123",
+        "new_password_confirm": "newpassword123",
+    })
+    assert r.status_code == 410
 
 
 # ── /change-password ──────────────────────────────────────────────────────

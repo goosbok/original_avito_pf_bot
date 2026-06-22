@@ -46,7 +46,8 @@ def test_link_email_step1_mismatch_raises():
 
 def test_reset_password_passwords_match():
     obj = ResetPasswordRequest(
-        token="tok",
+        email="user@example.com",
+        code="123456",
         new_password="password123",
         new_password_confirm="password123",
     )
@@ -56,7 +57,8 @@ def test_reset_password_passwords_match():
 def test_reset_password_mismatch_raises():
     with pytest.raises(ValidationError, match="passwords do not match"):
         ResetPasswordRequest(
-            token="tok",
+            email="user@example.com",
+            code="123456",
             new_password="password123",
             new_password_confirm="different",
         )

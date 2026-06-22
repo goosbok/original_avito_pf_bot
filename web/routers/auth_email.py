@@ -81,7 +81,7 @@ async def login(body: EmailLoginRequest) -> TokenResponse:
 
 @router.post("/forgot-password", response_model=None)
 async def forgot_password(body: ForgotPasswordRequest) -> Response:
-    """Send password reset link to email. Always returns 200 — never reveals registration status."""
+    """Send OTP code to email. Always returns 200 — never reveals registration status."""
     try:
         _auth_reset.forgot_password(body.email)
     except Exception:
@@ -91,10 +91,14 @@ async def forgot_password(body: ForgotPasswordRequest) -> Response:
 
 @router.post("/reset-password", status_code=204, response_model=None)
 async def reset_password(body: ResetPasswordRequest) -> None:
-    """Consume reset token and set a new password."""
+    """Verify OTP code and set new password."""
     try:
-        _auth_reset.reset_password(body.token, body.new_password)
-    except ValueError as exc:
+        _auth_reset.reset_password_by_otp(body.email, body.code, body.new_password)
+    except OTPExpired as exc:
+        raise HTTPException(status_code=410, detail=str(exc)) from exc
+    except OTPInvalid as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except (InvalidCredentials, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

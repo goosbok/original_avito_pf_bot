@@ -1,11 +1,8 @@
-"""Unit tests for services/auth_reset.py."""
-import re
-import sqlite3
-from pathlib import Path
-
+"""Unit tests for services/auth_reset.py — OTP-based reset."""
 import pytest
 
 from services import auth_email, auth_reset
+from services.exceptions import InvalidCredentials, OTPCooldown, OTPExpired, OTPInvalid
 
 
 @pytest.fixture
@@ -24,122 +21,89 @@ def _register(email: str, password: str = "password123") -> int:
     return auth_email.register(email, password)
 
 
-def _get_token_row(tmp_db: Path, email: str):
-    with sqlite3.connect(tmp_db) as con:
-        con.row_factory = sqlite3.Row
-        return con.execute(
-            "SELECT * FROM password_reset_tokens WHERE email = ?", (email,)
-        ).fetchone()
+# ── forgot_password ────────────────────────────────────────────────────────
 
-
-def _extract_token(body: str) -> str:
-    m = re.search(r"token=([^\s\n]+)", body)
-    assert m, f"no token in body: {body!r}"
-    return m.group(1)
-
-
-def test_forgot_password_sends_email(tmp_db: Path, fake_send_email):
+def test_forgot_password_sends_code(tmp_db, fake_send_email):
     _register("reset@example.com")
     auth_reset.forgot_password("reset@example.com")
     assert len(fake_send_email) == 1
-    assert fake_send_email[0]["to"] == "reset@example.com"
-    assert "reset-password" in fake_send_email[0]["body"]
-    assert "token=" in fake_send_email[0]["body"]
+    msg = fake_send_email[0]
+    assert msg["to"] == "reset@example.com"
+    import re
+    assert re.search(r"\b\d{6}\b", msg["body"]), "expected 6-digit code in body"
+    assert "http" not in msg["body"], "body must not contain a link"
 
 
-def test_forgot_password_unknown_email_silent(tmp_db: Path, fake_send_email):
+def test_forgot_password_unknown_email_silent(tmp_db, fake_send_email):
     auth_reset.forgot_password("nobody@example.com")
     assert fake_send_email == []
 
 
-def test_forgot_password_invalid_email_silent(tmp_db: Path, fake_send_email):
+def test_forgot_password_invalid_email_silent(tmp_db, fake_send_email):
     auth_reset.forgot_password("not-an-email")
     assert fake_send_email == []
 
 
-def test_forgot_password_stores_token(tmp_db: Path, fake_send_email):
-    _register("store@example.com")
-    auth_reset.forgot_password("store@example.com")
-    row = _get_token_row(tmp_db, "store@example.com")
-    assert row is not None
-    assert row["used_at"] is None
+def test_forgot_password_cooldown_raises(tmp_db, fake_send_email):
+    _register("cd@example.com")
+    auth_reset.forgot_password("cd@example.com")
+    with pytest.raises(OTPCooldown):
+        auth_reset.forgot_password("cd@example.com")
 
 
-def test_forgot_password_replaces_old_token(tmp_db: Path, fake_send_email):
-    _register("replace@example.com")
-    auth_reset.forgot_password("replace@example.com")
-    first_hash = _get_token_row(tmp_db, "replace@example.com")["token_hash"]
-    auth_reset.forgot_password("replace@example.com")
-    second_hash = _get_token_row(tmp_db, "replace@example.com")["token_hash"]
-    assert first_hash != second_hash
+# ── reset_password_by_otp ──────────────────────────────────────────────────
+
+def _issue_code(email: str) -> str:
+    """Issue a reset OTP for an already-registered email, return plaintext code."""
+    from services import otp
+    from services.auth_email import normalize_email
+    email_norm = normalize_email(email)
+    return otp.issue(
+        channel="email",
+        destination=email_norm,
+        purpose="password_reset",
+        ttl_seconds=600,
+        cooldown_seconds=0,
+    )
 
 
-def test_reset_password_success(tmp_db: Path, fake_send_email):
+def test_reset_by_otp_success(tmp_db):
     uid = _register("pw@example.com")
-    auth_reset.forgot_password("pw@example.com")
-    raw_token = _extract_token(fake_send_email[0]["body"])
-    auth_reset.reset_password(raw_token, "newpassword123")
+    code = _issue_code("pw@example.com")
+    auth_reset.reset_password_by_otp("pw@example.com", code, "newpassword123")
     assert auth_email.login("pw@example.com", "newpassword123") == uid
-    from services.exceptions import InvalidCredentials
     with pytest.raises(InvalidCredentials):
         auth_email.login("pw@example.com", "password123")
 
 
-def test_reset_password_token_marked_used(tmp_db: Path, fake_send_email):
-    _register("used@example.com")
-    auth_reset.forgot_password("used@example.com")
-    raw_token = _extract_token(fake_send_email[0]["body"])
-    auth_reset.reset_password(raw_token, "newpassword123")
-    row = _get_token_row(tmp_db, "used@example.com")
-    assert row["used_at"] is not None
+def test_reset_by_otp_wrong_code(tmp_db):
+    _register("wrong@example.com")
+    _issue_code("wrong@example.com")
+    with pytest.raises(OTPInvalid):
+        auth_reset.reset_password_by_otp("wrong@example.com", "000000", "newpassword123")
 
 
-def test_reset_password_invalid_token_raises(tmp_db: Path):
-    with pytest.raises(ValueError, match="invalid or expired"):
-        auth_reset.reset_password("totally-invalid-token", "newpassword123")
-
-
-def test_reset_password_already_used_raises(tmp_db: Path, fake_send_email):
-    _register("twice@example.com")
-    auth_reset.forgot_password("twice@example.com")
-    raw_token = _extract_token(fake_send_email[0]["body"])
-    auth_reset.reset_password(raw_token, "newpassword123")
-    with pytest.raises(ValueError, match="already used"):
-        auth_reset.reset_password(raw_token, "anotherpassword")
-
-
-def test_reset_password_expired_token_raises(tmp_db: Path, fake_send_email):
+def test_reset_by_otp_expired(tmp_db):
+    import sqlite3
     _register("exp@example.com")
-    auth_reset.forgot_password("exp@example.com")
+    code = _issue_code("exp@example.com")
     with sqlite3.connect(tmp_db) as con:
         con.execute(
-            "UPDATE password_reset_tokens SET expires_at = ? WHERE email = ?",
-            ("2000-01-01T00:00:00+00:00", "exp@example.com"),
+            "UPDATE otp_codes SET expires_at = '2000-01-01T00:00:00+00:00' "
+            "WHERE destination = 'exp@example.com' AND purpose = 'password_reset'"
         )
         con.commit()
-    raw_token = _extract_token(fake_send_email[0]["body"])
-    with pytest.raises(ValueError, match="invalid or expired"):
-        auth_reset.reset_password(raw_token, "newpassword123")
+    with pytest.raises(OTPExpired):
+        auth_reset.reset_password_by_otp("exp@example.com", code, "newpassword123")
 
 
-def test_reset_password_short_new_password_raises(tmp_db: Path, fake_send_email):
+def test_reset_by_otp_short_password(tmp_db):
     _register("short@example.com")
-    auth_reset.forgot_password("short@example.com")
-    raw_token = _extract_token(fake_send_email[0]["body"])
+    code = _issue_code("short@example.com")
     with pytest.raises(ValueError):
-        auth_reset.reset_password(raw_token, "short")
+        auth_reset.reset_password_by_otp("short@example.com", code, "short")
 
 
-def test_reset_password_email_provider_unlinked_raises(tmp_db: Path, fake_send_email):
-    uid = _register("unlinked@example.com")
-    auth_reset.forgot_password("unlinked@example.com")
-    raw_token = _extract_token(fake_send_email[0]["body"])
-    # Simulate email provider being unlinked after token was issued
-    with sqlite3.connect(tmp_db) as con:
-        con.execute(
-            "DELETE FROM auth_providers WHERE provider = 'email' AND identifier = ?",
-            ("unlinked@example.com",),
-        )
-        con.commit()
-    with pytest.raises(ValueError, match="invalid or expired"):
-        auth_reset.reset_password(raw_token, "newpassword123")
+def test_reset_by_otp_invalid_email(tmp_db):
+    with pytest.raises(OTPInvalid):
+        auth_reset.reset_password_by_otp("not-an-email", "123456", "newpassword123")

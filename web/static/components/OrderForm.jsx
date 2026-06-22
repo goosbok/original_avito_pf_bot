@@ -155,6 +155,12 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
   const urlCount = links.length;
   const daysNum = parseInt(days, 10) || 0;
   const totalPrice = urlCount > 0 ? fixCount * daysNum * urlCount * pricePerUnit : 0;
+  const _addDays = (iso, n) => {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+  const endDateDisplay = startDate && daysNum > 0 ? _addDays(startDate, daysNum - 1) : null;
 
   const handleInputChange = e => {
     const val = e.target.value;
@@ -516,6 +522,14 @@ function OrderFormPage({ user, balance, prefilledFrom, onNavigate, onOrderPlaced
                   />
                   <div className="form-hint">Когда начать показы — исполнитель стартует в этот день</div>
                 </div>
+                {endDateDisplay && (
+                  <div className="form-field">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span className="form-label" style={{ margin: 0 }}>Дата завершения</span>
+                      <span style={{ fontWeight: 700, color: 'var(--text-1)', fontSize: '0.9375rem' }}>{endDateDisplay}</span>
+                    </div>
+                  </div>
+                )}
                 <div style={{ height: 1, background: 'var(--border)' }} />
                 <div className="toggle-row" onClick={() => setContacts(v => !v)} style={{ userSelect: 'none', cursor: 'pointer' }}>
                   <div className={`toggle${contacts ? ' on' : ''}`} />

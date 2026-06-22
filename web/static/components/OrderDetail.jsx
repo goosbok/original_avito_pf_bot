@@ -27,9 +27,24 @@ function AvitoPFDetail({ order }) {
     ? viewsPerDay * days * links.length
     : (viewsPerDay != null && days != null ? viewsPerDay * days : null);
 
+  const _fmtDate = (iso) => {
+    if (!iso) return null;
+    const [y, mo, d] = iso.split('-');
+    return `${d}.${mo}.${y}`;
+  };
+  const _addDays = (iso, n) => {
+    const d = new Date(iso + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return _fmtDate(d.toISOString().slice(0, 10));
+  };
+  const startIso = order.start_date || null;
+  const endIso = startIso && days != null ? _addDays(startIso, days - 1) : null;
+
   const params = [
     days != null && { label: 'Дней накрутки', value: `${days}` },
     viewsPerDay != null && { label: 'Просмотров в день', value: `${viewsPerDay}` },
+    startIso && { label: 'Дата запуска', value: _fmtDate(startIso) },
+    endIso && { label: 'Дата завершения', value: endIso },
     { label: 'Запросы контактов', value: order.contacts ? 'Да' : 'Нет' },
     links.length > 0 && { label: 'Объявлений в заказе', value: `${links.length}` },
     totalViews != null && { label: 'Всего просмотров', value: totalViews.toLocaleString('ru-RU') },

@@ -255,6 +255,7 @@ async def get_order_detail(order_id: int) -> OrderDetailResponse:
         links=_get_order_links(int(order["increment"])),
         contacts=bool(order["contacts"]),
         date=str(order["date"]) if order["date"] else None,
+        start_date=str(order["start_date"]) if order["start_date"] else None,
         payment_method=str(order["payment_method"]) if order["payment_method"] else None,
         payment_expires_at=str(order["payment_expires_at"]) if order["payment_expires_at"] else None,
     )

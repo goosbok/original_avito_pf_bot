@@ -229,6 +229,7 @@ class OrderDetailResponse(BaseModel):
     links: list[str] = []
     contacts: bool
     date: Optional[str] = None
+    start_date: Optional[str] = None
     payment_method: Optional[str] = None
     payment_expires_at: Optional[str] = None
 

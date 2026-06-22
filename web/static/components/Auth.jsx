@@ -196,7 +196,11 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
       await api.post('/api/auth/email/forgot-password', { email: forgotEmail });
       setForgotStep('code');
     } catch (e) {
-      setError(e.message || 'Ошибка');
+      if (e.status === 429) {
+        setError('Код уже отправлен, подождите немного перед повторной отправкой');
+      } else {
+        setError(e.message || 'Ошибка');
+      }
     } finally {
       setLoading(false);
     }
@@ -216,7 +220,15 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
       });
       setResetDone(true);
     } catch (e) {
-      setError(e.message || 'Ошибка');
+      if (e.status === 410) {
+        setError('Код истёк — запросите новый');
+        setForgotStep('email');
+        setForgotCode('');
+      } else if (e.status === 401) {
+        setError('Неверный код');
+      } else {
+        setError(e.message || 'Ошибка');
+      }
     } finally {
       setLoading(false);
     }

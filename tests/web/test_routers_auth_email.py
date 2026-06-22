@@ -81,6 +81,20 @@ def test_forgot_password_always_200(client, monkeypatch):
     assert r.status_code == 200
 
 
+def test_forgot_password_cooldown_429(client, monkeypatch):
+    import services.email_sender as es
+    monkeypatch.setattr(es, "send_email", lambda *a, **kw: None)
+    from services import auth_email as _ae
+    _ae.register("cooldown@example.com", "password123")
+    # First request succeeds
+    r1 = client.post("/api/auth/email/forgot-password", json={"email": "cooldown@example.com"})
+    assert r1.status_code == 200
+    # Second request within 60s should 429
+    r2 = client.post("/api/auth/email/forgot-password", json={"email": "cooldown@example.com"})
+    assert r2.status_code == 429
+    assert "Retry-After" in r2.headers
+
+
 def test_forgot_password_sends_email_for_known_address(client, monkeypatch):
     calls = []
     import services.email_sender as es

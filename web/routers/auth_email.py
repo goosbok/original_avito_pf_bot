@@ -81,9 +81,15 @@ async def login(body: EmailLoginRequest) -> TokenResponse:
 
 @router.post("/forgot-password", response_model=None)
 async def forgot_password(body: ForgotPasswordRequest) -> Response:
-    """Send OTP code to email. Always returns 200 — never reveals registration status."""
+    """Send OTP code to email. Returns 200 for unknown emails, 429 on cooldown."""
     try:
         _auth_reset.forgot_password(body.email)
+    except OTPCooldown as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     except Exception:
         logger.exception("forgot_password error (returning 200 regardless)")
     return Response(status_code=200)

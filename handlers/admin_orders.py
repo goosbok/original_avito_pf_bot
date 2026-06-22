@@ -205,6 +205,9 @@ async def admin_call_show_order_by_index(call: types.CallbackQuery, state: FSMCo
         pass
     index = int(call.data.split(":")[1])
     state_data = await state.get_data()
+    if 'orders' not in state_data:
+        await call.message.answer("⚠️ Список заказов устарел. Откройте список заново.", reply_markup=admin_back_kb('orders_man'))
+        return
     orders = state_data['orders']
     orders_array = state_data['array']
     if 'report_type' not in state_data:
@@ -224,6 +227,9 @@ async def admin_call_show_all_orders(call: types.CallbackQuery, state: FSMContex
     except:
         logger.debug("could not delete message")
     state_data = await state.get_data()
+    if 'orders' not in state_data:
+        await call.message.answer("⚠️ Список заказов устарел. Откройте список заново.", reply_markup=admin_back_kb('orders_man'))
+        return
     orders = state_data['orders']
     orders_array = state_data['array']
     if orders:

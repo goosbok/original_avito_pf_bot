@@ -269,13 +269,37 @@ def mark_paid(order_id: int) -> None:
             logger.exception("mark_paid: dispatch_pending_links failed for %s", order_id)
 
 
+def _yookassa_payment_status(payment_id: str) -> str | None:
+    """Опросить YooKassa о статусе платежа. None — если API недоступна/ошибка
+    (безопасный дефолт: вызывающий продолжит как обычно, т.е. пометит failed)."""
+    try:
+        from data.config import SECRET_KEY, SHOP_ID
+        from yookassa import Configuration, Payment
+
+        Configuration.account_id = SHOP_ID
+        Configuration.secret_key = SECRET_KEY
+        return getattr(Payment.find_one(payment_id), "status", None)
+    except Exception:
+        logger.warning("yookassa find_one failed for payment %s (treating as unknown)",
+                       payment_id)
+        return None
+
+
 def mark_payment_failed(order_id: int) -> None:
     """Перевести unpaid → payment_failed (expiry или явный refusal).
 
-    Best-effort: если у заказа есть payment_id (yookassa), пробуем `Payment.cancel`,
-    чтобы юзеру не списало деньги. Ошибки cancel не валим — order уже в БД помечен.
+    Сверка в точке отказа. yookassa-платёж создаётся с capture=True: если юзер
+    оплатил, но не вернулся на сайт (return-url / status-poll не сработали),
+    деньги уже списаны (succeeded), а заказ так и висит unpaid — пока expiry-loop
+    не позовёт сюда. Это ЕДИНСТВЕННЫЙ чокпоинт, через который проходят все отказы
+    (expiry / return / status-poll), поэтому сверяемся с YooKassa именно здесь:
+    если платёж succeeded — это не отказ, а пропущенное подтверждение, переводим
+    заказ в paid (mark_paid → dispatch ссылок), а не payment_failed. Иначе деньги
+    остались бы у нас (Payment.cancel на succeeded всё равно не срабатывает),
+    а услуга не была бы оказана.
 
-    Если order не в unpaid — no-op (защита от гонок с webhook).
+    Best-effort: для не-succeeded yookassa-платежа пробуем `Payment.cancel`,
+    чтобы юзеру не списало. Если order не в unpaid — no-op (гонка с mark_paid).
     """
     with connect() as con:
         row = con.execute(
@@ -286,14 +310,28 @@ def mark_payment_failed(order_id: int) -> None:
         if row is None:
             return
         method, payment_id = row["payment_method"], row["payment_id"]
-        con.execute(
+
+    # Сверка ДО смены статуса — заказ ещё unpaid, поэтому mark_paid (с guard
+    # WHERE status='unpaid') отработает корректно.
+    if method == "yookassa" and payment_id:
+        if _yookassa_payment_status(payment_id) == "succeeded":
+            logger.info(
+                "mark_payment_failed: order %s YK=succeeded — восстанавливаем в paid",
+                order_id,
+            )
+            mark_paid(order_id)
+            return
+
+    with connect() as con:
+        cur = con.execute(
             "UPDATE orders SET status='payment_failed' "
             "WHERE increment=? AND status='unpaid'",
             (order_id,),
         )
         con.commit()
+        changed = cur.rowcount > 0
 
-    if method == "yookassa" and payment_id:
+    if changed and method == "yookassa" and payment_id:
         try:
             from data.config import SECRET_KEY, SHOP_ID
             from yookassa import Configuration, Payment

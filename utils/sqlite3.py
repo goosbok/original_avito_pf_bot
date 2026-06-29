@@ -1059,10 +1059,14 @@ def apply_phase2_migrations():
             print("orders.start_date added")
 
         # === order_links.dispatch_attempts (per-link auto retry counter) ===
-        existing_ol = {row['name'] for row in con.execute("PRAGMA table_info(order_links)").fetchall()}
-        if 'dispatch_attempts' not in existing_ol:
-            con.execute("ALTER TABLE order_links ADD COLUMN dispatch_attempts INTEGER NOT NULL DEFAULT 0")
-            print("order_links.dispatch_attempts added (existing rows defaulted to 0)")
+        ol_exists = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='order_links'"
+        ).fetchone()
+        if ol_exists:
+            existing_ol = {row['name'] for row in con.execute("PRAGMA table_info(order_links)").fetchall()}
+            if 'dispatch_attempts' not in existing_ol:
+                con.execute("ALTER TABLE order_links ADD COLUMN dispatch_attempts INTEGER NOT NULL DEFAULT 0")
+                print("order_links.dispatch_attempts added (existing rows defaulted to 0)")
 
         # === auth_providers.verified ===
         existing_ap = {row['name'] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}

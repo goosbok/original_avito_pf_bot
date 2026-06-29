@@ -13,8 +13,10 @@ import asyncio
 import logging
 from dataclasses import dataclass
 
+from data import config
 from services.avito_phrase_cache import lookup as cache_lookup
 from services.avito_url import extract_ad_id
+from services.circuit_breaker import CircuitBreaker
 from services.db import connect
 from services.exceptions import (
     ExecutorAPIError,
@@ -27,6 +29,30 @@ from services.order_links_classifier import classify
 from services.pf_executor_api import submit_link
 
 logger = logging.getLogger(__name__)
+
+_breaker = CircuitBreaker(
+    config.BIZA_BREAKER_ERRORS, config.BIZA_COOLDOWN_MIN * 60
+)
+
+
+def _bump_attempts_or_manual(link_id: int) -> None:
+    """+1 к dispatch_attempts; при достижении BIZA_MAX_ATTEMPTS → manual."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT dispatch_attempts FROM order_links "
+            "WHERE id=? AND status='pending'",
+            (link_id,),
+        ).fetchone()
+        if row is None:
+            return  # уже не pending — гонка
+        attempts = (row["dispatch_attempts"] or 0) + 1
+        mode = "manual" if attempts >= config.BIZA_MAX_ATTEMPTS else "auto"
+        con.execute(
+            "UPDATE order_links SET dispatch_attempts=?, delivery_mode=? "
+            "WHERE id=? AND status='pending'",
+            (attempts, mode, link_id),
+        )
+        con.commit()
 
 
 def dispatch_pending_links(order_id: int) -> None:
@@ -45,7 +71,8 @@ def dispatch_pending_links(order_id: int) -> None:
         order_d = dict(order)
         rows = con.execute(
             "SELECT id FROM order_links "
-            "WHERE order_id=? AND status='pending'",
+            "WHERE order_id=? AND status='pending' "
+            "AND (delivery_mode IS NULL OR delivery_mode='auto')",
             (order_id,),
         ).fetchall()
         candidates = [r["id"] for r in rows]
@@ -109,17 +136,14 @@ def _dispatch_one(link_id: int, order: dict) -> None:
             con.commit()
         return
     except ExecutorAPIError:
-        # Временный сбой — оставляем pending+auto для retry
-        with connect() as con:
-            con.execute(
-                "UPDATE order_links SET delivery_mode='auto' "
-                "WHERE id=? AND status='pending'",
-                (link_id,),
-            )
-            con.commit()
+        # Временный сбой biza (429/500/сеть). Считаем попытку: после
+        # BIZA_MAX_ATTEMPTS уводим ссылку в manual, иначе оставляем pending+auto.
+        _breaker.record_error()
+        _bump_attempts_or_manual(link_id)
         return
 
     # API принял — в work
+    _breaker.record_success()
     from services.order_links import mark_in_work
     deadline = compute_deadline(order)
     mark_in_work(link_id, delivery_mode="auto",

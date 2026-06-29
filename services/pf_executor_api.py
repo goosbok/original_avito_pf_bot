@@ -11,6 +11,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import requests
 
 from data import config
+from services import rate_limiter
 from services.exceptions import ExecutorAPIError, ExecutorAPIRejected
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,9 @@ def submit_link(
         "X-API-KEY": config.BIZA_API_KEY,
         "Content-Type": "application/json",
     }
+
+    # Глобальный лимит 60/мин — не превышаем, иначе biza отвечает 429.
+    rate_limiter.acquire()
 
     try:
         resp = _session.post(api_url, json=payload, headers=headers,

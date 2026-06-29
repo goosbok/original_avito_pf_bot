@@ -75,6 +75,10 @@ def _make_config_stub() -> types.ModuleType:
     stub.PF_AUTO_RATE_METRIC_INTERVAL_H = 1
     stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
     stub.PF_DEFAULT_START_HOUR = 0
+    stub.BIZA_MAX_PER_MIN = 60
+    stub.BIZA_BREAKER_ERRORS = 3
+    stub.BIZA_COOLDOWN_MIN = 30
+    stub.BIZA_MAX_ATTEMPTS = 2
     return stub
 
 
@@ -149,3 +153,22 @@ def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     apply_phase2_migrations()
 
     yield db_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_biza_singletons():
+    """Сбрасывает rate limiter и circuit breaker до и после каждого теста."""
+    def _do():
+        try:
+            from services.order_links_dispatcher import _breaker
+            _breaker.reset()
+        except Exception:
+            pass
+        try:
+            from services import rate_limiter
+            rate_limiter.reset()
+        except Exception:
+            pass
+    _do()
+    yield
+    _do()

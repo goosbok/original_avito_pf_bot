@@ -116,3 +116,13 @@ PF_AUTO_RATE_METRIC_INTERVAL_H: int = int(
 PF_DEFAULT_START_HOUR: int = max(
     0, min(23, int(os.getenv("PF_DEFAULT_START_HOUR", "0")))
 )
+
+# === biza API resilience (rate limit / circuit breaker / attempt cap) ===
+# biza режет при >60 req/min (HTTP 429). Лимитер не даёт превысить.
+BIZA_MAX_PER_MIN: int = max(1, int(os.getenv("BIZA_MAX_PER_MIN", "60")))
+# Стоп-кран: сколько ошибок подряд (429/500/сеть) до открытия.
+BIZA_BREAKER_ERRORS: int = max(1, int(os.getenv("BIZA_BREAKER_ERRORS", "3")))
+# Сколько минут не трогать biza после открытия стоп-крана.
+BIZA_COOLDOWN_MIN: int = max(1, int(os.getenv("BIZA_COOLDOWN_MIN", "30")))
+# Потолок попыток авто-отправки на ссылку; дальше → manual.
+BIZA_MAX_ATTEMPTS: int = max(1, int(os.getenv("BIZA_MAX_ATTEMPTS", "2")))

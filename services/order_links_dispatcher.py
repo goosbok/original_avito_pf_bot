@@ -78,6 +78,11 @@ def dispatch_pending_links(order_id: int) -> None:
         candidates = [r["id"] for r in rows]
 
     for link_id in candidates:
+        if not _breaker.allow():
+            logger.warning(
+                "dispatch_pending_links: circuit open, abort order %s", order_id
+            )
+            return
         try:
             _dispatch_one(link_id, order_d)
         except Exception:  # noqa: BLE001 — best-effort на партию
@@ -160,21 +165,32 @@ def dispatch_for_paid_orders() -> int:
     или прошёл частично (например, API временно не доступен).
     Возвращает количество обработанных заказов.
     """
+    if not _breaker.allow():
+        logger.info("dispatch_for_paid_orders: circuit open, skip pass")
+        return 0
     with connect() as con:
         rows = con.execute(
             "SELECT DISTINCT o.increment "
             "FROM orders o JOIN order_links ol ON ol.order_id = o.increment "
-            "WHERE o.status='paid' AND ol.status='pending'"
+            "WHERE o.status='paid' AND ol.status='pending' "
+            "AND (ol.delivery_mode IS NULL OR ol.delivery_mode='auto')"
         ).fetchall()
     order_ids = [int(r["increment"]) for r in rows]
+    handled = 0
     for order_id in order_ids:
+        if not _breaker.allow():
+            logger.warning(
+                "dispatch_for_paid_orders: circuit opened mid-pass, aborting"
+            )
+            break
         try:
             dispatch_pending_links(order_id)
+            handled += 1
         except Exception:  # noqa: BLE001
             logger.exception(
                 "dispatch_for_paid_orders: order %s failed", order_id
             )
-    return len(order_ids)
+    return handled
 
 
 async def run_dispatcher_loop() -> None:

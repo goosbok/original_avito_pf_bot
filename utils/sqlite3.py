@@ -967,8 +967,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "failure_reason TEXT,"
             "external_id TEXT,"
             "created_at TIMESTAMP NOT NULL,"
+            "dispatch_attempts INTEGER NOT NULL DEFAULT 0,"
             "FOREIGN KEY (order_id) REFERENCES orders(increment))",
-            12,
+            13,
         ),
         (
             "avito_ad_phrase_cache",
@@ -1056,6 +1057,12 @@ def apply_phase2_migrations():
         if 'start_date' not in existing_orders:
             con.execute("ALTER TABLE orders ADD COLUMN start_date TEXT")
             print("orders.start_date added")
+
+        # === order_links.dispatch_attempts (per-link auto retry counter) ===
+        existing_ol = {row['name'] for row in con.execute("PRAGMA table_info(order_links)").fetchall()}
+        if 'dispatch_attempts' not in existing_ol:
+            con.execute("ALTER TABLE order_links ADD COLUMN dispatch_attempts INTEGER NOT NULL DEFAULT 0")
+            print("order_links.dispatch_attempts added (existing rows defaulted to 0)")
 
         # === auth_providers.verified ===
         existing_ap = {row['name'] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}

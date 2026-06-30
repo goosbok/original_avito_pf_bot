@@ -113,6 +113,81 @@ def submit_link(
     raise ExecutorAPIError(f"{status}: {err_text}")
 
 
+def get_tasks(*, page: int = 1, limit: int = 50) -> list[dict]:
+    """GET get-tasks.php?module=avito_pf → список задач (biza отдаёт новые сверху).
+
+    Через rate-limiter. Raises ExecutorAPIError на не-200 / сеть / не-success.
+    """
+    if not config.BIZA_API_KEY:
+        raise ExecutorAPIError("BIZA_API_KEY not configured")
+    rate_limiter.acquire()
+    api_url = config.BIZA_API_BASE_URL + "/get-tasks.php"
+    try:
+        resp = _session.get(
+            api_url,
+            params={"module": "avito_pf", "page": page, "limit": limit},
+            headers={"X-API-KEY": config.BIZA_API_KEY},
+            timeout=20.0,
+        )
+    except requests.RequestException as exc:
+        raise ExecutorAPIError(f"get-tasks network: {exc}") from exc
+    if resp.status_code != 200:
+        raise ExecutorAPIError(f"get-tasks {resp.status_code}: {resp.text[:200]}")
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise ExecutorAPIError("get-tasks: invalid JSON") from exc
+    if not body.get("success"):
+        raise ExecutorAPIError(f"get-tasks not success: {body.get('error')}")
+    return body.get("data", {}).get("tasks", []) or []
+
+
+def find_existing_task(
+    url: str,
+    order: dict,
+    *,
+    within_seconds: int = 600,
+    now_ms: float | None = None,
+) -> str | None:
+    """Дедуп после ошибки add-tasks (он НЕ идемпотентен): ищет уже созданную
+    задачу с тем же ad_link + views_per_day + days_count, созданную недавно
+    (created_at в пределах within_seconds). Возвращает task_id (str) или None.
+
+    На любую ошибку get-tasks → None (caller откатывается к retry-логике).
+    biza отдаёт задачи новыми сверху, поэтому первое совпадение — самое свежее.
+    """
+    raw = str(order.get("position_name") or "")
+    parts = raw.split("/")
+    try:
+        days = int(parts[0])
+        views = int(parts[1])
+    except (ValueError, IndexError):
+        return None
+    try:
+        tasks = get_tasks(page=1, limit=50)
+    except ExecutorAPIError:
+        return None
+    if now_ms is None:
+        now_ms = datetime.now(timezone.utc).timestamp() * 1000.0
+    for t in tasks:
+        if t.get("ad_link") != url:
+            continue
+        try:
+            if int(t.get("views_per_day")) != views:
+                continue
+            if int(t.get("days_count")) != days:
+                continue
+        except (TypeError, ValueError):
+            continue
+        try:
+            created_ms = float(t.get("created_at"))
+        except (TypeError, ValueError):
+            return str(t.get("task_id"))  # нет времени → берём (newest-first)
+        if now_ms - created_ms <= within_seconds * 1000:
+            return str(t.get("task_id"))
+    return None
+
+
 # === Payload builder ===
 
 

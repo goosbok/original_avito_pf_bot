@@ -38,7 +38,6 @@ class RateLimiter:
                 wait = (1.0 - self._tokens) / self._refill_per_sec
             self._sleep(wait)
 
-
     def reset(self) -> None:
         with self._lock:
             self._tokens = self._capacity

@@ -118,8 +118,10 @@ PF_DEFAULT_START_HOUR: int = max(
 )
 
 # === biza API resilience (rate limit / circuit breaker / attempt cap) ===
-# biza режет при >60 req/min (HTTP 429). Лимитер не даёт превысить.
-BIZA_MAX_PER_MIN: int = max(1, int(os.getenv("BIZA_MAX_PER_MIN", "60")))
+# biza режет при >60 req/min (HTTP 429). Token-bucket ёмкости C в худшем
+# случае (полный бакет + дозаправка) выдаёт до 2·C за скользящее окно 60с,
+# поэтому дефолт 30 → ≤60/мин в любом окне. Реальный объём много ниже.
+BIZA_MAX_PER_MIN: int = max(1, int(os.getenv("BIZA_MAX_PER_MIN", "30")))
 # Стоп-кран: сколько ошибок подряд (429/500/сеть) до открытия.
 BIZA_BREAKER_ERRORS: int = max(1, int(os.getenv("BIZA_BREAKER_ERRORS", "3")))
 # Сколько минут не трогать biza после открытия стоп-крана.

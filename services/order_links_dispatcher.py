@@ -200,7 +200,9 @@ async def run_dispatcher_loop() -> None:
     )
     while True:
         try:
-            count = dispatch_for_paid_orders()
+            # В отдельном потоке: dispatch делает синхронный HTTP + блокирующий
+            # rate_limiter.sleep — нельзя морозить общий event-loop (FastAPI/aiogram).
+            count = await asyncio.to_thread(dispatch_for_paid_orders)
             if count:
                 logger.info("dispatcher: handled %d orders", count)
         except Exception:  # noqa: BLE001

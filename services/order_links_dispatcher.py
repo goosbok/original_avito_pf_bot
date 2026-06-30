@@ -26,7 +26,7 @@ from services.exceptions import (
 )
 from services.order_links import compute_deadline
 from services.order_links_classifier import classify
-from services.pf_executor_api import submit_link
+from services.pf_executor_api import find_existing_task, submit_link
 
 logger = logging.getLogger(__name__)
 
@@ -141,8 +141,18 @@ def _dispatch_one(link_id: int, order: dict) -> None:
             con.commit()
         return
     except ExecutorAPIError:
-        # Временный сбой biza (429/500/сеть). Считаем попытку: после
-        # BIZA_MAX_ATTEMPTS уводим ссылку в manual, иначе оставляем pending+auto.
+        # add-tasks НЕ идемпотентен: biza могла создать задачу несмотря на ошибку.
+        # Перед повтором проверяем get-tasks — если задача уже есть, усыновляем её,
+        # не плодим дубль (рекомендация biza). Иначе — считаем попытку.
+        existing = find_existing_task(url, order)
+        if existing is not None:
+            _breaker.record_success()
+            from services.order_links import mark_in_work
+            mark_in_work(link_id, delivery_mode="auto",
+                         deadline_at=compute_deadline(order), external_id=existing)
+            logger.info("dispatch.dedup link=%s adopted external_id=%s",
+                        link_id, existing)
+            return
         _breaker.record_error()
         _bump_attempts_or_manual(link_id)
         return

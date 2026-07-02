@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.dispatcher.filters.state import State, StatesGroup
 
 from data.loader import dp, bot
-from utils.sqlite3 import get_admins, get_user, get_order, delete_order
+from utils.sqlite3 import get_admins, get_user, get_order, delete_order, get_user_by_tg_id
 from design import order_text
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,7 @@ class Admin(StatesGroup):
     new_promik_price = State()
     del_user = State()
     user_info = State()
+    select_user = State()
 
 
 class hammster(StatesGroup):
@@ -35,21 +36,22 @@ def generate_random_string(length):
 random_combination = generate_random_string(8)
 
 
-async def find_user(param):
-    if param.isdigit():
-        user = get_user(id=param)
+async def find_user(param: str) -> list[dict]:
+    results = []
+    stripped = param.lstrip('@')
+    if stripped.isdigit():
+        by_id = get_user(id=stripped)
+        by_tg = get_user_by_tg_id(stripped)
+        seen: set = set()
+        for u in [by_id, by_tg]:
+            if u and u['id'] not in seen:
+                seen.add(u['id'])
+                results.append(u)
     else:
-        if param[0] != '@':
-            try:
-                user = get_user(user_name=param)
-            except Exception as e:
-                logger.exception("get_user_string: user not found param=%s", param)
-        else:
-            try:
-                user = get_user(user_name=param[1:])
-            except Exception as e:
-                logger.exception("get_user_string: user not found param=%s", param)
-    return user
+        u = get_user(user_name=stripped)
+        if u:
+            results.append(u)
+    return results
 
 
 @dp.message_handler(commands=['admin'], state='*')

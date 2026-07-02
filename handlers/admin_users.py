@@ -11,10 +11,122 @@ from utils.sqlite3 import (
     get_all_telegram_ids,
 )
 from utils.other import get_user_string_without_first_name
-from keyboards.inline_keyboards import admin_back_kb
+from keyboards.inline_keyboards import admin_back_kb, user_select_kb
 from .admin_base import Admin, find_user
 
 logger = logging.getLogger(__name__)
+
+
+async def _show_candidate(target, state: FSMContext) -> None:
+    """Send current candidate card with pagination keyboard."""
+    data = await state.get_data()
+    candidates = data["candidates"]
+    page = data["page"]
+    usr = candidates[page]
+    usr_str = await get_user_string_without_first_name(usr)
+    text = (
+        f"🔍 Найдено {len(candidates)} пользователей. Выберите нужного:\n\n"
+        f"🐹 {usr_str}\n💳 Баланс: <b>{usr['balance']}</b>"
+    )
+    kb = user_select_kb(page, len(candidates))
+    msg = target.message if hasattr(target, "message") else target
+    await msg.answer(text, reply_markup=kb)
+
+
+async def _proceed(target, state: FSMContext, usr: dict, action: str) -> None:
+    """Route to the appropriate next step for the given action."""
+    msg = target.message if hasattr(target, "message") else target
+    if action == "balance":
+        usr_str = await get_user_string_without_first_name(usr)
+        await msg.answer(f"Выбран\n🐹 Пользователь {usr_str}\n💳 Баланс: <b>{usr['balance']}</b>")
+        await state.update_data(usr=usr)
+        await balance.change_balance.set()
+        await msg.answer("💳 Введите новый баланс:")
+    elif action == "del":
+        usr_str = await get_user_string_without_first_name(usr)
+        try:
+            delete_user(usr['id'])
+            await msg.answer(f"✅ Пользователь {usr_str} успешно удален!", reply_markup=admin_back_kb('users_man'))
+        except Exception as e:
+            logger.exception("handler error")
+            await msg.answer(f"❎ Ошибка удаления пользователя!\n{e}", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+    elif action == "vip_set":
+        usr_str = await get_user_string_without_first_name(usr)
+        adm_tg_id = target.from_user.id if hasattr(target, "from_user") else None
+        adm_usr = get_user(id=adm_tg_id) if adm_tg_id else None
+        if usr['is_vip'] != 1:
+            update_user(id=usr['id'], is_vip=1)
+            await msg.answer(f"🐹 Пользователь {usr_str} получил 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+            tg_id = get_tg_id_for_user(usr['id'])
+            if tg_id and adm_usr:
+                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
+        else:
+            await msg.answer(f"🐹 Пользователь {usr_str} уже имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+    elif action == "vip_unset":
+        usr_str = await get_user_string_without_first_name(usr)
+        adm_tg_id = target.from_user.id if hasattr(target, "from_user") else None
+        adm_usr = get_user(id=adm_tg_id) if adm_tg_id else None
+        if usr['is_vip'] != 0:
+            update_user(id=usr['id'], is_vip=0)
+            await msg.answer(f"🐹 Пользователь {usr_str} потерял 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+            tg_id = get_tg_id_for_user(usr['id'])
+            if tg_id and adm_usr:
+                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
+        else:
+            await msg.answer(f"🐹 Пользователь {usr_str} не имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+
+
+async def handle_user_input(message: types.Message, state: FSMContext, action: str) -> None:
+    """Shared entry point for all four admin user flows."""
+    users = await find_user(message.text)
+    if len(users) == 0:
+        await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('users_man'))
+        await state.finish()
+    elif len(users) == 1:
+        await _proceed(message, state, users[0], action)
+    else:
+        await state.update_data(candidates=users, page=0, pending_action=action)
+        await Admin.select_user.set()
+        await _show_candidate(message, state)
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith("usel:"), state=Admin.select_user)
+async def usel_nav(call: types.CallbackQuery, state: FSMContext):
+    action = call.data.split(":")[1]
+    if action == "noop":
+        await call.answer()
+        return
+    if action == "cancel":
+        await call.answer()
+        await state.finish()
+        await call.message.answer("❌ Отменено.", reply_markup=admin_back_kb('users_man'))
+        return
+    data = await state.get_data()
+    candidates = data["candidates"]
+    page = data["page"]
+    if action == "prev":
+        page = max(0, page - 1)
+    elif action == "next":
+        page = min(len(candidates) - 1, page + 1)
+    elif action == "pick":
+        pending = data["pending_action"]
+        await call.answer()
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await _proceed(call, state, candidates[page], pending)
+        return
+    await state.update_data(page=page)
+    await call.answer()
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await _show_candidate(call.message, state)
 
 
 class balance(StatesGroup):

@@ -1472,3 +1472,17 @@ def funnel_period_kb(service: str) -> InlineKeyboardMarkup:
     )
     kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="funnel_menu"))
     return kb
+
+
+def user_select_kb(page: int, total: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=3)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("←", callback_data="usel:prev"))
+    nav.append(InlineKeyboardButton(f"{page + 1}/{total}", callback_data="usel:noop"))
+    if page < total - 1:
+        nav.append(InlineKeyboardButton("→", callback_data="usel:next"))
+    kb.row(*nav)
+    kb.add(InlineKeyboardButton("✅ Выбрать этого", callback_data="usel:pick"))
+    kb.add(InlineKeyboardButton("🔙 Отмена", callback_data="usel:cancel"))
+    return kb

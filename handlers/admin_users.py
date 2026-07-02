@@ -186,20 +186,7 @@ async def del_user(call: types.CallbackQuery):
 
 @dp.message_handler(state=Admin.del_user)
 async def del_usr(message: types.Message, state: FSMContext):
-    delUser = await find_user(message.text)
-    if not delUser:
-        await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
-        return
-    usr_str = await get_user_string_without_first_name(delUser)
-    try:
-        delete_user(delUser['id'])
-        await message.answer(f"✅ Пользователь {usr_str} успешно удален!", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
-    except Exception as e:
-        logger.exception("handler error")
-        await message.answer(f"❎ Ошибка удаления пользователя!\n{e}", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
+    await handle_user_input(message, state, "del")
 
 
 @dp.callback_query_handler(text="user_balance")
@@ -214,21 +201,7 @@ async def usr_balance(call: types.CallbackQuery):
 
 @dp.message_handler(state=balance.select_user)
 async def usr_sel(message: types.Message, state: FSMContext):
-    usr = await find_user(message.text)
-    if not usr:
-        await message.answer(f"⚠️ Пользователь {message.text} не найден!", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
-        return
-    try:
-        usr_str = await get_user_string_without_first_name(usr)
-        await message.answer(f"Выбран\n🐹 Пользователь {usr_str}\n💳 Баланс: <b>{usr['balance']}</b>")
-        await state.update_data(usr=usr)
-        await balance.change_balance.set()
-        await message.answer("💳 Введите новый баланс:")
-    except Exception as e:
-        logger.exception("handler error")
-        await message.answer(f"⚠️ Ошибка!:\n{e}")
-        await state.finish()
+    await handle_user_input(message, state, "balance")
 
 
 @dp.message_handler(state=balance.change_balance)
@@ -262,23 +235,8 @@ async def set_vip(call: types.CallbackQuery):
 
 
 @dp.message_handler(state=vip.set_status)
-async def vip_set(message: types.Message, state: FSMContext, user_id: int):
-    try:
-        usr = await find_user(message.text)
-        adm_usr = get_user(id=user_id)
-        usr_str = await get_user_string_without_first_name(usr)
-        if usr['is_vip'] != 1:
-            update_user(id=usr['id'], is_vip=1)
-            await message.answer(f"🐹 Пользователь {usr_str} получил 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            tg_id = get_tg_id_for_user(usr['id'])
-            if tg_id:
-                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
-        else:
-            await message.answer(f"🐹 Пользователь {usr_str} уже имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
-    except Exception as e:
-        await message.answer(f"⚠️ Ошибка!\n{e}")
-    await state.finish()
+async def vip_set(message: types.Message, state: FSMContext):
+    await handle_user_input(message, state, "vip_set")
 
 
 @dp.callback_query_handler(text="delete_vip")
@@ -292,23 +250,8 @@ async def unset_vip(call: types.CallbackQuery):
 
 
 @dp.message_handler(state=vip.unset_status)
-async def vip_unset(message: types.Message, state: FSMContext, user_id: int):
-    try:
-        usr = await find_user(message.text)
-        adm_usr = get_user(id=user_id)
-        usr_str = await get_user_string_without_first_name(usr)
-        if usr['is_vip'] != 0:
-            update_user(id=usr['id'], is_vip=0)
-            await message.answer(f"🐹 Пользователь {usr_str} потерял 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            tg_id = get_tg_id_for_user(usr['id'])
-            if tg_id:
-                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
-        else:
-            await message.answer(f"🐹 Пользователь {usr_str} не имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-        await state.finish()
-    except Exception as e:
-        await message.answer(f"⚠️ Ошибка!\n{e}")
-    await state.finish()
+async def vip_unset(message: types.Message, state: FSMContext):
+    await handle_user_input(message, state, "vip_unset")
 
 
 @dp.callback_query_handler(text="get_vip", state="*")

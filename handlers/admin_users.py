@@ -55,27 +55,35 @@ async def _proceed(target, state: FSMContext, usr: dict, action: str) -> None:
         usr_str = await get_user_string_without_first_name(usr)
         adm_tg_id = target.from_user.id if hasattr(target, "from_user") else None
         adm_usr = get_user(id=adm_tg_id) if adm_tg_id else None
-        if usr['is_vip'] != 1:
-            update_user(id=usr['id'], is_vip=1)
-            await msg.answer(f"🐹 Пользователь {usr_str} получил 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            tg_id = get_tg_id_for_user(usr['id'])
-            if tg_id and adm_usr:
-                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
-        else:
-            await msg.answer(f"🐹 Пользователь {usr_str} уже имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        try:
+            if usr['is_vip'] != 1:
+                update_user(id=usr['id'], is_vip=1)
+                await msg.answer(f"🐹 Пользователь {usr_str} получил 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+                tg_id = get_tg_id_for_user(usr['id'])
+                if tg_id and adm_usr:
+                    await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} установил Вам 💎VIP-статус!")
+            else:
+                await msg.answer(f"🐹 Пользователь {usr_str} уже имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        except Exception as e:
+            logger.exception("handler error")
+            await msg.answer(f"❎ Ошибка установки VIP-статуса!\n{e}", reply_markup=admin_back_kb('users_man'))
         await state.finish()
     elif action == "vip_unset":
         usr_str = await get_user_string_without_first_name(usr)
         adm_tg_id = target.from_user.id if hasattr(target, "from_user") else None
         adm_usr = get_user(id=adm_tg_id) if adm_tg_id else None
-        if usr['is_vip'] != 0:
-            update_user(id=usr['id'], is_vip=0)
-            await msg.answer(f"🐹 Пользователь {usr_str} потерял 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
-            tg_id = get_tg_id_for_user(usr['id'])
-            if tg_id and adm_usr:
-                await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
-        else:
-            await msg.answer(f"🐹 Пользователь {usr_str} не имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        try:
+            if usr['is_vip'] != 0:
+                update_user(id=usr['id'], is_vip=0)
+                await msg.answer(f"🐹 Пользователь {usr_str} потерял 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+                tg_id = get_tg_id_for_user(usr['id'])
+                if tg_id and adm_usr:
+                    await bot.send_message(chat_id=tg_id, text=f"🤖 Пользователь @{adm_usr['user_name']} отменил Вам 💎VIP-статус!")
+            else:
+                await msg.answer(f"🐹 Пользователь {usr_str} не имеет 💎VIP-статус!", reply_markup=admin_back_kb('users_man'))
+        except Exception as e:
+            logger.exception("handler error")
+            await msg.answer(f"❎ Ошибка снятия VIP-статуса!\n{e}", reply_markup=admin_back_kb('users_man'))
         await state.finish()
 
 
@@ -104,6 +112,7 @@ async def usel_nav(call: types.CallbackQuery, state: FSMContext):
         await state.finish()
         await call.message.answer("❌ Отменено.", reply_markup=admin_back_kb('users_man'))
         return
+    await call.answer()
     data = await state.get_data()
     candidates = data["candidates"]
     page = data["page"]
@@ -121,7 +130,6 @@ async def usel_nav(call: types.CallbackQuery, state: FSMContext):
         await _proceed(call, state, candidates[page], pending)
         return
     await state.update_data(page=page)
-    await call.answer()
     try:
         await call.message.delete()
     except Exception:

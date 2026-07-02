@@ -169,7 +169,8 @@ async def call_user_all_orders(call: types.CallbackQuery, state: FSMContext):
 async def admin_show_user_all_orders(message: types.Message, state: FSMContext):
     state_data = await state.get_data()
     if 'old_user' not in state_data:
-        usr = await find_user(message.text)
+        _users = await find_user(message.text)
+        usr = _users[0] if _users else None
     else:
         usr = state_data['old_user']
     try:
@@ -586,7 +587,8 @@ async def magic_gen(message: types.Message, state: FSMContext):
     if 'old_user' in state_data:
         user = state_data['old_user']
     else:
-        user = await find_user(param)
+        _users = await find_user(param)
+        user = _users[0] if _users else None
     page = state_data.get('page', 'magic')
     if user:
         if magic_command == "generate":
@@ -724,7 +726,8 @@ async def user_gen_finance_report(user_id):
 async def user_all_refills_user(message: types.Message, state: FSMContext):
     state_data = await state.get_data()
     if 'old_user' not in state_data:
-        user = await find_user(message.text)
+        _users = await find_user(message.text)
+        user = _users[0] if _users else None
         page = 'users_man'
     else:
         user = state_data['old_user']

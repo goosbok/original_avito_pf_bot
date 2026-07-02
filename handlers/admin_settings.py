@@ -464,7 +464,8 @@ async def admin_add_admin(message: types.Message, state: FSMContext):
             add_admin(user_id_str)
             await message.answer(f'✅ Пользователь с ID {user_id_str} стал админом!', reply_markup=admin_back_kb("admins_setup"))
         else:
-            user = await find_user(user_id_str)
+            _users = await find_user(user_id_str)
+            user = _users[0] if _users else None
             if user:
                 usr_str = await get_user_string_without_first_name(user)
                 # Admins are keyed by TG ID; resolve internal ID → TG ID.
@@ -504,7 +505,8 @@ async def admin_add_spam_exclude(message: types.Message, state: FSMContext):
         add_spam_exclude(user_id_str)
         await message.answer(f'✅ Пользователь с ID {user_id_str} исключен из рассылки!', reply_markup=admin_back_kb("admins_setup"))
     else:
-        user = await find_user(user_id_str)
+        _users = await find_user(user_id_str)
+        user = _users[0] if _users else None
         if user:
             usr_str = await get_user_string_without_first_name(user)
             add_spam_exclude(str(user['id']))
@@ -529,7 +531,8 @@ async def admin_add_report_exclude(message: types.Message, state: FSMContext):
         add_report_exclude(user_id_str)
         await message.answer(f'✅ Пользователь с ID {user_id_str} исключен из отчетов!', reply_markup=admin_back_kb("admins_setup"))
     else:
-        user = await find_user(user_id_str)
+        _users = await find_user(user_id_str)
+        user = _users[0] if _users else None
         if user:
             usr_str = await get_user_string_without_first_name(user)
             add_report_exclude(str(user['id']))

@@ -8,7 +8,6 @@ Flow:
 from __future__ import annotations
 
 import logging
-import re
 
 from aiogram import types
 from aiogram.dispatcher import FSMContext
@@ -23,16 +22,9 @@ from aiogram.types import (
 from data.loader import dp
 from services import identity
 from services.exceptions import AccountMergeConflict
+from utils.phones import normalize_phone
 
 logger = logging.getLogger(__name__)
-
-_NON_DIGIT_RE = re.compile(r"[^\d]+")
-
-
-def _normalize_phone(raw: str) -> str:
-    """Telegram contact.phone_number может быть без '+'. Возвращает '+<digits>'."""
-    digits = _NON_DIGIT_RE.sub("", raw or "")
-    return f"+{digits}" if digits else ""
 
 
 def _contact_keyboard() -> ReplyKeyboardMarkup:
@@ -73,8 +65,8 @@ async def on_contact(message: Message, state: FSMContext, user_id: int) -> None:
         )
         return
 
-    phone = _normalize_phone(contact.phone_number or "")
-    if not phone or len(phone) < 6:
+    phone = normalize_phone(contact.phone_number or "")
+    if not phone:
         await message.answer(
             "Не удалось разобрать номер. Попробуйте ещё раз: /connect",
             reply_markup=ReplyKeyboardRemove(),

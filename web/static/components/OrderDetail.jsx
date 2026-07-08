@@ -33,9 +33,14 @@ function AvitoPFDetail({ order }) {
     return `${d}.${mo}.${y}`;
   };
   const _addDays = (iso, n) => {
+    // Не использовать toISOString() — это UTC и для МСК (UTC+3) сдвигает
+    // дату на день назад (полночь МСК = 21:00 UTC предыдущих суток).
     const d = new Date(iso + 'T00:00:00');
     d.setDate(d.getDate() + n);
-    return _fmtDate(d.toISOString().slice(0, 10));
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return _fmtDate(`${y}-${mo}-${day}`);
   };
   const startIso = order.start_date || null;
   const endIso = startIso && days != null ? _addDays(startIso, days - 1) : null;

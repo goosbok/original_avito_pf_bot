@@ -199,7 +199,10 @@ async def order_contact_set(call: CallbackQuery, state: FSMContext, user_id: int
         STR = get_string('str_debet_pf')
         f_price = format_decimal(int(data['total_price']))
         await call.message.answer(STR.format(f_price), reply_markup=yes_no_order_kb())
-        await call.message.delete()
+        try:
+            await call.message.delete()
+        except Exception:
+            logger.debug("could not delete message")
     else:
         from utils.error_handler import error_kb
         STR = get_string('str_error')

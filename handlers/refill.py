@@ -41,34 +41,56 @@ async def refill(message: types.Message, state: FSMContext, user_id: int):
             await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id - 1)
         except Exception:
             logger.debug("could not delete message")
-    else:
-        from services.payment_methods import get_enabled as _get_payment_methods
-        enabled_methods = _get_payment_methods()
-        STR = get_string('str_select_payment_method').format(format_decimal(amount))
-        msg = await message.answer(STR, reply_markup=payment_methods_kb(enabled_methods))
-        async with state.proxy() as data:
-            data['price'] = amount
+        return
+
+    from services.payment_methods import get_enabled as _get_payment_methods
+    enabled_methods = _get_payment_methods()
+
+    # Один включённый способ оплаты — не заставляем выбирать, сразу отдаём
+    # итог (как после выбора метода вручную).
+    if len(enabled_methods) == 1:
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+        except Exception:
+            logger.debug("could not delete message")
+        tg_id = message.from_user.id
+        if enabled_methods[0] == "manual":
+            await _handle_manual_payment(state, amount, user_id, tg_id=tg_id)
+        else:
+            await _handle_yookassa_payment(state, amount, user_id, tg_id=tg_id)
+        return
+
+    STR = get_string('str_select_payment_method').format(format_decimal(amount))
+    msg = await message.answer(STR, reply_markup=payment_methods_kb(enabled_methods))
+    async with state.proxy() as data:
+        data['price'] = amount
     try:
         await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id - 1)
     except Exception:
         logger.debug("could not delete message")
 
 
-async def _handle_manual_payment(call: CallbackQuery, state: FSMContext, amount: int, user_id: int) -> None:
+async def _handle_manual_payment(
+    state: FSMContext, amount: int, user_id: int, *,
+    tg_id: int, old_message: "types.Message | None" = None,
+) -> None:
     await state.finish()
     manager_nick = get_setting('manager_nick') or 'support'
     f_amount = format_decimal(int(amount))
-    tg_id = call.from_user.id
     copy_text = f"Хочу пополнить баланс на {amount}₽. Мой ID: {tg_id}"
     STR = get_string('str_manual_payment').format(f_amount, copy_text)
-    await call.message.answer(STR, reply_markup=manual_payment_kb(manager_nick))
-    try:
-        await call.message.delete()
-    except Exception:
-        logger.debug("could not delete message")
+    await bot.send_message(chat_id=tg_id, text=STR, reply_markup=manual_payment_kb(manager_nick))
+    if old_message is not None:
+        try:
+            await old_message.delete()
+        except Exception:
+            logger.debug("could not delete message")
 
 
-async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amount: int, user_id: int) -> None:
+async def _handle_yookassa_payment(
+    state: FSMContext, amount: int, user_id: int, *,
+    tg_id: int, old_message: "types.Message | None" = None,
+) -> None:
     from services.refill import (
         create_invoice as svc_create_invoice,
         finalize_with_referral_bonus,
@@ -78,8 +100,11 @@ async def _handle_yookassa_payment(call: CallbackQuery, state: FSMContext, amoun
         notify_admins_success, notify_referrer, notify_user_success,
     )
 
-    await call.message.delete()
-    tg_id = call.from_user.id
+    if old_message is not None:
+        try:
+            await old_message.delete()
+        except Exception:
+            logger.debug("could not delete message")
 
     try:
         payment_url, payment_id = svc_create_invoice(
@@ -174,9 +199,10 @@ async def select_payment_method(call: CallbackQuery, state: FSMContext, user_id:
         await call.message.answer(get_string('str_error'), reply_markup=error_kb())
         return
 
+    tg_id = call.from_user.id
     if method == "manual":
-        await _handle_manual_payment(call, state, amount, user_id)
+        await _handle_manual_payment(state, amount, user_id, tg_id=tg_id, old_message=call.message)
     elif method == "yookassa":
-        await _handle_yookassa_payment(call, state, amount, user_id)
+        await _handle_yookassa_payment(state, amount, user_id, tg_id=tg_id, old_message=call.message)
     else:
         await call.answer("Неизвестный способ оплаты", show_alert=True)

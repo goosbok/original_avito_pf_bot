@@ -29,6 +29,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.SUPPORT_CHAT_ID = 0
     stub.SUPPORT_THREAD_QUESTIONS = 0
     stub.SUPPORT_THREAD_ORDERS = 0
+    stub.SUPPORT_THREAD_ORDERS_WEB = 0
     stub.SUPPORT_THREAD_ERRORS = 0
     stub.SUPPORT_THREAD_NEW_USERS = 0
     stub.CODER = 0

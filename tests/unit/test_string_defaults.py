@@ -22,7 +22,6 @@ REQUIRED_BUTTON_KEYS = [
     "btn_all_completed",
     "btn_all_posted",
     "btn_avito_cases",
-    "btn_rules",
     "btn_support",
     "btn_qna",
     "btn_promocodes",

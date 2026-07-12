@@ -122,7 +122,7 @@ async def _handle_yookassa_payment(
     if tg_id != 6988175544 and tg_id != 257838190:
         await bot.send_message(
             chat_id=tg_id, text=STR1,
-            reply_markup=yookassa_kb(int(amount), payment_url),
+            reply_markup=yookassa_kb(payment_url),
         )
         success = await check_payment_status(payment_id)
     else:

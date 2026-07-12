@@ -349,12 +349,12 @@ def pay_kb(price):
     )
     return keyboard
 
-def yookassa_kb(price, pay_url):
+def yookassa_kb(pay_url):
     keyboard = InlineKeyboardMarkup()
 
     keyboard.row(
         InlineKeyboardButton(
-            text=f"Оплатить {price} ₽",
+            text="Оплатить",
             url=pay_url
         ),
         InlineKeyboardButton(

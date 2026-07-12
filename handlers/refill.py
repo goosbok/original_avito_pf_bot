@@ -31,16 +31,23 @@ def _get_tg_id_for_user(internal_user_id: int) -> "int | None":
 @dp.message_handler(lambda message: message.text.isdigit(), state="refill_balance")
 async def refill(message: types.Message, state: FSMContext, user_id: int):
     amount = int(message.text)
+
+    # message.message_id - 1 — промпт "введите сумму" (profile.ref_bal),
+    # message.message_id — само сообщение юзера с суммой. Оба больше не
+    # нужны, как только сумма получена; иначе промпт остаётся висеть в
+    # чате и при повторном заходе в "Пополнить баланс" накапливаются дубли.
+    for mid in (message.message_id - 1, message.message_id):
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=mid)
+        except Exception:
+            logger.debug("could not delete message id=%s", mid)
+
     min_amount = int(get_setting('min_amount'))
     if amount < min_amount:
         await state.finish()
         STR = get_string('str_more_money')
         f_min_amo = format_decimal(min_amount)
-        msg = await message.answer(STR.format(f_min_amo), reply_markup=user_back_kb('user:profile'))
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id - 1)
-        except Exception:
-            logger.debug("could not delete message")
+        await message.answer(STR.format(f_min_amo), reply_markup=user_back_kb('user:profile'))
         return
 
     from services.payment_methods import get_enabled as _get_payment_methods
@@ -49,10 +56,6 @@ async def refill(message: types.Message, state: FSMContext, user_id: int):
     # Один включённый способ оплаты — не заставляем выбирать, сразу отдаём
     # итог (как после выбора метода вручную).
     if len(enabled_methods) == 1:
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
-        except Exception:
-            logger.debug("could not delete message")
         tg_id = message.from_user.id
         if enabled_methods[0] == "manual":
             await _handle_manual_payment(state, amount, user_id, tg_id=tg_id)
@@ -61,13 +64,9 @@ async def refill(message: types.Message, state: FSMContext, user_id: int):
         return
 
     STR = get_string('str_select_payment_method').format(format_decimal(amount))
-    msg = await message.answer(STR, reply_markup=payment_methods_kb(enabled_methods))
+    await message.answer(STR, reply_markup=payment_methods_kb(enabled_methods))
     async with state.proxy() as data:
         data['price'] = amount
-    try:
-        await bot.delete_message(chat_id=message.chat.id, message_id=msg.message_id - 1)
-    except Exception:
-        logger.debug("could not delete message")
 
 
 async def _handle_manual_payment(

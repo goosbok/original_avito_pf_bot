@@ -79,6 +79,28 @@ async def test_refill_shows_choice_when_multiple_methods_enabled(tmp_db):
 
 
 @pytest.mark.asyncio
+async def test_refill_deletes_prompt_and_own_message(tmp_db):
+    """Промпт "введите сумму" (profile.ref_bal) и сообщение юзера с суммой
+    должны удаляться сразу — иначе промпт остаётся висеть в чате и
+    накапливается при повторном заходе в "Пополнить баланс" (см. отчёт)."""
+    from handlers.refill import refill
+    import handlers.refill as refill_mod
+
+    message = _make_message(message_id=50)
+    state = MagicMock()
+    state.finish = AsyncMock()
+
+    with patch("services.payment_methods.get_enabled", return_value=["yookassa"]), \
+         patch("handlers.refill._handle_yookassa_payment", new=AsyncMock()), \
+         patch.object(refill_mod, "bot") as bot_mock:
+        bot_mock.delete_message = AsyncMock()
+        await refill(message, state, user_id=777)
+
+    deleted_ids = {call.kwargs["message_id"] for call in bot_mock.delete_message.call_args_list}
+    assert deleted_ids == {49, 50}  # 49 = промпт (message_id - 1), 50 = сообщение юзера
+
+
+@pytest.mark.asyncio
 async def test_select_payment_method_passes_tg_id_and_old_message(tmp_db):
     from handlers.refill import select_payment_method
 

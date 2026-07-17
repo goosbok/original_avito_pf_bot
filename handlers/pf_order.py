@@ -214,7 +214,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
     track_step(user_id=user_id, service="pf_avito", step="order_confirmed")
     user = get_user(id=user_id)
     async with state.proxy() as data:
-        if 'total_price' not in data:
+        if 'total_price' not in data or 'contact' not in data:
             from utils.error_handler import error_kb
             STR = get_string('str_error')
             await call.message.answer(STR, reply_markup=error_kb())
@@ -261,6 +261,7 @@ async def confirm_order(call: CallbackQuery, state: FSMContext, user_id: int):
                     "order placed: user_id=%s price=%s days=%s fix=%s",
                     user_id, data['total_price'], data.get('days'), data.get('fix'),
                 )
+                await state.finish()
             except Exception as exc:
                 await report_handler_error(
                     exc,

@@ -6,6 +6,7 @@ users.id == telegram_id удалён.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -16,6 +17,17 @@ from services.exceptions import (
     ProviderAlreadyLinked,
     UserNotFound,
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _grant_welcome_bonus_safe(user_id: int) -> None:
+    """Начислить welcome-бонус, не ломая регистрацию при любой ошибке."""
+    try:
+        from services.welcome_bonus import grant_welcome_bonus
+        grant_welcome_bonus(user_id)
+    except Exception:
+        logger.warning("welcome bonus grant failed for user_id=%s", user_id, exc_info=True)
 
 
 @dataclass(frozen=True)
@@ -178,6 +190,7 @@ def get_or_create_user_by_telegram(
     # Genuinely new user
     new_id = _create_user(user_name=user_name, first_name=first_name, ref_id=ref_id)
     link_provider(new_id, "telegram", str(tg_id))
+    _grant_welcome_bonus_safe(new_id)
     return new_id
 
 
@@ -210,7 +223,11 @@ def find_or_create_user_by_phone(phone: str, *, verified: bool = False) -> int:
             (new_user_id, phone, _now_iso(), 1 if verified else 0),
         )
         con.commit()
-        return new_user_id
+    # Гость (verified=False) бонус не получает: его аккаунт может смерджиться
+    # в полноценный (link_phone_provider), и бонус бы задвоился.
+    if verified:
+        _grant_welcome_bonus_safe(new_user_id)
+    return new_user_id
 
 
 def _is_phone_only_user(con, user_id: int) -> bool:
@@ -346,4 +363,5 @@ def get_or_create_user_by_email(
 
     new_id = _create_user(first_name=first_name)
     link_provider(new_id, "email", email_normalized, credential_hash=credential_hash)
+    _grant_welcome_bonus_safe(new_id)
     return new_id

@@ -57,3 +57,62 @@ def test_grant_disabled_when_zero(tmp_db, monkeypatch):
     assert grant_welcome_bonus(user_id) == 0
     assert balance.get_balance(user_id) == 0
     assert _welcome_rows(tmp_db, user_id) == []
+
+
+# ── интеграция с identity (кто получает бонус) ──────────────────────────────
+
+def test_new_telegram_user_gets_bonus(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    user_id = identity.get_or_create_user_by_telegram(tg_id=901, user_name="u1")
+    assert balance.get_balance(user_id) == 100
+    assert len(_welcome_rows(tmp_db, user_id)) == 1
+
+
+def test_existing_telegram_user_no_second_bonus(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    first = identity.get_or_create_user_by_telegram(tg_id=902, user_name="u2")
+    second = identity.get_or_create_user_by_telegram(tg_id=902, user_name="u2")
+    assert first == second
+    assert balance.get_balance(first) == 100
+    assert len(_welcome_rows(tmp_db, first)) == 1
+
+
+def test_new_email_user_gets_bonus(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    user_id = identity.get_or_create_user_by_email(
+        "user@example.com", credential_hash="x" * 32
+    )
+    assert balance.get_balance(user_id) == 100
+
+
+def test_new_verified_phone_user_gets_bonus(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    user_id = identity.find_or_create_user_by_phone("+79990000001", verified=True)
+    assert balance.get_balance(user_id) == 100
+
+
+def test_guest_phone_user_no_bonus(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    user_id = identity.find_or_create_user_by_phone("+79990000002")  # verified=False
+    assert balance.get_balance(user_id) == 0
+    assert _welcome_rows(tmp_db, user_id) == []
+
+
+def test_raw_create_user_no_bonus(tmp_db, monkeypatch):
+    """_create_user сам по себе не начисляет — этим покрыт и партнёрский API
+    (services/auth_api.py вызывает _create_user напрямую)."""
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    user_id = identity._create_user(first_name="api-end-user")
+    assert balance.get_balance(user_id) == 0
+    assert _welcome_rows(tmp_db, user_id) == []
+
+
+def test_merge_guest_into_registered_no_double_bonus(tmp_db, monkeypatch):
+    """Гость (verified=False, без бонуса) мерджится в полноценный аккаунт —
+    бонус не задваивается."""
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    identity.find_or_create_user_by_phone("+79990000003")  # guest, без бонуса
+    target_id = identity.get_or_create_user_by_telegram(tg_id=903, user_name="u3")
+    identity.link_phone_provider(target_id, "+79990000003", set_verified=True)
+    assert balance.get_balance(target_id) == 100
+    assert len(_welcome_rows(tmp_db, target_id)) == 1

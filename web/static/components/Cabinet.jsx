@@ -253,6 +253,8 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
             </div>
           </div>
 
+          <InstallBanner />
+
           {/* Catalog */}
           <div className="cabinet__section">
             <div className="section-header">

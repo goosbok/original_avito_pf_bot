@@ -127,6 +127,9 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
             </button>
           )}
 
+          {/* A2HS install entry point (regular user view only) */}
+          {isApp && user && !adminMode && <InstallHeaderButton />}
+
           {/* Notifications bell (regular user view only) */}
           {isApp && user && !adminMode && <NotificationsBell onNavigate={onNavigate} />}
 

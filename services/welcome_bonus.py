@@ -23,14 +23,17 @@ SOURCE_TYPE = "welcome_bonus"
 def grant_welcome_bonus(user_id: int) -> int:
     """Начислить welcome-бонус, если включён и ещё не начислялся.
 
-    Возвращает начисленную сумму в копейках (0 — выключено или уже был).
+    Возвращает начисленную сумму в рублях (0 — выключено или уже был).
     Порядок INSERT→credit как в refill.finalize(): строка в refills — гард
-    от повторного начисления, поэтому создаётся первой.
+    от повторного начисления, поэтому создаётся первой. Принятое ограничение:
+    если процесс умрёт между INSERT и credit(), бонус потерян навсегда
+    (guard-строка блокирует повтор) — осознанный компромисс по образцу
+    refill.finalize() (см. комментарий в refill.py:124-129).
     """
     rub = int(getattr(config, "WELCOME_BONUS_RUB", 0) or 0)
     if rub <= 0:
         return 0
-    amount = rub * 100  # рубли → копейки
+    amount = rub  # users.balance и refills.amount хранятся в целых рублях
 
     with connect() as con:
         already = con.execute(

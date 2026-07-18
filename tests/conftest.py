@@ -80,6 +80,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.BIZA_BREAKER_ERRORS = 3
     stub.BIZA_COOLDOWN_MIN = 30
     stub.BIZA_MAX_ATTEMPTS = 2
+    stub.WELCOME_BONUS_RUB = 0
     return stub
 
 

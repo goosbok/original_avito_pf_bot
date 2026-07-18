@@ -128,3 +128,7 @@ BIZA_BREAKER_ERRORS: int = max(1, int(os.getenv("BIZA_BREAKER_ERRORS", "3")))
 BIZA_COOLDOWN_MIN: int = max(1, int(os.getenv("BIZA_COOLDOWN_MIN", "30")))
 # Потолок попыток авто-отправки на ссылку; дальше → manual.
 BIZA_MAX_ATTEMPTS: int = max(1, int(os.getenv("BIZA_MAX_ATTEMPTS", "2")))
+
+# ── Welcome bonus ────────────────────────────────────────────────────────────
+# Приветственный бонус новым пользователям, в рублях. 0 = выключено.
+WELCOME_BONUS_RUB: int = int(os.getenv("WELCOME_BONUS_RUB", "0"))

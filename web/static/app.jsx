@@ -310,6 +310,7 @@ function App() {
       }
       {renderScreen()}
       {user && !adminMode && <SupportChat />}
+      {user && !adminMode && <InstallGuideSheet />}
     </div>
   );
 }

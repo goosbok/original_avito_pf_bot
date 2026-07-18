@@ -29,9 +29,10 @@
 | Куда начисляется | Обычный баланс сервиса (`users.balance`), вывода денег нет |
 | Процент | `settings.ref_percent = 10`, правится существующей админкой настроек |
 | Архитектура ссылок | **Мультиссылки-кампании**: у партнера несколько ссылок с разными слагами, статистика по каждой |
-| Точки входа | Ссылка из бота ведет в TG (`t.me/...?start=ref_<slug>`), ссылка с сайта — на сайт (`?ref=<slug>`); слаг общий |
+| Точки входа | Ссылка из бота ведет в TG (`t.me/...?start=ref_<user_id>-<slug>`), ссылка с сайта — на сайт (`?ref=<user_id>-<slug>`); реф-код общий |
 | VIP | Как сейчас: за реферала-VIP бонус не начисляется |
 | Индивидуальный процент | Админ может выставить свой процент на **каждую ссылку** (по договоренности); пусто = глобальный `ref_percent` |
+| Формат реф-кода | `<user_id>-<slug>` — слаг уникален только внутри пользователя; битый/чужой слаг при валидном `user_id` → атрибуция к партнеру без ссылки |
 
 ## Данные (SQLite, схема в `utils/sqlite3.py`)
 
@@ -39,12 +40,13 @@
 CREATE TABLE IF NOT EXISTS referral_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,            -- владелец-партнер (users.id)
-  slug TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  slug TEXT NOT NULL COLLATE NOCASE,
   clicks INTEGER NOT NULL DEFAULT 0,
   custom_percent INTEGER,              -- NULL = глобальный settings.ref_percent;
                                        -- иначе индивидуальный % (ставит админ)
   created_at TIMESTAMP NOT NULL,
-  archived_at TIMESTAMP                -- NULL = активна
+  archived_at TIMESTAMP,               -- NULL = активна
+  UNIQUE (user_id, slug)               -- слаг уникален внутри пользователя
 );
 
 CREATE TABLE IF NOT EXISTS referral_bonuses (
@@ -68,38 +70,55 @@ ALTER TABLE users ADD COLUMN ref_link_id INTEGER;  -- через какую сс
 - Миграция — по образцу существующих guard-миграций в `utils/sqlite3.py`
   (idempotent `ALTER TABLE` / `CREATE TABLE IF NOT EXISTS`).
 
-### Слаги
+### Реф-код и слаги
 
-- 3–32 символа, `[a-z0-9_-]`, храним в lower-case, уникальность регистронезависимая.
-- Стоп-лист: `connect`, `admin`, `ref`, `start`, `help`, `api`, `www`, `bot`.
-- Случайный слаг: 8 символов base36 (`secrets`), с ретраем при коллизии.
+- Канонический реф-код: `<user_id>-<slug>`, например `42-youtube`. Парсинг:
+  ведущие цифры до первого `-` — ID партнера, остаток — слаг.
+- Слаг: 3–32 символа, `[a-z0-9_-]`, храним в lower-case, уникальность
+  регистронезависимая **внутри одного пользователя** (`UNIQUE(user_id, slug)`).
+  Стоп-лист не нужен: слаг никогда не встречается в коде без `user_id`.
+- Случайный слаг: 8 символов base36 (`secrets`), с ретраем при коллизии
+  внутри пользователя.
 - Лимит: 10 активных ссылок на партнера.
 
 ## Ссылки и атрибуция
 
-Каждая ссылка-кампания дает две формы с одним слагом:
+Каждая ссылка-кампания дает две формы с одним реф-кодом `<user_id>-<slug>`:
 
-- **Сайт:** `https://<лендинг>/?ref=<slug>` и `https://<ЛК>/?ref=<slug>`.
-- **Бот:** `https://t.me/<bot>?start=ref_<slug>`.
+- **Сайт:** `https://<лендинг>/?ref=<user_id>-<slug>` и
+  `https://<ЛК>/?ref=<user_id>-<slug>`.
+- **Бот:** `https://t.me/<bot>?start=ref_<user_id>-<slug>`
+  (алфавит payload Telegram `[A-Za-z0-9_-]` — совместимо, лимит 64 символа
+  выдерживается: `ref_` + 10 цифр + `-` + 32 слага = 47).
+
+Разбор кода (общая функция, используется ботом и вебом):
+
+1. `user_id` не существует → атрибуции нет.
+2. `user_id` валиден, слаг найден среди его активных ссылок →
+   `ref_id = user_id`, `ref_link_id = link.id`.
+3. `user_id` валиден, слаг не найден / архивный / пустой (опечатка, удаленная
+   ссылка) → **атрибуция к партнеру в общем**: `ref_id = user_id`,
+   `ref_link_id = NULL` (бонус по глобальному проценту).
 
 Потоки:
 
-1. **Бот.** `handlers/main_start.py` разбирает `ref_<slug>` (новый префикс,
-   до существующих веток digit/magic). Находит активную `referral_links` по
-   слагу → если у юзера `ref_id IS NULL` и это не самопривязка → сетит
-   `ref_id` + `ref_link_id`. Легаси `/start <user_id>` продолжает работать.
+1. **Бот.** `handlers/main_start.py` разбирает `ref_<user_id>-<slug>` (новый
+   префикс, до существующих веток digit/magic) общей функцией разбора → если
+   у юзера `ref_id IS NULL` и это не самопривязка → сетит `ref_id` (+
+   `ref_link_id`, если слаг нашелся). Легаси `/start <user_id>` продолжает
+   работать — это частный случай «атрибуция к партнеру без ссылки».
 2. **Лендинг** (статический `web/landing/index.html`, деплой через
-   `deploy.sh`). Инлайн-скрипт: читает `?ref=<slug>`, дописывает `ref` ко
+   `deploy.sh`). Инлайн-скрипт: читает `?ref=<user_id>-<slug>`, дописывает `ref` ко
    всем ссылкам на ЛК (localStorage между доменами лендинга и ЛК не
    шарится — проброс только через URL), шлет клик через
-   `navigator.sendBeacon('https://<ЛК>/api/referral/click?slug=<slug>')` —
+   `navigator.sendBeacon('https://<ЛК>/api/referral/click?code=<user_id>-<slug>')` —
    simple request без preflight, CORS-настройка не нужна (в FastAPI её
    сейчас нет).
-3. **ЛК-SPA** (`web/static/app.jsx`). При загрузке читает `?ref=<slug>` →
-   localStorage (`ref_slug`, TTL 30 дней). При регистрации передает
-   `ref_slug` в теле запроса.
+3. **ЛК-SPA** (`web/static/app.jsx`). При загрузке читает
+   `?ref=<user_id>-<slug>` → localStorage (`ref_code`, TTL 30 дней).
+   При регистрации передает `ref_code` в теле запроса.
 4. **Бэкенд регистрации.** `POST /api/auth/phone/verify` и email-register
-   принимают опциональное `ref_slug`. Атрибуция применяется **только если
+   принимают опциональное `ref_code`. Атрибуция применяется **только если
    пользователь реально создан** (не найден существующий) и слаг активен и
    не принадлежит самому юзеру.
 
@@ -129,13 +148,13 @@ ALTER TABLE users ADD COLUMN ref_link_id INTEGER;  -- через какую сс
 | Endpoint | Auth | Назначение |
 |---|---|---|
 | `GET /api/me/referral` | JWT | Процент, ссылки со статистикой (клики, регистрации, заработано), итоги |
-| `POST /api/me/referral/links` `{slug?}` | JWT | Создать ссылку; без `slug` — случайный; 409 если занят; 422 при невалидном слаге; 409 при лимите |
+| `POST /api/me/referral/links` `{slug?}` | JWT | Создать ссылку; без `slug` — случайный; 409 если слаг уже есть у этого пользователя; 422 при невалидном слаге; 409 при лимите |
 | `DELETE /api/me/referral/links/{id}` | JWT | Архивировать (только свою) |
 | `GET /api/me/referral/bonuses?limit&offset` | JWT | История начислений |
-| `POST /api/referral/click?slug=<slug>` | публичный | +1 к `clicks` (слаг в query — совместимо с `sendBeacon` без preflight; невалидный слаг — молча 200) |
+| `POST /api/referral/click?code=<user_id>-<slug>` | публичный | +1 к `clicks` найденной ссылки (код в query — совместимо с `sendBeacon` без preflight; битый/неизвестный код — молча 200) |
 
 Изменяемые: `POST /api/auth/phone/verify`, email-register — опциональное поле
-`ref_slug`.
+`ref_code`.
 
 Админские (в существующий `web/routers/admin_users.py` + новые в
 `referral.py`, доступ через существующий admin-guard):
@@ -200,8 +219,10 @@ ALTER TABLE users ADD COLUMN ref_link_id INTEGER;  -- через какую сс
 
 - Валидация слагов (длина, алфавит, стоп-лист, регистр), генерация случайных.
 - Создание/архив ссылок, лимит, 409 на дубль.
-- Атрибуция: бот `ref_<slug>`, легаси `/start <id>`, веб `ref_slug` при
-  регистрации, self-referral, повторная атрибуция (не перезаписывается),
+- Разбор реф-кода: валидный код, несуществующий `user_id`, битый/архивный/
+  пустой слаг → fallback на атрибуцию без ссылки.
+- Атрибуция: бот `ref_<user_id>-<slug>`, легаси `/start <id>`, веб `ref_code`
+  при регистрации, self-referral, повторная атрибуция (не перезаписывается),
   существующий юзер (не атрибуцируется).
 - Бонус: 10% с каждого пополнения, floor, VIP-исключение, гонка
   (двойной finalize → один бонус), запись в `referral_bonuses`,

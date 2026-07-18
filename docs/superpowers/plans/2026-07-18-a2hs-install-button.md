@@ -403,9 +403,9 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
 .a2hs-banner__desc { font-size: 0.8125rem; color: var(--text-2); margin-top: 2px; }
 .a2hs-banner__cta { white-space: nowrap; }
 .a2hs-banner__close {
-  position: absolute; top: 8px; right: 10px;
+  position: absolute; top: 2px; right: 4px;
   background: none; border: none; cursor: pointer;
-  color: var(--text-3); font-size: 0.875rem; line-height: 1; padding: 4px;
+  color: var(--text-3); font-size: 0.875rem; line-height: 1; padding: 10px;
 }
 .a2hs-banner__close:hover { color: var(--text-1); }
 
@@ -437,6 +437,9 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
   border-radius: 16px 16px 0 0;
   width: 100%; max-width: 480px;
   padding: 14px 20px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
   box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
 }
 .a2hs-sheet__grab {

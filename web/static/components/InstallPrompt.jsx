@@ -65,11 +65,16 @@ function InstallGuideSheet() {
   const [open, setOpen] = useA2hsState(false);
   useA2hsEffect(() => {
     const h = () => setOpen(true);
+    const onKey = e => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('a2hs-open-guide', h);
-    return () => window.removeEventListener('a2hs-open-guide', h);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('a2hs-open-guide', h);
+      window.removeEventListener('keydown', onKey);
+    };
   }, []);
   if (!open) return null;
-  const done = () => { window.a2hs.dismiss(); setOpen(false); };
+  const done = () => { if (window.a2hs) window.a2hs.dismiss(); setOpen(false); };
   return (
     <div className="a2hs-overlay" onClick={() => setOpen(false)}>
       <div className="a2hs-sheet" onClick={e => e.stopPropagation()}>

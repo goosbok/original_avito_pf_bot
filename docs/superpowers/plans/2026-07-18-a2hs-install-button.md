@@ -427,6 +427,13 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
   color: var(--primary);
 }
 
+/* Ultra-narrow phones (<=359px): the header row (logo + bell + theme +
+   burger) has no room for another 36px icon — the burger gets clipped.
+   The cabinet banner stays as the entry point at these widths. */
+@media (max-width: 359px) {
+  .a2hs-header-btn { display: none; }
+}
+
 .a2hs-overlay {
   position: fixed; inset: 0; z-index: 1200;
   background: rgba(10, 14, 20, 0.5);

@@ -103,11 +103,11 @@ def test_grant_credits_balance_and_writes_refill(tmp_db, monkeypatch):
     user_id = identity._create_user(first_name="test")
     granted = grant_welcome_bonus(user_id)
 
-    assert granted == 100 * 100  # копейки
-    assert balance.get_balance(user_id) == 100 * 100
+    assert granted == 100  # рубли, без конвертации
+    assert balance.get_balance(user_id) == 100
     rows = _welcome_rows(tmp_db, user_id)
     assert len(rows) == 1
-    assert rows[0]["amount"] == 100 * 100
+    assert rows[0]["amount"] == 100
     assert rows[0]["status"] == "succeeded"
     assert rows[0]["payment_id"] is None
 
@@ -121,7 +121,7 @@ def test_grant_is_idempotent(tmp_db, monkeypatch):
     second = grant_welcome_bonus(user_id)
 
     assert second == 0
-    assert balance.get_balance(user_id) == 100 * 100
+    assert balance.get_balance(user_id) == 100
     assert len(_welcome_rows(tmp_db, user_id)) == 1
 
 
@@ -170,14 +170,14 @@ SOURCE_TYPE = "welcome_bonus"
 def grant_welcome_bonus(user_id: int) -> int:
     """Начислить welcome-бонус, если включён и ещё не начислялся.
 
-    Возвращает начисленную сумму в копейках (0 — выключено или уже был).
+    Возвращает начисленную сумму в рублях (0 — выключено или уже был).
     Порядок INSERT→credit как в refill.finalize(): строка в refills — гард
     от повторного начисления, поэтому создаётся первой.
     """
     rub = int(getattr(config, "WELCOME_BONUS_RUB", 0) or 0)
     if rub <= 0:
         return 0
-    amount = rub * 100  # рубли → копейки
+    amount = rub  # users.balance и refills.amount хранятся в целых рублях
 
     with connect() as con:
         already = con.execute(
@@ -227,7 +227,7 @@ git commit -m "feat(bonus): add welcome bonus grant service"
 def test_new_telegram_user_gets_bonus(tmp_db, monkeypatch):
     monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
     user_id = identity.get_or_create_user_by_telegram(tg_id=901, user_name="u1")
-    assert balance.get_balance(user_id) == 100 * 100
+    assert balance.get_balance(user_id) == 100
     assert len(_welcome_rows(tmp_db, user_id)) == 1
 
 
@@ -236,7 +236,7 @@ def test_existing_telegram_user_no_second_bonus(tmp_db, monkeypatch):
     first = identity.get_or_create_user_by_telegram(tg_id=902, user_name="u2")
     second = identity.get_or_create_user_by_telegram(tg_id=902, user_name="u2")
     assert first == second
-    assert balance.get_balance(first) == 100 * 100
+    assert balance.get_balance(first) == 100
     assert len(_welcome_rows(tmp_db, first)) == 1
 
 
@@ -245,13 +245,13 @@ def test_new_email_user_gets_bonus(tmp_db, monkeypatch):
     user_id = identity.get_or_create_user_by_email(
         "user@example.com", credential_hash="x" * 32
     )
-    assert balance.get_balance(user_id) == 100 * 100
+    assert balance.get_balance(user_id) == 100
 
 
 def test_new_verified_phone_user_gets_bonus(tmp_db, monkeypatch):
     monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
     user_id = identity.find_or_create_user_by_phone("+79990000001", verified=True)
-    assert balance.get_balance(user_id) == 100 * 100
+    assert balance.get_balance(user_id) == 100
 
 
 def test_guest_phone_user_no_bonus(tmp_db, monkeypatch):
@@ -277,7 +277,7 @@ def test_merge_guest_into_registered_no_double_bonus(tmp_db, monkeypatch):
     identity.find_or_create_user_by_phone("+79990000003")  # guest, без бонуса
     target_id = identity.get_or_create_user_by_telegram(tg_id=903, user_name="u3")
     identity.link_phone_provider(target_id, "+79990000003", set_verified=True)
-    assert balance.get_balance(target_id) == 100 * 100
+    assert balance.get_balance(target_id) == 100
     assert len(_welcome_rows(tmp_db, target_id)) == 1
 ```
 
@@ -410,11 +410,11 @@ def test_referral_bonus_survives_welcome_bonus(tmp_db, monkeypatch):
     user_id = identity.get_or_create_user_by_telegram(tg_id=911, user_name="newbie")
     update_user(id=user_id, ref_id=referrer_id)
 
-    res = refill.finalize_with_referral_bonus(user_id, 10_000)  # первый реальный депозит
+    res = refill.finalize_with_referral_bonus(user_id, 1_000)  # первый реальный депозит
 
     assert res.was_newly_finalized
     assert res.referrer_id == referrer_id
-    assert res.referrer_bonus == 3_000  # 30% от 10 000 копеек
+    assert res.referrer_bonus == 300  # 30% от 1 000 ₽
 ```
 
 - [ ] **Step 2: Убедиться, что тест падает**

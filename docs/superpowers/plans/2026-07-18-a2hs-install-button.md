@@ -58,6 +58,7 @@
 // beforeinstallprompt even with an emulated iPhone UA, so 'ios' is otherwise
 // unreachable there): localStorage.setItem('a2hs_force', 'ios')
 (function () {
+  'use strict';
   var deferredPrompt = null;
   var promptConsumed = false; // native dialog shown; keep UI until installed
   var installedThisSession = false;
@@ -100,7 +101,7 @@
     getState: function () {
       var forced = null;
       try { forced = localStorage.getItem('a2hs_force'); } catch (_) {}
-      if (forced) return forced;
+      if (forced && /^(installed|installable|ios|unavailable)$/.test(forced)) return forced;
       if (installedThisSession || isStandalone()) return 'installed';
       if (deferredPrompt || promptConsumed) return 'installable';
       if (isIosSafari()) return 'ios';
@@ -110,12 +111,21 @@
     // stays 'installable' (via promptConsumed) so both entry points remain
     // visible; a further click is a no-op until Chromium re-fires the event
     // (typically next navigation). Never rejects — errors resolve as null.
+    // Sync throws and a rejected prompt() promise are swallowed too: the
+    // event is spent either way, promptConsumed keeps the UI visible.
     prompt: function () {
       if (!deferredPrompt) return Promise.resolve(null);
       var p = deferredPrompt;
       deferredPrompt = null;
       promptConsumed = true;
-      p.prompt();
+      var shown;
+      try {
+        shown = p.prompt();
+      } catch (_) {
+        notify();
+        return Promise.resolve(null);
+      }
+      if (shown && shown.catch) shown.catch(function () {});
       return p.userChoice
         .catch(function () { return null; })
         .then(function (choice) { notify(); return choice || null; });

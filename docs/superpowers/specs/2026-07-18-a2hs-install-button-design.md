@@ -49,6 +49,8 @@ The in-app WebView row matters: the Telegram bot is this product's main funnel, 
 
 Known iOS limitation (accepted): Safari cannot tell whether the icon is already on the home screen while browsing. A user who added the icon manually and never dismissed the banner sees it once; the "Готово, добавил" button in the sheet and the ✕ both hide it forever. The header icon stays visible on iOS — it is small and harmless.
 
+Ultra-narrow exception: on viewports ≤359px the header icon is hidden entirely (`@media (max-width: 359px)`) — measured at 320px the header row (logo + icon + bell + theme toggle + burger) overflows and clips the burger. The cabinet banner remains the entry point at these widths.
+
 Known iOS limitation #2 (accepted): the home-screen web app has storage separate from Safari, so the user logs in again on first launch of the installed app.
 
 ---
@@ -104,7 +106,7 @@ Click routing (shared handler): `state === 'installable'` → `a2hs.prompt()`; `
 
 ### 4. Styles (`platform.css`)
 
-New block near other component styles: `.a2hs-banner`, `.a2hs-header-btn`, `.a2hs-sheet` (+ overlay). Theme via existing CSS vars only (`--surface`, `--border`, `--primary`, `--text-*`) — must look right in light and dark. Breakpoints: banner is a normal card on both; sheet is bottom-anchored on mobile, centered dialog from `min-width: 769px` — the stylesheet's single existing 768/769px cut (no new one-off breakpoints). Per project rule, verify on mobile AND desktop — including the header icon in the cramped mobile header.
+New block near other component styles: `.a2hs-banner`, `.a2hs-header-btn`, `.a2hs-sheet` (+ overlay). Theme via existing CSS vars only (`--surface`, `--border`, `--primary`, `--text-*`) — must look right in light and dark. Breakpoints: banner is a normal card on both; sheet is bottom-anchored on mobile, centered dialog from `min-width: 769px` — the stylesheet's single existing 768/769px cut. One deliberate exception: `max-width: 359px` hides the header icon (see the ultra-narrow note in the visibility section). Per project rule, verify on mobile AND desktop — including the header icon in the cramped mobile header.
 
 ---
 

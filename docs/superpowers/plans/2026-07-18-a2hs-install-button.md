@@ -27,6 +27,8 @@
 | `web/static/components/AppHeader.jsx` | Mount `<InstallHeaderButton />` before `<NotificationsBell />` (~line 131) |
 | `web/static/app.jsx` | Mount `<InstallGuideSheet />` at root (~line 312) |
 | `web/static/platform.css` | New `.a2hs-*` styles block (append at end) |
+| `.gitignore` | Ignore local `docker-compose.override.yml` |
+| `docker-compose.override.yml` | New, **local only / git-ignored** — binds `./web/static` into the api container for F5-visible edits |
 
 ---
 
@@ -45,11 +47,19 @@
 //
 // States:
 //   'installed'   — running standalone, or `appinstalled` fired this session
-//   'installable' — Chromium handed us a deferred install prompt
-//   'ios'         — iPhone/iPad Safari: no API, we show manual instructions
-//   'unavailable' — everything else (Firefox, desktop Safari, …): show nothing
+//   'installable' — Chromium install prompt available (or already shown and
+//                   declined this session — UI must not vanish under the user)
+//   'ios'         — iPhone/iPad browser with a share-sheet path to the home
+//                   screen (Safari, Chrome/Firefox on iOS)
+//   'unavailable' — everything else, incl. iOS in-app WebViews (Telegram,
+//                   VK, …) where the share-sheet instructions can't be followed
+//
+// Debug override (needed to test the iOS sheet in DevTools — Chrome fires
+// beforeinstallprompt even with an emulated iPhone UA, so 'ios' is otherwise
+// unreachable there): localStorage.setItem('a2hs_force', 'ios')
 (function () {
   var deferredPrompt = null;
+  var promptConsumed = false; // native dialog shown; keep UI until installed
   var installedThisSession = false;
   var subscribers = [];
   var memDismissed = false; // fallback when localStorage is blocked
@@ -63,14 +73,19 @@
       || window.navigator.standalone === true;
   }
 
-  function isIos() {
-    return /iphone|ipad|ipod/i.test(navigator.userAgent)
+  function isIosSafari() {
+    var ua = navigator.userAgent;
+    var ios = /iphone|ipad|ipod/i.test(ua)
       // iPadOS ≥13 reports itself as a Mac, but Macs have no touch points
       || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    // In-app WebViews lack the Safari UA token; real browsers keep it.
+    return ios && /safari/i.test(ua);
   }
 
+  // No e.preventDefault(): it would suppress Chrome's own install
+  // mini-infobar, and our entry points are login-gated — guests would get
+  // nothing in return. The event reference works without it.
   window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
     deferredPrompt = e;
     notify();
   });
@@ -83,21 +98,27 @@
 
   window.a2hs = {
     getState: function () {
+      var forced = null;
+      try { forced = localStorage.getItem('a2hs_force'); } catch (_) {}
+      if (forced) return forced;
       if (installedThisSession || isStandalone()) return 'installed';
-      if (deferredPrompt) return 'installable';
-      if (isIos()) return 'ios';
+      if (deferredPrompt || promptConsumed) return 'installable';
+      if (isIosSafari()) return 'ios';
       return 'unavailable';
     },
-    // A captured event can be .prompt()ed only once: consume the reference.
-    // If the user declines, Chromium re-fires beforeinstallprompt later
-    // (usually on next navigation) and the state flips back to 'installable'.
+    // The captured event is single-use. On decline the state deliberately
+    // stays 'installable' (via promptConsumed) so both entry points remain
+    // visible; a further click is a no-op until Chromium re-fires the event
+    // (typically next navigation). Never rejects — errors resolve as null.
     prompt: function () {
       if (!deferredPrompt) return Promise.resolve(null);
       var p = deferredPrompt;
       deferredPrompt = null;
-      notify();
+      promptConsumed = true;
       p.prompt();
-      return p.userChoice;
+      return p.userChoice
+        .catch(function () { return null; })
+        .then(function (choice) { notify(); return choice || null; });
     },
     subscribe: function (cb) {
       subscribers.push(cb);
@@ -127,16 +148,36 @@ After the `/api.js` block (line ~26), before `/dates.js`:
   <script src="/a2hs.js"></script>
 ```
 
-- [ ] **Step 3: Verify in browser**
+- [ ] **Step 3: Local dev override for statics (one-time setup)**
 
-Run: `docker compose up -d` (if not already running), open `http://localhost:8000`.
+The api image `COPY`s the code and `docker-compose.yml` mounts only `./storage` — without a bind mount, every statics edit would require a full image rebuild before it is visible in the browser.
+
+Create `docker-compose.override.yml` in the worktree root (compose picks it up automatically):
+
+```yaml
+services:
+  api:
+    volumes:
+      - ./web/static:/app/web/static
+```
+
+Append to `.gitignore` (the override is a local dev convenience and must never reach prod):
+
+```
+docker-compose.override.yml
+```
+
+- [ ] **Step 4: Verify in browser**
+
+Run: `docker compose up -d --build` **from the worktree root** (first run builds the image with a2hs.js baked in; afterwards the bind mount makes statics edits visible on plain F5). Open `http://localhost:8000`.
 In DevTools console: `window.a2hs.getState()`.
 Expected: `'unavailable'` (Firefox/Safari) or `'installable'` after a couple of seconds (Chrome; localhost counts as a secure context). No console errors.
+Note: if the main checkout's stack is running, stop it first (`docker compose down` there) — both bind port 8000.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add web/static/a2hs.js web/static/index.html
+git add web/static/a2hs.js web/static/index.html .gitignore
 git commit -m "feat(web): add a2hs state module capturing PWA install events"
 ```
 
@@ -159,12 +200,23 @@ const { useState: useA2hsState, useEffect: useA2hsEffect } = React;
 
 function useA2HS() {
   const [, force] = useA2hsState(0);
-  useA2hsEffect(() => window.a2hs.subscribe(() => force(x => x + 1)), []);
+  useA2hsEffect(() => {
+    if (!window.a2hs) return undefined;
+    const unsub = window.a2hs.subscribe(() => force(x => x + 1));
+    // Re-check once: beforeinstallprompt may have fired in the gap between
+    // the first render and this effect — that notify() had no subscribers.
+    force(x => x + 1);
+    return unsub;
+  }, []);
+  // No hard dependency on the plain script: if /a2hs.js failed to load
+  // (partial deploy, blocking extension), render no install UI instead of
+  // throwing and blanking the whole SPA.
+  if (!window.a2hs) return { state: 'unavailable', dismissed: true };
   return { state: window.a2hs.getState(), dismissed: window.a2hs.isDismissed() };
 }
 
 function a2hsActivate(state) {
-  if (state === 'installable') window.a2hs.prompt();
+  if (state === 'installable') window.a2hs.prompt(); // never rejects (caught inside a2hs.js)
   else if (state === 'ios') window.dispatchEvent(new CustomEvent('a2hs-open-guide'));
 }
 
@@ -228,7 +280,7 @@ function InstallGuideSheet() {
               <path d="M12 3v12M12 3L8 7m4-4l4 4" />
               <path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
             </svg>
-            {' '}в панели Safari
+            {' '}в панели браузера
           </li>
           <li>Выберите <b>«На экран “Домой”»</b></li>
           <li>Нажмите <b>«Добавить»</b> — значок появится на главном экране</li>
@@ -304,6 +356,8 @@ Right before the NotificationsBell line (`{isApp && user && !adminMode && <Notif
 
 Chrome, `http://localhost:8000`, logged in: once `beforeinstallprompt` fires, the banner shows in the cabinet (between balance block and «Услуги») and the icon shows left of the bell. In Firefox: neither appears. No console errors either way.
 
+Then check the mobile header fit (DevTools, 320px and 375px widths): the extra 36px icon must not overflow or wrap the header row — worst case is an admin account with admin toggle + install icon + bell + theme toggle in one row.
+
 - [ ] **Step 4: Commit**
 
 ```bash
@@ -324,7 +378,8 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
 /* ============ A2HS (add to home screen) ============ */
 .a2hs-banner {
   display: flex; align-items: center; gap: 14px;
-  padding: 14px 18px; margin-bottom: 24px;
+  /* right padding reserves the ✕ corner so it never overlaps the CTA */
+  padding: 14px 44px 14px 18px; margin-bottom: 24px;
   position: relative; flex-wrap: wrap;
 }
 .a2hs-banner__icon { border-radius: 10px; flex-shrink: 0; }
@@ -384,8 +439,10 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
 .a2hs-sheet__steps svg { vertical-align: -3px; color: var(--primary); }
 .a2hs-sheet__actions { display: flex; gap: 8px; }
 
-/* Desktop: centered dialog instead of bottom sheet */
-@media (min-width: 640px) {
+/* Desktop: centered dialog instead of bottom sheet.
+   769px matches the stylesheet's single mobile/desktop cut (see the
+   existing 768/769px media blocks) — no one-off breakpoints. */
+@media (min-width: 769px) {
   .a2hs-overlay { align-items: center; padding: 20px; }
   .a2hs-sheet { border-radius: 16px; }
   .a2hs-sheet__grab { display: none; }
@@ -409,37 +466,46 @@ git commit -m "feat(web): style a2hs banner, header button and guide sheet"
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Chromium install flow**
+- [ ] **Step 1: Chromium install flow (incl. decline)**
 
 Chrome on `http://localhost:8000`, logged in:
 1. Banner + header icon appear (after `beforeinstallprompt`, up to a few seconds).
-2. «Установить» → native install dialog.
-3. Accept → banner and icon disappear immediately (`appinstalled`).
-4. Open the installed app window → neither banner nor icon (standalone). Uninstall the app afterwards (chrome://apps).
+2. «Установить» → native install dialog opens; **banner and icon stay visible while it is open**.
+3. **Decline** («Cancel») → banner and icon remain; clicking again is a no-op (event consumed until Chromium re-fires it — expected, not a bug). Reload the page to re-arm.
+4. «Установить» again → **Accept** → banner and icon disappear immediately (`appinstalled`).
+5. Open the installed app window → neither banner nor icon (standalone). Uninstall the app afterwards (chrome://apps) and clear site data, or the next run's `beforeinstallprompt` won't fire.
 
-- [ ] **Step 2: iOS flow (DevTools emulation)**
+- [ ] **Step 2: iOS flow (DevTools + forced state)**
 
-DevTools → iPhone emulation → reload (UA must be iPhone; use the "iPhone" device preset with its default UA):
+Plain iPhone-UA emulation is NOT enough: Chrome fires `beforeinstallprompt` regardless of the emulated UA and `installable` wins over `ios`. Force the state instead:
+
+In DevTools console: `localStorage.setItem('a2hs_force', 'ios')`, iPhone device preset, reload.
 1. Banner + icon visible.
-2. Click → guide sheet with 3 steps slides up from the bottom.
+2. Click → guide sheet with 3 steps appears anchored to the bottom edge (no animation — appears instantly, that is expected).
 3. «Готово, добавил» → sheet closes, banner gone; survives reload (localStorage).
 4. Header icon still visible (expected on iOS).
-5. Clear `localStorage.removeItem('a2hs_dismissed')` → banner back after reload.
+5. Clean up: `localStorage.removeItem('a2hs_dismissed')` → banner back after reload; then `localStorage.removeItem('a2hs_force')`.
 
-- [ ] **Step 3: Dismiss flow**
+- [ ] **Step 3: Real iPhone (before deploy)**
 
-✕ on the banner → hidden, survives reload. Header icon unaffected.
+On an actual iPhone in Safari (dev stand or prod after deploy): banner visible, sheet opens, the share-sheet path «Поделиться → На экран “Домой” → Добавить» actually works, the installed icon opens the cabinet. Emulation cannot exercise the real share sheet — do not skip this.
 
-- [ ] **Step 4: Negative case**
+- [ ] **Step 4: Dismiss flow + ✕ hit target**
 
-Firefox (or Safari desktop): no banner, no icon, no console errors.
+✕ on the banner → hidden, survives reload. Header icon unaffected. Aim-click just inside the top-right corner of the «Установить» button — it must trigger install, not dismiss (the ✕ must not overlap the CTA).
 
-- [ ] **Step 5: Python suite (regression only — no backend changes)**
+- [ ] **Step 5: Negative cases**
 
-Run: `docker exec original_avito_pf_bot-api-1 python -m pytest` (per project rule: tests inside Docker, not local python3).
+1. Firefox (or Safari desktop): no banner, no icon, no console errors.
+2. In-app WebView behavior: `localStorage.setItem('a2hs_force', 'unavailable')` + reload → nothing rendered (this is what Telegram's iOS browser gets via the missing-`Safari`-token heuristic). Clean up the key afterwards.
+
+- [ ] **Step 6: Python suite (regression only — no backend changes)**
+
+Run **from the worktree root**: `docker compose exec api python -m pytest`
+(tests inside Docker per project rule; `docker compose` resolves the project by current directory, so this hits THIS worktree's container — never hardcode `original_avito_pf_bot-api-1`, that is the main checkout's stale container.)
 Expected: green, same as baseline.
 
-- [ ] **Step 6: Final commit if anything was touched during verification**
+- [ ] **Step 7: Final commit if anything was touched during verification**
 
 ```bash
 git status   # expect clean; commit fixes with fix(web): ... if any

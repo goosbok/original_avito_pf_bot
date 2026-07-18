@@ -27,6 +27,7 @@ Frontend only, no backend changes:
 - `web/static/components/AppHeader.jsx` — mount header icon
 - `web/static/app.jsx` — mount iOS guide sheet at root
 - `web/static/platform.css` — styles (both themes, both breakpoints)
+- `.gitignore` — ignore the local `docker-compose.override.yml` (dev-only statics bind mount; must never reach prod)
 
 `manifest.json` needs no changes: the FastAPI app serves the SPA from `/` (`web/main.py` `spa_fallback`), so `start_url: "/"` opens the cabinet.
 
@@ -37,10 +38,14 @@ Frontend only, no backend changes:
 | Environment | Detection signal | Banner | Header icon | Click action |
 |---|---|---|---|---|
 | Running as installed app | `display-mode: standalone` or `navigator.standalone` | hidden | hidden | — |
-| Chromium, installable | `beforeinstallprompt` captured | shown unless dismissed | shown | `deferredPrompt.prompt()` |
+| Chromium, installable | `beforeinstallprompt` captured | shown unless dismissed | shown | `prompt()` → native dialog |
+| Chromium, dialog declined | prompt consumed, no `appinstalled` | still shown | still shown | no-op until event re-fires |
 | Chromium, installed | no `beforeinstallprompt` / `appinstalled` fired | hidden | hidden | — |
-| iOS Safari | iPhone/iPad UA (installability unknowable) | shown unless dismissed | shown | open instructions sheet |
-| Other (Firefox, desktop Safari, …) | no prompt event, not iOS | hidden | hidden | — |
+| iOS Safari (also Chrome/Firefox on iOS) | iPhone/iPad UA **with** `Safari` token | shown unless dismissed | shown | open instructions sheet |
+| iOS in-app WebView (Telegram, VK, …) | iPhone/iPad UA **without** `Safari` token | hidden | hidden | — |
+| Other (Firefox desktop, desktop Safari, …) | no prompt event, not iOS | hidden | hidden | — |
+
+The in-app WebView row matters: the Telegram bot is this product's main funnel, and Telegram's iOS WKWebView matches `/iphone/i` but has no share-sheet path to the home screen — showing Safari instructions there would be a dead end. The `Safari`-token heuristic errs on the safe side: worst case is no button, never broken instructions.
 
 Known iOS limitation (accepted): Safari cannot tell whether the icon is already on the home screen while browsing. A user who added the icon manually and never dismissed the banner sees it once; the "Готово, добавил" button in the sheet and the ✕ both hide it forever. The header icon stays visible on iOS — it is small and harmless.
 
@@ -66,38 +71,40 @@ window.a2hs = {
 };
 ```
 
-State resolution order:
+State resolution order (a debug override runs first: `localStorage.a2hs_force = '<state>'` forces any state — required to test the iOS sheet in DevTools, where Chrome fires `beforeinstallprompt` regardless of the emulated UA):
 
 1. `installed` — `matchMedia('(display-mode: standalone)').matches || navigator.standalone === true`, or `appinstalled` event fired this session.
-2. `installable` — `beforeinstallprompt` captured (`e.preventDefault()`, keep reference).
-3. `ios` — `/iphone|ipad|ipod/i.test(navigator.userAgent)` or iPadOS masquerading as Mac (`platform === 'MacIntel' && maxTouchPoints > 1`).
+2. `installable` — `beforeinstallprompt` captured, **or already consumed by `prompt()` this session** — after a declined native dialog the UI must not vanish from under the user.
+3. `ios` — iPhone/iPad UA (incl. iPadOS masquerading as Mac: `platform === 'MacIntel' && maxTouchPoints > 1`) **and** UA contains the `Safari` token (excludes in-app WebViews).
 4. `unavailable` — everything else.
 
 Note: on Chromium `beforeinstallprompt` arrives asynchronously (often a second or two after load), so state starts as `unavailable` and flips to `installable` — this is why components subscribe instead of reading once.
 
-`prompt()` guards: a captured event can be `.prompt()`ed only once. After use the reference is cleared; if the user declined, Chromium may re-fire `beforeinstallprompt` later and the state flips back to `installable`. If the reference is absent, `prompt()` is a no-op.
+We do **not** call `e.preventDefault()` on `beforeinstallprompt`. It is only needed to suppress Chrome's own ambient install UI (mini-infobar), and our replacement entry points are login-gated — guests would lose the native affordance and get nothing back. A logged-in Android user may see both the mini-infobar and our banner; accepted. The event reference works without `preventDefault`.
+
+`prompt()` semantics: the captured event is single-use — consume the reference, call `.prompt()`, resolve with `userChoice`. Rejections are caught and resolved as `null`, so callers never see an unhandled rejection. On accept, `appinstalled` flips the state to `installed` and all UI hides. On decline the state stays `installable` and a further click is a no-op until Chromium re-fires the event (typically next navigation) — honest platform limitation.
 
 `localStorage` unavailable (private mode) → `dismiss()` keeps the flag in memory: banner hides for the session, reappears next visit. Acceptable.
 
 ### 2. `web/static/components/InstallPrompt.jsx`
 
-- `useA2HS()` — hook: `{ state, dismissed }`, subscribes to `window.a2hs` on mount.
-- `InstallBanner` — card for the cabinet. Visible when `(state === 'installable' || state === 'ios') && !dismissed`. App icon, title «Добавьте авито.пф на экран», subtitle «Быстрый доступ к заказам и балансу», primary button «Установить», ✕ in the corner (→ `a2hs.dismiss()`).
+- `useA2HS()` — hook: `{ state, dismissed }`, subscribes to `window.a2hs` on mount and forces one re-render right after subscribing (an event may fire in the render-to-subscribe gap and would otherwise be lost). If `window.a2hs` is absent (script 404 during a partial deploy, blocked by an extension), returns `'unavailable'` instead of throwing — a missing install button must not blank the SPA.
+- `InstallBanner` — card for the cabinet. Visible when `(state === 'installable' || state === 'ios') && !dismissed`. App icon, title «Добавьте авито.пф на главный экран», subtitle «Быстрый доступ к заказам и балансу — в одно касание», primary button «Установить», ✕ in the corner (→ `a2hs.dismiss()`). The banner reserves right padding so the ✕ never overlaps the CTA.
 - `InstallHeaderButton` — icon button for the header. Visible when `state === 'installable' || state === 'ios'` (ignores dismissed). `title="Добавить на главный экран"`.
-- `InstallGuideSheet` — iOS instructions. Mounted once at app root; opened by CustomEvent `a2hs-open-guide` (same pattern as `support-chat-send`). Bottom sheet on mobile, centered dialog on desktop. Three steps (Поделиться → «На экран “Домой”» → Добавить), ghost button «Готово, добавил» (→ `dismiss()` + close), closes on overlay click.
+- `InstallGuideSheet` — iOS instructions. Mounted once at app root; opened by CustomEvent `a2hs-open-guide` (same pattern as `support-chat-send`). Bottom sheet on mobile, centered dialog on desktop (no open/close animation — appears instantly). Three steps: «Поделиться» **в панели браузера** (wording covers both Safari and Chrome/Firefox on iOS) → «На экран “Домой”» → «Добавить». Ghost button «Готово, добавил» (→ `dismiss()` + close), closes on overlay click.
 
 Click routing (shared handler): `state === 'installable'` → `a2hs.prompt()`; `state === 'ios'` → `window.dispatchEvent(new CustomEvent('a2hs-open-guide'))`.
 
 ### 3. Mount points
 
 - `Cabinet.jsx` — `<InstallBanner />` right after `.cabinet-top-row`, before the services catalog. Full-width card.
-- `AppHeader.jsx` — `<InstallHeaderButton />` immediately left of `<NotificationsBell />`; rendered only when `isApp && user && !adminMode`, in both desktop and mobile action groups.
+- `AppHeader.jsx` — `<InstallHeaderButton />` immediately left of `<NotificationsBell />`; rendered only when `isApp && user && !adminMode`. There is a single `.header__actions` group (~line 115) serving both breakpoints — one mount point.
 - `app.jsx` — `<InstallGuideSheet />` mounted at root alongside `SupportChat`.
 - `index.html` — `<script src="/a2hs.js">` after `api.js`; `InstallPrompt.jsx` script tag before `AppHeader.jsx` (dependency order).
 
 ### 4. Styles (`platform.css`)
 
-New block near other component styles: `.a2hs-banner`, `.a2hs-header-btn`, `.a2hs-sheet` (+ overlay). Theme via existing CSS vars only (`--surface`, `--border`, `--primary`, `--text-*`) — must look right in light and dark. Breakpoints: banner is a normal card on both; sheet is bottom-anchored under 640px, centered dialog above. Per project rule, verify on mobile AND desktop.
+New block near other component styles: `.a2hs-banner`, `.a2hs-header-btn`, `.a2hs-sheet` (+ overlay). Theme via existing CSS vars only (`--surface`, `--border`, `--primary`, `--text-*`) — must look right in light and dark. Breakpoints: banner is a normal card on both; sheet is bottom-anchored on mobile, centered dialog from `min-width: 769px` — the stylesheet's single existing 768/769px cut (no new one-off breakpoints). Per project rule, verify on mobile AND desktop — including the header icon in the cramped mobile header.
 
 ---
 
@@ -111,7 +118,10 @@ a2hs.js: detect standalone / iOS, listen for beforeinstallprompt, appinstalled
 React mounts → useA2HS() subscribes → components render per visibility matrix
    │
 click (banner or header icon)
-   ├─ installable → a2hs.prompt() ──► native dialog ──► appinstalled → all UI hides
+   ├─ installable → a2hs.prompt() ──► native dialog
+   │      ├─ accept → appinstalled → state 'installed' → all UI hides
+   │      └─ decline → state stays 'installable', UI stays
+   │                   (further clicks no-op until Chromium re-fires the event)
    └─ ios → CustomEvent 'a2hs-open-guide' ──► sheet with 3 steps
                                                   ├─ «Готово, добавил» → dismiss() → banner hidden forever
                                                   └─ close/overlay → nothing persisted
@@ -124,10 +134,11 @@ banner ✕ → dismiss() → banner hidden forever (header icon unaffected)
 
 No JS test infrastructure exists (components are Babel-in-browser, Python tests only). Verification is manual, against a checklist:
 
-1. Chrome desktop: banner + header icon appear once `beforeinstallprompt` fires; «Установить» opens the native dialog; accepting hides both immediately (`appinstalled`); relaunch in the installed window shows neither (standalone).
-2. Chrome DevTools device emulation + real Android if available: same flow.
-3. iOS Safari (device or simulator): banner + icon visible; click opens the sheet; «Готово, добавил» hides the banner permanently (survives reload); header icon remains.
-4. ✕ on the banner: hidden, survives reload.
-5. Firefox desktop: neither banner nor icon rendered.
-6. Both themes (light/dark), both breakpoints (mobile/desktop) for banner and sheet.
-7. Full Python suite in Docker — must stay green (no backend changes expected).
+0. Statics workflow: the api image `COPY`s the code and mounts only `./storage`, so browser checks need either a rebuild (`docker compose up -d --build`) after each edit, or the local git-ignored `docker-compose.override.yml` mounting `./web/static` (Task 1 of the plan sets it up) — then plain F5 suffices.
+1. Chrome desktop: banner + header icon appear once `beforeinstallprompt` fires; «Установить» opens the native dialog; **declining keeps both visible** (further clicks are no-ops until the event re-fires); accepting hides both immediately (`appinstalled`); relaunch in the installed window shows neither (standalone). Uninstall via chrome://apps afterwards.
+2. iOS sheet in DevTools: `localStorage.setItem('a2hs_force', 'ios')` + reload — plain iPhone-UA emulation is NOT enough, Chrome fires `beforeinstallprompt` regardless and `installable` wins. Banner + icon visible; click opens the sheet (instantly, no animation); «Готово, добавил» hides the banner permanently (survives reload); header icon remains. Clean up: `localStorage.removeItem('a2hs_force')`.
+3. Real iPhone Safari before deploy: same flow end-to-end (emulation cannot exercise the real share sheet).
+4. ✕ on the banner: hidden, survives reload; the ✕ must not overlap the «Установить» button (aim-click test near the CTA's top-right corner).
+5. Negative cases: Firefox desktop — nothing rendered; forced in-app WebView (`a2hs_force = 'unavailable'`, or a real Telegram iOS client) — nothing rendered.
+6. Both themes (light/dark), both breakpoints (mobile/desktop) for banner, sheet AND header icon — including the cramped 320–375px mobile header on an admin account (admin toggle + install icon + bell + theme toggle in one row).
+7. Full Python suite in Docker: `docker compose exec api python -m pytest` from the worktree root. Never hardcode a container name — compose derives it from the project directory, so the main checkout's `original_avito_pf_bot-api-1` is a different (stale) container.

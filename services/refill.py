@@ -180,9 +180,12 @@ class RefillResult:
 
 
 def _is_first_refill(user_id: int) -> bool:
+    # welcome_bonus не считается пополнением: иначе реферер не получил бы
+    # 30% с первого реального депозита приглашённого (см. services/welcome_bonus.py)
     with connect() as con:
         row = con.execute(
-            "SELECT 1 FROM refills WHERE user_id = ? AND status = 'succeeded' LIMIT 1",
+            "SELECT 1 FROM refills WHERE user_id = ? AND status = 'succeeded' "
+            "AND source_type != 'welcome_bonus' LIMIT 1",
             (user_id,),
         ).fetchone()
     return row is None

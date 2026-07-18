@@ -116,3 +116,23 @@ def test_merge_guest_into_registered_no_double_bonus(tmp_db, monkeypatch):
     identity.link_phone_provider(target_id, "+79990000003", set_verified=True)
     assert balance.get_balance(target_id) == 100
     assert len(_welcome_rows(tmp_db, target_id)) == 1
+
+
+# ── совместимость с реф-бонусом ─────────────────────────────────────────────
+
+def test_referral_bonus_survives_welcome_bonus(tmp_db, monkeypatch):
+    """Welcome-строка не должна занимать слот «первого пополнения»: реферер
+    обязан получить 30% с первого РЕАЛЬНОГО депозита приглашённого."""
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    from services import refill
+    from utils.sqlite3 import update_user
+
+    referrer_id = identity.get_or_create_user_by_telegram(tg_id=910, user_name="ref")
+    user_id = identity.get_or_create_user_by_telegram(tg_id=911, user_name="newbie")
+    update_user(id=user_id, ref_id=referrer_id)
+
+    res = refill.finalize_with_referral_bonus(user_id, 1_000)  # первый реальный депозит
+
+    assert res.was_newly_finalized
+    assert res.referrer_id == referrer_id
+    assert res.referrer_bonus == 300  # 30% от 1 000 ₽

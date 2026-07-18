@@ -10,6 +10,7 @@ from design import (
     start_text, start_text_ref, welcome_bonus_line,
 )
 from keyboards.inline_keyboards import get_menu_kb
+from services import welcome_bonus
 
 async def get_user_name(user):
     if user.first_name:
@@ -48,7 +49,7 @@ async def main_start(message: Message, state: FSMContext, user_id: int, is_new_u
     args = message.get_args()
     name = await get_user_name(usr)
     bonus_line = ""
-    if is_new_user and config.WELCOME_BONUS_RUB > 0:
+    if is_new_user and config.WELCOME_BONUS_RUB > 0 and welcome_bonus.was_granted(user_id):
         bonus_line = welcome_bonus_line.format(config.WELCOME_BONUS_RUB)
     if args == 'connect':
         # Deep-link from web SPA: /start connect → trigger phone-sharing flow

@@ -20,6 +20,16 @@ from utils.other import get_date
 SOURCE_TYPE = "welcome_bonus"
 
 
+def was_granted(user_id: int) -> bool:
+    """Был ли юзеру начислен welcome-бонус (по guard-строке в refills)."""
+    with connect() as con:
+        row = con.execute(
+            "SELECT 1 FROM refills WHERE user_id = ? AND source_type = ? LIMIT 1",
+            (user_id, SOURCE_TYPE),
+        ).fetchone()
+    return row is not None
+
+
 def grant_welcome_bonus(user_id: int) -> int:
     """Начислить welcome-бонус, если включён и ещё не начислялся.
 

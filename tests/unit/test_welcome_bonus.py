@@ -179,6 +179,20 @@ async def test_start_no_bonus_line_for_returning_user(tmp_db, monkeypatch):
     assert "приветственный бонус" not in text
 
 
+async def test_start_no_bonus_line_when_grant_did_not_happen(tmp_db, monkeypatch):
+    """is_new_user=True, конфиг включён, но начисления не было (legacy-claim
+    или проглоченный сбой гранта) — строку не показываем."""
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    from handlers.main_start import main_start
+
+    user_id = identity._create_user(first_name="Вася")  # без бонуса
+    msg = _start_message(923)
+    await main_start(msg, AsyncMock(), user_id=user_id, is_new_user=True)
+
+    text = msg.answer.call_args.args[0]
+    assert "приветственный бонус" not in text
+
+
 async def test_start_no_bonus_line_when_disabled(tmp_db, monkeypatch):
     monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 0, raising=False)
     from handlers.main_start import main_start

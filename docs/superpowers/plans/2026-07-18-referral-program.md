@@ -26,7 +26,8 @@ docker exec original_avito_pf_bot-api-1 python -m pytest tests/unit/<file>.py -v
 | `services/referral.py` | Create | Слаги, ссылки, реф-коды, атрибуция, статистика, проценты |
 | `services/refill.py` | Modify | `finalize_with_referral_bonus`: 10% с каждого, credit + история |
 | `handlers/main_start.py` | Modify | Ветка `/start ref_<код>` |
-| `handlers/profile.py` | Modify | Реф-ссылка из дефолтной ссылки, счетчик по `ref_id` |
+| `handlers/profile.py` | Modify | Реф-ссылка (read-only), счетчик по `ref_id` |
+| `handlers/admin_orders.py` | Modify | Админ-отчет: рефералы по `ref_id`, не по CSV |
 | `services/identity.py` | Modify | Перенос `ref_id` при мердже phone-only |
 | `web/routers/auth_phone.py` | Modify | `ref_code` в verify |
 | `web/routers/auth_email.py` + `web/schemas.py` | Modify | `ref_code` в register-verify |
@@ -218,6 +219,15 @@ Expected: FAIL (`no such table: referral_links`)
             "CREATE INDEX IF NOT EXISTS idx_referral_bonuses_referrer "
             "ON referral_bonuses(referrer_id, id DESC)"
         )
+        # Сидим строку настройки: экран настроек в боте листает ТОЛЬКО строки
+        # из БД (get_all_settings), дефолт в _SETTING_DEFAULTS там не виден.
+        # ON CONFLICT DO NOTHING — правки админа не затираются при рестартах.
+        con.execute(
+            "INSERT INTO settings(parametr, description, value) "
+            "VALUES ('ref_percent', "
+            "'Партнерка: % с каждого пополнения реферала', '10') "
+            "ON CONFLICT(parametr) DO NOTHING"
+        )
 ```
 
 (Индексы кладем сюда, а не в `get_index_statements()`, по той же причине, что и refills-индексы — см. комментарий в `get_index_statements`.)
@@ -229,6 +239,10 @@ Expected: FAIL (`no such table: referral_links`)
 ```python
     "ref_percent": "10",
 ```
+
+Дефолт в коде — фолбэк на случай удаленной строки; рабочая строка в
+`settings` сидится миграцией из Step 4, иначе параметр невозможно найти и
+поменять через админ-экран настроек бота.
 
 - [ ] **Step 6: Прогнать тест**
 
@@ -341,12 +355,13 @@ def test_archive_foreign_link_fails(tmp_db: Path) -> None:
     assert archive_link(2, link["id"]) is False
 
 
-def test_get_or_create_default_link_lazy(tmp_db: Path) -> None:
-    from services.referral import get_or_create_default_link
+def test_get_default_link_readonly(tmp_db: Path) -> None:
+    """Ничего не создает: профиль бота — read-only путь."""
+    from services.referral import create_link, get_default_link
     _mk_user(tmp_db, 1)
-    a = get_or_create_default_link(1)
-    b = get_or_create_default_link(1)
-    assert a["id"] == b["id"]
+    assert get_default_link(1) is None
+    link = create_link(1, "promo")
+    assert get_default_link(1)["id"] == link["id"]
 ```
 
 - [ ] **Step 2: Запустить — убедиться, что падает**
@@ -466,19 +481,16 @@ def list_links(user_id: int) -> list[dict]:
     return [_row_to_link(r) for r in rows]
 
 
-def get_or_create_default_link(user_id: int) -> dict:
-    """Первая активная ссылка юзера; нет ни одной — создаем со случайным слагом.
-
-    Используется ботом (кнопка «Показать реферальную ссылку»)."""
+def get_default_link(user_id: int) -> dict | None:
+    """Первая активная ссылка юзера или None. Read-only: профиль бота ничего
+    не создает — ссылки заводятся только явно (на сайте)."""
     with connect() as con:
         row = con.execute(
             "SELECT * FROM referral_links "
             "WHERE user_id = ? AND archived_at IS NULL ORDER BY id LIMIT 1",
             (user_id,),
         ).fetchone()
-    if row is not None:
-        return _row_to_link(row)
-    return create_link(user_id, None)
+    return _row_to_link(row) if row is not None else None
 ```
 
 - [ ] **Step 4: Прогнать тесты**
@@ -525,9 +537,11 @@ def test_parse_ref_code() -> None:
     from services.referral import parse_ref_code
     assert parse_ref_code("42-youtube") == (42, "youtube")
     assert parse_ref_code("42") == (42, None)
-    assert parse_ref_code("42-") == (None, None)
+    assert parse_ref_code("42-") == (42, None)  # пустой слаг → атрибуция без ссылки (спека, п.3)
     assert parse_ref_code("abc") == (None, None)
     assert parse_ref_code("") == (None, None)
+    assert parse_ref_code("9" * 20) == (None, None)        # > int64 — иначе OverflowError в sqlite
+    assert parse_ref_code("9" * 20 + "-x") == (None, None)
     assert parse_ref_code("42-YOU tube") == (42, "you tube")  # чистит регистр, валидность решает resolve
 
 
@@ -674,13 +688,14 @@ Expected: FAIL (`ImportError: cannot import name 'parse_ref_code'`)
 ```python
 # ---------------------------------------------------------------- реф-коды
 
-_CODE_RE = re.compile(r"^(\d+)(?:-(.+))?$")
+_CODE_RE = re.compile(r"^(\d+)(?:-(.*))?$")
+_MAX_ID_DIGITS = 12  # sqlite биндит только int64: длиннее — мусор, а не OverflowError
 
 
 def parse_ref_code(code: str) -> tuple[int | None, str | None]:
-    """"42-youtube" → (42, "youtube"); "42" → (42, None); мусор → (None, None)."""
+    """"42-youtube" → (42, "youtube"); "42" и "42-" → (42, None); мусор → (None, None)."""
     m = _CODE_RE.match((code or "").strip())
-    if m is None:
+    if m is None or len(m.group(1)) > _MAX_ID_DIGITS:
         return None, None
     slug = m.group(2)
     return int(m.group(1)), (slug.lower() if slug else None)
@@ -855,6 +870,7 @@ git commit -m "feat(referral): ref-code parsing, attribution with fallback, clic
 **Files:**
 - Modify: `services/refill.py:190-246` (`_get_user_for_referral`, `finalize_with_referral_bonus`)
 - Modify: `tests/unit/test_refill.py:87-127` (реферальные тесты)
+- Modify: `tests/unit/test_refill_state_machine.py:33-47,198-215` (тесты `_is_first_refill` и 30%-ожидания)
 
 - [ ] **Step 1: Переписать реферальные тесты под новую модель**
 
@@ -984,6 +1000,8 @@ def _record_referral_bonus(
     referrer_new_balance: int,
 ) -> None:
     """История начисления + durable web-уведомление реферу."""
+    import re
+
     from utils.other import format_decimal, get_date
     from utils.sqlite3 import get_string
 
@@ -1006,6 +1024,9 @@ def _record_referral_bonus(
         text = get_string("str_ref_balance_refil").format(
             format_decimal(bonus), format_decimal(referrer_new_balance)
         )
+        # Строка — телеграмный HTML (<b>…</b>); веб-уведомления рендерятся
+        # плоским текстом (React экранирует), поэтому теги вырезаем.
+        text = re.sub(r"</?[a-zA-Z][^>]*>", "", text)
         con.execute(
             "INSERT INTO notifications(user_id, kind, text) VALUES (?, 'referral', ?)",
             (referrer_id, text),
@@ -1051,15 +1072,26 @@ def finalize_with_referral_bonus(
                 referrer_new_balance = None
                 bonus = 0
             else:
-                _record_referral_bonus(
-                    referrer_id=int(referrer_id),
-                    referred_user_id=user_id,
-                    payment_id=payment_id,
-                    link_id=user["ref_link_id"],
-                    bonus=bonus,
-                    percent=percent,
-                    referrer_new_balance=referrer_new_balance,
-                )
+                try:
+                    _record_referral_bonus(
+                        referrer_id=int(referrer_id),
+                        referred_user_id=user_id,
+                        payment_id=payment_id,
+                        link_id=user["ref_link_id"],
+                        bonus=bonus,
+                        percent=percent,
+                        referrer_new_balance=referrer_new_balance,
+                    )
+                except Exception:
+                    # Баланс реферу уже начислен — сбой записи истории или
+                    # уведомления НЕ должен превратить успешный платеж в ошибку
+                    # для плательщика. Логируем для ручного backfill.
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        "referral bonus history write failed: referrer=%s "
+                        "payer=%s bonus=%s payment_id=%s",
+                        referrer_id, user_id, bonus, payment_id,
+                    )
 
     return RefillResult(
         user_balance=new_balance,
@@ -1070,15 +1102,35 @@ def finalize_with_referral_bonus(
     )
 ```
 
+- [ ] **Step 3b: Обновить tests/unit/test_refill_state_machine.py**
+
+Файл тоже завязан на старую модель — без правки полный прогон в Task 15 красный:
+
+1. Удалить тесты `test_is_first_refill_ignores_pending` (строка 33) и
+   `test_is_first_refill_false_after_succeeded` (строка 42) — функция
+   `_is_first_refill` удалена вместе с условием «только первое пополнение».
+2. В `test_referral_bonus_not_double_credited` (строка 198): докстринг →
+   `"""Реф-бонус за один payment_id начисляется РОВНО ОДИН раз (гонка)."""`,
+   ожидания 30% заменить на 10%:
+
+```python
+    assert r1.referrer_bonus == 100  # 10% of 1000
+    assert r1.referrer_new_balance == 100
+```
+
+3. В хвосте теста (повторный finalize того же payment_id) баланс рефера
+   должен остаться `100` — найти прочие `300` в этом тесте
+   (`grep -n 300 tests/unit/test_refill_state_machine.py`) и заменить на `100`.
+
 - [ ] **Step 4: Прогнать тесты refill целиком**
 
-Run: `docker exec original_avito_pf_bot-api-1 python -m pytest tests/unit/test_refill.py -v`
+Run: `docker exec original_avito_pf_bot-api-1 python -m pytest tests/unit/test_refill.py tests/unit/test_refill_state_machine.py -v`
 Expected: PASS. Если падают НЕреферальные тесты — чинить регресс, не тесты.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add services/refill.py tests/unit/test_refill.py
+git add services/refill.py tests/unit/test_refill.py tests/unit/test_refill_state_machine.py
 git commit -m "feat(referral): pay percent on every refill via credit, honor per-link percent"
 ```
 
@@ -1113,7 +1165,23 @@ git commit -m "feat(referral): pay percent on every refill via credit, honor per
         return
 ```
 
-Легаси-ветки (`args.isdigit()`, magic) не трогать — работают как раньше.
+- [ ] **Step 1b: Починить гард перезаписи в легаси-ветке**
+
+Там же, в начале блока `if args:` (строка ~54), заменить проверку «уже есть
+реферер» с `ref_user_name` на `ref_id`:
+
+```python
+    if args:
+        if user['ref_id'] is not None:
+            ref_name = await get_refer_name(user['ref_id'])
+            await message.answer(f"{yes_refer.format(name, ref_name)}")
+```
+
+(было `if user['ref_user_name'] is not None:`). Новый `attribute()` пишет в
+`ref_user_name` username партнера, который бывает NULL — старый гард пропустил
+бы юзера в легаси-ветку, и клик по старой ссылке `?start=<id>` перезаписал бы
+`ref_id`, нарушая инвариант «атрибуция одноразовая». Остальную логику
+легаси-веток (digit, magic) не трогать.
 
 - [ ] **Step 2: Smoke-прогон и синтаксис**
 
@@ -1241,9 +1309,14 @@ class VerifyBody(BaseModel):
     existing = identity.find_user_id_by_provider("phone", phone)
     user_id = identity.find_or_create_user_by_phone(phone, verified=True)
     if existing is None and body.ref_code:
-        # Атрибуция ТОЛЬКО для реально нового юзера. Ошибки кода — молча.
-        from services import referral
-        referral.attribute(user_id, body.ref_code)
+        # Атрибуция ТОЛЬКО для реально нового юзера. Любой сбой (битый код,
+        # залоченная БД) не должен ронять регистрацию: OTP уже сожжен, и 500
+        # здесь оставил бы юзера без JWT при созданном аккаунте.
+        try:
+            from services import referral
+            referral.attribute(user_id, body.ref_code)
+        except Exception:
+            logger.exception("referral attribution failed: user_id=%s", user_id)
     return TokenResponse(access_token=create_jwt(user_id))
 ```
 
@@ -1271,8 +1344,12 @@ class EmailRegisterVerifyRequest(BaseModel):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if body.ref_code:
         # register-verify существует только для новых регистраций — атрибуцируем.
-        from services import referral
-        referral.attribute(user_id, body.ref_code)
+        # Сбой атрибуции не должен ронять регистрацию (OTP уже израсходован).
+        try:
+            from services import referral
+            referral.attribute(user_id, body.ref_code)
+        except Exception:
+            logger.exception("referral attribution failed: user_id=%s", user_id)
     return TokenResponse(access_token=create_jwt(user_id))
 ```
 
@@ -1391,7 +1468,9 @@ class CreateLinkBody(BaseModel):
 
 
 class AdminPercentBody(BaseModel):
-    custom_percent: int | None = Field(None, ge=1, le=100)
+    # Поле ОБЯЗАТЕЛЬНОЕ (но nullable): PATCH с пустым телом должен вернуть 422,
+    # а не молча сбросить договорной процент на глобальный.
+    custom_percent: int | None = Field(..., ge=1, le=100)
 
 
 @router.get("/me/referral")
@@ -1525,6 +1604,9 @@ def test_admin_sets_custom_percent(tmp_db: Path) -> None:
     # Вне диапазона
     assert c.patch(f"/api/admin/referral/links/{link['id']}",
                    json={"custom_percent": 150}, headers=_auth(1)).status_code == 422
+    # Пустое тело — 422 (поле обязательное), а не молчаливый сброс процента
+    assert c.patch(f"/api/admin/referral/links/{link['id']}",
+                   json={}, headers=_auth(1)).status_code == 422
     # Не существует
     assert c.patch("/api/admin/referral/links/9999",
                    json={"custom_percent": 30}, headers=_auth(1)).status_code == 404
@@ -1553,25 +1635,28 @@ git commit -m "test(referral): cover admin referral endpoints"
 
 - [ ] **Step 1: app.jsx — захват и beacon**
 
-Рядом с разбором `_qs` (до компонента App) добавить:
+⚠️ `_qs` объявлен ВНУТРИ `function App()` (app.jsx:17) — на верхнем уровне
+его нет. Блок ниже самодостаточен (парсит query сам); вставить его на верхний
+уровень app.jsx, ДО `function App()`:
 
 ```jsx
-// --- Реф-код партнерки: ловим ?ref=<user_id>-<slug>, храним 30 дней ---
+// --- Реф-код партнерки: ловим ?ref=<user_id>-<slug>, храним 30 дней.
+// Политика last-touch (спека): новый код замещает ранее сохраненный.
 const REF_TTL_MS = 30 * 24 * 3600 * 1000;
-const _refParam = _qs.get('ref');
-if (_refParam && /^\d+(-[a-z0-9_-]{3,32})?$/i.test(_refParam)) {
+(function () {
+  const refParam = new URLSearchParams(window.location.search).get('ref');
+  if (!refParam || !/^\d{1,12}(-[a-z0-9_-]{3,32})?$/i.test(refParam)) return;
   let stored = null;
   try { stored = JSON.parse(localStorage.getItem('ref_code') || 'null'); } catch (e) {}
-  const fresh = stored && stored.exp > Date.now();
-  if (!fresh) {
-    localStorage.setItem('ref_code',
-      JSON.stringify({ code: _refParam, exp: Date.now() + REF_TTL_MS }));
-    // Клик считаем один раз на первое касание (см. spec: клики считает SPA)
-    if (navigator.sendBeacon) {
-      navigator.sendBeacon('/api/referral/click?code=' + encodeURIComponent(_refParam));
-    }
+  const prevCode = stored && stored.exp > Date.now() ? stored.code : null;
+  localStorage.setItem('ref_code',
+    JSON.stringify({ code: refParam, exp: Date.now() + REF_TTL_MS }));
+  // Клик шлем только при смене кода — перезагрузка страницы с тем же ?ref
+  // не накручивает счетчик.
+  if (prevCode !== refParam && navigator.sendBeacon) {
+    navigator.sendBeacon('/api/referral/click?code=' + encodeURIComponent(refParam));
   }
-}
+})();
 window.getRefCode = function () {
   try {
     const raw = JSON.parse(localStorage.getItem('ref_code') || 'null');
@@ -1910,61 +1995,71 @@ git commit -m "feat(referral): admin per-link percent override in user drawer"
 ### Task 12: Лендинг — проброс ?ref
 
 **Files:**
-- Modify: `web/landing/index.html` (перед `</body>`)
-- Modify: `docs/superpowers/specs/2026-07-18-referral-program-design.md` (уточнение про клики)
+- Modify: `web/landing/index.html` (в `<head>` исходного документа)
 
-- [ ] **Step 1: Вставить скрипт**
+⚠️ Лендинг — САМОРАСПАКОВЫВАЮЩАЯСЯ страница: реальная разметка (все ссылки на
+ЛК) лежит строкой в `<script type="__bundler/template">` и подменяет документ
+после DOMContentLoaded через DOMParser + `replaceWith` (см. строки 43–236).
+Поэтому «переписать href при загрузке» невозможно: в момент выполнения
+вставленного скрипта ссылок в DOM нет, а при подмене документа сам скрипт
+будет выброшен. Работающий способ — делегированный обработчик на `document`:
+объект document при подмене НЕ заменяется, слушатель переживает swap и
+дописывает `ref` в момент клика (capture-фаза, до навигации).
 
-Перед `</body>` в `web/landing/index.html`:
+- [ ] **Step 1: Вставить скрипт в `<head>`**
+
+В `<head>` исходного документа `web/landing/index.html` (до загрузчика):
 
 ```html
 <script>
 (function () {
   var ref = new URLSearchParams(location.search).get('ref');
-  if (!ref || !/^\d+(-[a-z0-9_-]{3,32})?$/i.test(ref)) return;
-  // Дописываем ref ко всем ссылкам на ЛК: localStorage между доменами не шарится.
-  document.querySelectorAll('a[href*="lk."]').forEach(function (a) {
+  if (!ref || !/^\d{1,12}(-[a-z0-9_-]{3,32})?$/i.test(ref)) return;
+  // Разметка подменяется загрузчиком после DOMContentLoaded — дописываем ref
+  // не при загрузке, а в момент клика: слушатель на document переживает swap.
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href*="lk."]') : null;
+    if (!a) return;
     try {
       var u = new URL(a.getAttribute('href'), location.href);
       u.searchParams.set('ref', ref);
       a.setAttribute('href', u.toString());
-    } catch (e) { /* битые href пропускаем */ }
-  });
+    } catch (err) { /* битые href пропускаем */ }
+  }, true);
 })();
 </script>
 ```
 
-Клик здесь НЕ считаем — beacon шлет ЛК-SPA при первом касании (Task 9); двойной счет по цепочке лендинг→ЛК исключен.
+Клик здесь НЕ считаем — beacon шлет ЛК-SPA при смене кода (Task 9); двойной
+счет по цепочке лендинг→ЛК исключен. Спека уже синхронизирована.
 
-- [ ] **Step 2: Синхронизировать спеку**
+- [ ] **Step 2: Ручная проверка**
 
-В `docs/superpowers/specs/2026-07-18-referral-program-design.md` пункт 2 раздела «Потоки» — заменить упоминание beacon с лендинга на:
+Открыть лендинг локально с `?ref=1-test`, кликнуть ссылку на ЛК — переход
+идет на `lk...?...&ref=1-test`. До клика href в DevTools выглядят БЕЗ ref —
+это норма: подстановка происходит в момент клика.
 
-```
-   шлет клик НЕ лендинг, а ЛК-SPA при первом касании (?ref без свежего
-   ref_code в localStorage) — так исключается двойной счет по цепочке
-   лендинг → ЛК.
-```
-
-- [ ] **Step 3: Ручная проверка**
-
-Открыть лендинг локально с `?ref=1-test` — все ссылки на `lk.*` получили `?ref=1-test`.
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add web/landing/index.html docs/superpowers/specs/2026-07-18-referral-program-design.md
+git add web/landing/index.html
 git commit -m "feat(referral): propagate ref code from landing to cabinet links"
 ```
 
 ---
 
-### Task 13: Бот — профиль и реферальная ссылка
+### Task 13: Бот — профиль, реферальная ссылка и админ-отчет
 
 **Files:**
 - Modify: `handlers/profile.py:47-49`
+- Modify: `handlers/admin_orders.py:518-560` (отчет по юзеру: рефералы из ref_id, не из CSV)
 
-- [ ] **Step 1: Показать реф-код дефолтной ссылки**
+- [ ] **Step 1: Профиль — показать реф-код (read-only, ничего не создавать)**
+
+Просмотр профиля — пассивное действие; создавать в нем ссылку нельзя (иначе
+каждый юзер бота получит фантомную кампанию). Показываем первую активную
+ссылку, а если ссылок нет — код без слага `ref_<user_id>`: он валиден и дает
+атрибуцию «в общем».
 
 В `handlers/profile.py` (строки ~47-49) заменить:
 
@@ -1978,24 +2073,67 @@ git commit -m "feat(referral): propagate ref code from landing to cabinet links"
 
 ```python
     profile_string = get_string('str_user_profile')
-    from services.referral import get_or_create_default_link, referrals_count
-    _def_link = get_or_create_default_link(user_id)
-    ref_link = f"{config.botlink}?start=ref_{user_id}-{_def_link['slug']}"
+    from services.referral import get_default_link, referrals_count
+    _def_link = get_default_link(user_id)  # read-only: ничего не создаем
+    _slug_part = f"-{_def_link['slug']}" if _def_link else ""
+    ref_link = f"{config.botlink}?start=ref_{user_id}{_slug_part}"
     rferals_count = referrals_count(user_id)
 ```
 
 Импорт `get_referals_count` из `utils.other` в шапке файла удалить, если больше нигде в файле не используется (проверить grep-ом по файлу).
 
-- [ ] **Step 2: Smoke**
+- [ ] **Step 2: Админ-отчет — рефералы по ref_id вместо легаси-CSV**
 
-Run: `docker exec original_avito_pf_bot-api-1 python -c "import handlers.profile"`
+Новый код НЕ пополняет `users.referals` (CSV), а отчет в
+`handlers/admin_orders.py:518-527` строится именно по нему — у партнера с
+рефералами новой модели админ увидел бы нули. Заменить блок:
+
+```python
+        if user['referals']:
+            referals_array = user['referals'].split(',')
+            referals_count = len(referals_array)
+            for ref_id in referals_array:
+                ref_user = get_user(id=ref_id)
+                ref_str_add = await get_user_string_without_first_name(ref_user)
+                referals_list_str.append(ref_str_add)
+                referals_str = ', '.join(referals_list_str)
+```
+
+на:
+
+```python
+        from services.db import connect as _ref_connect
+        with _ref_connect() as _con:
+            referals_array = [
+                str(r["id"]) for r in _con.execute(
+                    "SELECT id FROM users WHERE ref_id = ?", (int(user_id),)
+                ).fetchall()
+            ]
+        referals_count = len(referals_array)
+        for ref_id in referals_array:
+            ref_user = get_user(id=ref_id)
+            ref_str_add = await get_user_string_without_first_name(ref_user)
+            referals_list_str.append(ref_str_add)
+            referals_str = ', '.join(referals_list_str)
+```
+
+Ниже в этом же блоке (строка ~550) условие `if user['referals']:` перед
+подсчетом взносов рефералов заменить на `if referals_array:` — иначе суммы
+взносов продолжат считаться по CSV-списку.
+
+(Легаси-юзеры не потеряются: старый flow всегда выставлял и `ref_id`, и CSV,
+так что запрос по `ref_id` покрывает обе модели.)
+
+- [ ] **Step 3: Smoke**
+
+Run: `docker exec original_avito_pf_bot-api-1 python -c "import handlers.profile, handlers.admin_orders"`
 Expected: без ошибок. Легаси-ссылки `?start=<user_id>` из старых сообщений продолжают работать (ветка digit в main_start не тронута).
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add handlers/profile.py
-git commit -m "feat(referral): bot profile shows default campaign ref link and live count"
+git add handlers/profile.py handlers/admin_orders.py
+git commit -m "feat(referral): bot profile ref link read-only, admin report counts by ref_id"
 ```
 
 ---
@@ -2058,6 +2196,45 @@ def test_merge_keeps_target_ref(tmp_db: Path) -> None:
         assert con.execute(
             "SELECT ref_id FROM users WHERE id = 200"
         ).fetchone()[0] == 43
+
+
+def test_merge_repoints_partner_data(tmp_db: Path) -> None:
+    """source сам был партнером: его рефералы, ссылки и бонусы переезжают на target."""
+    import sqlite3
+    from services import identity
+    from services.referral import create_link
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (100, 0)")   # source-партнер
+        con.execute("INSERT INTO users(id, balance) VALUES (200, 0)")   # target
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009902', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '557', '2026-07-18', 1)"
+        )
+    link = create_link(100, "promo")
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO users(id, balance, ref_id, ref_link_id) VALUES (300, 0, 100, ?)",
+            (link["id"],),
+        )  # реферал source-партнера
+        con.execute(
+            "INSERT INTO referral_bonuses(referrer_id, referred_user_id, refill_id,"
+            " link_id, amount, percent, created_at)"
+            " VALUES (100, 300, NULL, ?, 50, 10, '2026-07-18')",
+            (link["id"],),
+        )
+    identity.link_phone_provider(200, "+79990009902", set_verified=True)
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute("SELECT ref_id FROM users WHERE id = 300").fetchone()[0] == 200
+        assert con.execute(
+            "SELECT user_id FROM referral_links WHERE id = ?", (link["id"],)
+        ).fetchone()[0] == 200
+        assert con.execute(
+            "SELECT referrer_id FROM referral_bonuses"
+        ).fetchone()[0] == 200
 ```
 
 - [ ] **Step 2: Запустить — убедиться, что падает**
@@ -2070,7 +2247,8 @@ Expected: FAIL (`ref_id` = NULL)
 В `services/identity.py`, в `_merge_phone_only_into`, перед `con.execute("DELETE FROM users WHERE id=?", ...)`:
 
 ```python
-    # Перенос реферера: если у source был ref_id, а у target нет — сохраняем атрибуцию.
+    # Перенос партнерских данных source → target.
+    # 1) Его собственный реферер — если у target еще нет:
     src_ref = con.execute(
         "SELECT ref_id, ref_link_id, ref_user_name FROM users WHERE id=?",
         (source_user_id,),
@@ -2082,6 +2260,42 @@ Expected: FAIL (`ref_id` = NULL)
             (src_ref["ref_id"], src_ref["ref_link_id"], src_ref["ref_user_name"],
              target_user_id),
         )
+    # 2) Его рефералы, ссылки и история бонусов — иначе после DELETE source
+    #    ref_id рефералов повиснет на несуществующем юзере: бонусы молча
+    #    перестанут начисляться, а /api/me/referral покажет нули.
+    try:
+        con.execute(
+            "UPDATE users SET ref_id=? WHERE ref_id=?",
+            (target_user_id, source_user_id),
+        )
+        for _link in con.execute(
+            "SELECT id, slug FROM referral_links WHERE user_id=?",
+            (source_user_id,),
+        ).fetchall():
+            try:
+                con.execute(
+                    "UPDATE referral_links SET user_id=? WHERE id=?",
+                    (target_user_id, _link["id"]),
+                )
+            except Exception:
+                # UNIQUE(user_id, slug): у target уже есть такой слаг — переименуем.
+                con.execute(
+                    "UPDATE referral_links SET user_id=?, slug=? WHERE id=?",
+                    (target_user_id, f"{_link['slug']}-{_link['id']}", _link["id"]),
+                )
+        con.execute(
+            "UPDATE referral_bonuses SET referrer_id=? WHERE referrer_id=?",
+            (target_user_id, source_user_id),
+        )
+        con.execute(
+            "UPDATE referral_bonuses SET referred_user_id=? WHERE referred_user_id=?",
+            (target_user_id, source_user_id),
+        )
+    except Exception:
+        pass  # схемы без партнерских таблиц (старые тесты) — как с refills выше
+
+    # Примечание: после мерджа активных ссылок может стать больше лимита —
+    # MAX_ACTIVE_LINKS проверяется только при создании, это осознанно.
 ```
 
 - [ ] **Step 4: Прогнать**
@@ -2103,7 +2317,9 @@ git commit -m "feat(referral): carry referrer over on phone-only account merge"
 - [ ] **Step 1: Полный прогон тестов**
 
 Run: `docker exec original_avito_pf_bot-api-1 python -m pytest -q`
-Expected: все зеленые. Любой упавший тест — регресс, чинить код, а не тест (кроме явно переписанных в Task 4).
+Expected: все зеленые. Любой упавший тест — регресс, чинить код, а не тест
+(кроме явно переписанных в Task 4: `tests/unit/test_refill.py` и
+`tests/unit/test_refill_state_machine.py`).
 
 - [ ] **Step 2: Sanity-чеклист вручную**
 

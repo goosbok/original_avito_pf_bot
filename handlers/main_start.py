@@ -2,11 +2,12 @@ import colorama
 from aiogram.dispatcher import FSMContext
 from aiogram.types import Message
 
+from data import config
 from data.loader import bot, storage, dp
 from utils.sqlite3 import get_user, update_user, all_users
 from design import (
     yes_refer, refer_not_in_base, invite_yourself,
-    start_text, start_text_ref,
+    start_text, start_text_ref, welcome_bonus_line,
 )
 from keyboards.inline_keyboards import get_menu_kb
 
@@ -40,12 +41,15 @@ async def get_refer_name(user_id):
         return None
 
 @dp.message_handler(commands=['start'], state="*")
-async def main_start(message: Message, state: FSMContext, user_id: int):
+async def main_start(message: Message, state: FSMContext, user_id: int, is_new_user: bool = False):
     await state.finish()
     user = get_user(id=user_id)
     usr = message.from_user
     args = message.get_args()
     name = await get_user_name(usr)
+    bonus_line = ""
+    if is_new_user and config.WELCOME_BONUS_RUB > 0:
+        bonus_line = welcome_bonus_line.format(config.WELCOME_BONUS_RUB)
     if args == 'connect':
         # Deep-link from web SPA: /start connect → trigger phone-sharing flow
         from handlers.connect import prompt_for_contact
@@ -79,7 +83,7 @@ async def main_start(message: Message, state: FSMContext, user_id: int):
                             update_user(id=refer['id'], referals=referals_str)
                         else:
                             update_user(id=refer['id'], referals=str(user_id))
-                        await message.answer(start_text_ref(ref_first_name=ref_name), reply_markup=get_menu_kb())
+                        await message.answer(start_text_ref(ref_first_name=ref_name) + bonus_line, reply_markup=get_menu_kb())
                 else:
                     await message.answer(f"{refer_not_in_base.format(name, refer_id)}")
             else:
@@ -104,9 +108,9 @@ async def main_start(message: Message, state: FSMContext, user_id: int):
                                 update_user(id=usr['id'], referals=referals_str)
                             else:
                                 update_user(id=usr['id'], referals=str(user_id))
-                            await message.answer(start_text_ref(ref_first_name), reply_markup=get_menu_kb())
+                            await message.answer(start_text_ref(ref_first_name) + bonus_line, reply_markup=get_menu_kb())
                 else:
                     await message.answer(invite_yourself)
                         #await message.reply(f"Привет {user['first_name']}! Ты пришел по реферальной ссылке {usr['first_name']} (@{usr['user_name']}).")
     else:
-        await message.answer(f"{start_text.format(name)}", reply_markup=get_menu_kb())
+        await message.answer(f"{start_text.format(name)}{bonus_line}", reply_markup=get_menu_kb())

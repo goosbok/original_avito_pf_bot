@@ -131,8 +131,61 @@ def test_referral_bonus_survives_welcome_bonus(tmp_db, monkeypatch):
     user_id = identity.get_or_create_user_by_telegram(tg_id=911, user_name="newbie")
     update_user(id=user_id, ref_id=referrer_id)
 
+    assert len(_welcome_rows(tmp_db, user_id)) == 1  # предусловие: welcome-строка есть
+
     res = refill.finalize_with_referral_bonus(user_id, 1_000)  # первый реальный депозит
 
     assert res.was_newly_finalized
     assert res.referrer_id == referrer_id
     assert res.referrer_bonus == 300  # 30% от 1 000 ₽
+    assert res.user_balance == 1_100  # 100 welcome + 1 000 депозит
+
+
+# ── уведомление в /start ────────────────────────────────────────────────────
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+
+def _start_message(tg_id: int) -> MagicMock:
+    msg = MagicMock()
+    msg.get_args = MagicMock(return_value="")
+    msg.answer = AsyncMock()
+    msg.from_user = SimpleNamespace(first_name="Вася", username="vasya", id=tg_id)
+    return msg
+
+
+async def test_start_shows_bonus_line_for_new_user(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    from handlers.main_start import main_start
+
+    user_id = identity.get_or_create_user_by_telegram(tg_id=920, user_name="vasya")
+    msg = _start_message(920)
+    await main_start(msg, AsyncMock(), user_id=user_id, is_new_user=True)
+
+    text = msg.answer.call_args.args[0]
+    assert "приветственный бонус 100 ₽" in text
+
+
+async def test_start_no_bonus_line_for_returning_user(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    from handlers.main_start import main_start
+
+    user_id = identity.get_or_create_user_by_telegram(tg_id=921, user_name="vasya")
+    msg = _start_message(921)
+    await main_start(msg, AsyncMock(), user_id=user_id, is_new_user=False)
+
+    text = msg.answer.call_args.args[0]
+    assert "приветственный бонус" not in text
+
+
+async def test_start_no_bonus_line_when_disabled(tmp_db, monkeypatch):
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 0, raising=False)
+    from handlers.main_start import main_start
+
+    user_id = identity.get_or_create_user_by_telegram(tg_id=922, user_name="vasya")
+    msg = _start_message(922)
+    await main_start(msg, AsyncMock(), user_id=user_id, is_new_user=True)
+
+    text = msg.answer.call_args.args[0]
+    assert "приветственный бонус" not in text

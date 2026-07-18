@@ -3,6 +3,7 @@ from data.config import *
 from utils.sqlite3 import get_user
 from utils.other_functions import get_user_string_without_first_name, get_days_suffix, format_decimal
 start_text = "👋 Приветствую, <b>{}</b> ! Выберите что хотите сделать."
+welcome_bonus_line = "\n\n🎁 Вам начислен приветственный бонус {} ₽"
 
 profile = "🪪 Личный кабинет"
 tarifs = "💰 Тарифы"

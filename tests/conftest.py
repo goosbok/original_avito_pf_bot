@@ -35,6 +35,7 @@ def _make_config_stub() -> types.ModuleType:
     stub.CODER = 0
     stub.botlink = "https://t.me/test"
     stub.SITE_URL = ""
+    stub.LANDING_URL = "https://pf-bot.com"
     stub.channel_link = "https://t.me/test"
     stub.host = ""
     stub.user = ""

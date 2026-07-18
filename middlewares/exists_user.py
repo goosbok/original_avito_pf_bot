@@ -40,6 +40,7 @@ class ExistsUserMiddleware(BaseMiddleware):
             first_name=first_name,
         )
         data["user_id"] = internal_user_id
+        data["is_new_user"] = is_new
 
         if is_new:
             logger.info("new user registered: tg_id=%s username=%s", user_id, user_name)

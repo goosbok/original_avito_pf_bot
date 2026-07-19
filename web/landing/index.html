@@ -27,6 +27,23 @@
       This page requires JavaScript to display.
     </div>
   </noscript>
+  <script>
+  (function () {
+    var ref = new URLSearchParams(location.search).get('ref');
+    if (!ref || !/^\d{1,12}(-[a-z0-9_-]{3,32})?$/i.test(ref)) return;
+    // Разметка подменяется загрузчиком после DOMContentLoaded — дописываем ref
+    // не при загрузке, а в момент клика: слушатель на document переживает swap.
+    document.addEventListener('click', function (e) {
+      var a = e.target && e.target.closest ? e.target.closest('a[href*="lk."]') : null;
+      if (!a) return;
+      try {
+        var u = new URL(a.getAttribute('href'), location.href);
+        u.searchParams.set('ref', ref);
+        a.setAttribute('href', u.toString());
+      } catch (err) { /* битые href пропускаем */ }
+    }, true);
+  })();
+  </script>
 </head>
 <body>
   <div id="__bundler_thumbnail">

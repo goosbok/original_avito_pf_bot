@@ -36,7 +36,7 @@ def normalize_slug(slug: str) -> str:
     slug = (slug or "").strip().lower()
     if not SLUG_RE.match(slug):
         raise SlugInvalid(
-            "слаг: 3-32 символа, только латиница в нижнем регистре, цифры, '-' и '_'"
+            "метка: 3-32 символа, только латиница в нижнем регистре, цифры, '-' и '_'"
         )
     return slug
 
@@ -81,10 +81,10 @@ def create_link(user_id: int, slug: str | None = None) -> dict:
                 if "UNIQUE constraint failed" not in str(exc):
                     raise
                 if explicit:
-                    raise SlugTaken(f"слаг '{norm}' уже занят у этого пользователя")
+                    raise SlugTaken(f"метка '{norm}' уже занята у этого пользователя")
                 norm = generate_slug()  # коллизия случайного — перегенерим
         else:
-            raise SlugTaken("не удалось подобрать случайный слаг")
+            raise SlugTaken("не удалось подобрать случайную метку")
         row = con.execute(
             "SELECT * FROM referral_links WHERE id = ?", (cur.lastrowid,)
         ).fetchone()

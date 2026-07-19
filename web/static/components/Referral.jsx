@@ -82,7 +82,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
         <h3 style={{ fontSize: '1rem', marginBottom: 10 }}>Новая ссылка</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input className="input" style={{ flex: '1 1 180px' }} placeholder="свой-слаг (латиница, 3-32)"
+          <input className="input" style={{ flex: '1 1 180px' }} placeholder="своя метка (латиница, 3-32)"
                  value={slug} onChange={e => setSlug(e.target.value)} disabled={busy} />
           <button className="btn btn--primary" onClick={createLink}
                   disabled={busy || slug.trim().length < 3}>Создать</button>

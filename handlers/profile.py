@@ -17,7 +17,6 @@ from keyboards.users_menu import (
 from utils.other import (
     format_decimal,
     str2bool,
-    get_referals_count,
 )
 from utils.sqlite3 import (
     get_user,
@@ -44,8 +43,11 @@ async def user_profile(call: CallbackQuery, state: FSMContext, user_id: int):
             logger.debug("user:profile: could not delete message")
         return
     profile_string = get_string('str_user_profile')
-    ref_link = f"{config.botlink}?start={user_id}"
-    rferals_count = get_referals_count(user)
+    from services.referral import get_default_link, referrals_count
+    _def_link = get_default_link(user_id)  # read-only: ничего не создаем
+    _slug_part = f"-{_def_link['slug']}" if _def_link else ""
+    ref_link = f"{config.botlink}?start=ref_{user_id}{_slug_part}"
+    rferals_count = referrals_count(user_id)
     f_balance = format_decimal(user['balance'])
     await call.message.answer(
         text=profile_string.format(f_balance, ref_link, rferals_count),

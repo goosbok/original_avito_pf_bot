@@ -516,14 +516,19 @@ async def gen_magic_report(user_id):
         referals_array = []
         referals_list_str = []
 
-        if user['referals']:
-            referals_array = user['referals'].split(',')
-            referals_count = len(referals_array)
-            for ref_id in referals_array:
-                ref_user = get_user(id=ref_id)
-                ref_str_add = await get_user_string_without_first_name(ref_user)
-                referals_list_str.append(ref_str_add)
-                referals_str = ', '.join(referals_list_str)
+        from services.db import connect as _ref_connect
+        with _ref_connect() as _con:
+            referals_array = [
+                str(r["id"]) for r in _con.execute(
+                    "SELECT id FROM users WHERE ref_id = ?", (int(user_id),)
+                ).fetchall()
+            ]
+        referals_count = len(referals_array)
+        for ref_id in referals_array:
+            ref_user = get_user(id=ref_id)
+            ref_str_add = await get_user_string_without_first_name(ref_user)
+            referals_list_str.append(ref_str_add)
+            referals_str = ', '.join(referals_list_str)
 
         report['referals'] = f"\n🐹 рефералы: <b>{referals_count}</b>\n{referals_str}"
 
@@ -548,7 +553,7 @@ async def gen_magic_report(user_id):
 
         report['general'] += f"\n💵 Финансовая статистика:\nВносил деньги <b>{user_refil_count}</b> раз\
                \nВсего внесено <b>{user_total_sum} руб.</b>"
-        if user['referals']:
+        if referals_array:
             referals_refills_sum = 0
             referals_refills_count = 0
             for ref_id in referals_array:

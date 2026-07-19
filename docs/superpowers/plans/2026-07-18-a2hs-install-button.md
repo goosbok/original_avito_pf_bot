@@ -490,19 +490,19 @@ git commit -m "feat(web): mount install banner in cabinet and icon in header"
 .a2hs-sheet__steps svg { vertical-align: -3px; color: var(--primary); }
 .a2hs-sheet__actions { display: flex; gap: 8px; }
 
-/* Desktop: centered dialog instead of bottom sheet.
-   769px matches the stylesheet's single mobile/desktop cut (see the
-   existing 768/769px media blocks) — no one-off breakpoints. */
+/* A2HS is a mobile action (add to home screen), so both entry points are
+   hidden on desktop-width viewports — matching the stylesheet's single
+   768/769px cut and its .mobile-only convention. The feature therefore only
+   ever appears ≤768px, and the guide sheet is always a bottom sheet. */
 @media (min-width: 769px) {
-  .a2hs-overlay { align-items: center; padding: 20px; }
-  .a2hs-sheet { border-radius: 16px; }
-  .a2hs-sheet__grab { display: none; }
+  .a2hs-banner,
+  .a2hs-header-btn { display: none; }
 }
 ```
 
 - [ ] **Step 2: Verify both themes and breakpoints**
 
-Reload. Check banner + sheet in: light theme mobile (DevTools iPhone emulation), light desktop, dark mobile, dark desktop (theme toggle in header). Nothing overflows, colors come from vars, sheet is bottom-anchored on mobile and centered on desktop.
+Reload. Check banner + sheet in light and dark theme on a mobile viewport (DevTools iPhone emulation); nothing overflows, colors come from vars, sheet is bottom-anchored. At desktop width confirm the banner and header icon are absent entirely (mobile-only feature).
 
 - [ ] **Step 3: Commit**
 

@@ -8,6 +8,31 @@ const TWEAK_DEFAULTS = {
   accentColor: '#0088cc'
 };
 
+// --- Реф-код партнерки: ловим ?ref=<user_id>-<slug>, храним 30 дней.
+// Политика last-touch (спека): новый код замещает ранее сохраненный.
+const REF_TTL_MS = 30 * 24 * 3600 * 1000;
+(function () {
+  const refParam = new URLSearchParams(window.location.search).get('ref');
+  if (!refParam || !/^\d{1,12}(-[a-z0-9_-]{3,32})?$/i.test(refParam)) return;
+  let stored = null;
+  try { stored = JSON.parse(localStorage.getItem('ref_code') || 'null'); } catch (e) {}
+  const prevCode = stored && stored.exp > Date.now() ? stored.code : null;
+  localStorage.setItem('ref_code',
+    JSON.stringify({ code: refParam, exp: Date.now() + REF_TTL_MS }));
+  // Клик шлем только при смене кода — перезагрузка страницы с тем же ?ref
+  // не накручивает счетчик.
+  if (prevCode !== refParam && navigator.sendBeacon) {
+    navigator.sendBeacon('/api/referral/click?code=' + encodeURIComponent(refParam));
+  }
+})();
+window.getRefCode = function () {
+  try {
+    const raw = JSON.parse(localStorage.getItem('ref_code') || 'null');
+    if (raw && raw.exp > Date.now()) return raw.code;
+  } catch (e) {}
+  return null;
+};
+
 function App() {
   if (window.location.pathname === '/reset-password') {
     window.history.replaceState(null, '', '/');

@@ -53,7 +53,8 @@ function PhoneLogin({ onSuccess }) {
     if (!code || code.length < 4) return setError('Введите код из SMS');
     setLoading(true); setError('');
     try {
-      const data = await api.post('/api/auth/phone/verify', { phone, code });
+      const data = await api.post('/api/auth/phone/verify',
+        { phone, code, ref_code: window.getRefCode ? window.getRefCode() : null });
       if (data && data.access_token) {
         onSuccess(data.access_token);
       } else {

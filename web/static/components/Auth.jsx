@@ -118,7 +118,8 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
     setLoading(true); setError('');
     try {
       const data = await api.post('/api/auth/email/register-verify', {
-        email, code: regCode
+        email, code: regCode,
+        ref_code: window.getRefCode ? window.getRefCode() : null,
       });
       onLogin(data.access_token);
     } catch (e) {

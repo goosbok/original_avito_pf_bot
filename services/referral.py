@@ -92,12 +92,24 @@ def create_link(user_id: int, slug: str | None = None) -> dict:
 
 
 def archive_link(user_id: int, link_id: int) -> bool:
-    """Архивировать свою ссылку. False — нет такой/чужая/уже архивная."""
+    """Скрыть свою ссылку (archived_at = now). False — нет такой/чужая/уже скрыта."""
     with connect() as con:
         cur = con.execute(
             "UPDATE referral_links SET archived_at = ? "
             "WHERE id = ? AND user_id = ? AND archived_at IS NULL",
             (get_date(), link_id, user_id),
+        )
+        con.commit()
+    return cur.rowcount == 1
+
+
+def restore_link(user_id: int, link_id: int) -> bool:
+    """Вернуть скрытую ссылку в активные (archived_at = NULL). False — нет такой/чужая/не скрыта."""
+    with connect() as con:
+        cur = con.execute(
+            "UPDATE referral_links SET archived_at = NULL "
+            "WHERE id = ? AND user_id = ? AND archived_at IS NOT NULL",
+            (link_id, user_id),
         )
         con.commit()
     return cur.rowcount == 1

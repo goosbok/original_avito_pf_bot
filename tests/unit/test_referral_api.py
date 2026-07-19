@@ -137,7 +137,25 @@ def test_archive_link_endpoint(tmp_db: Path) -> None:
     assert c.delete(f"/api/me/referral/links/{link['id']}",
                     headers=_auth(1)).status_code == 204
     assert c.delete(f"/api/me/referral/links/{link['id']}",
-                    headers=_auth(1)).status_code == 404  # уже архивная
+                    headers=_auth(1)).status_code == 404  # уже скрыта
+
+
+def test_restore_link_endpoint(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    c = _client()
+    link = c.post("/api/me/referral/links", json={"slug": "youtube"},
+                  headers=_auth(1)).json()
+    assert c.delete(f"/api/me/referral/links/{link['id']}",
+                    headers=_auth(1)).status_code == 204
+    # restore возвращает 200 и снимает archived
+    assert c.post(f"/api/me/referral/links/{link['id']}/restore",
+                  headers=_auth(1)).status_code == 200
+    # повторный restore (уже активна) → 404
+    assert c.post(f"/api/me/referral/links/{link['id']}/restore",
+                  headers=_auth(1)).status_code == 404
+    # restore несуществующей → 404
+    assert c.post("/api/me/referral/links/9999/restore",
+                  headers=_auth(1)).status_code == 404
 
 
 def test_click_endpoint_public_and_silent(tmp_db: Path) -> None:

@@ -52,6 +52,15 @@ async def archive_link(
         raise HTTPException(status_code=404, detail="ссылка не найдена")
 
 
+@router.post("/me/referral/links/{link_id}/restore")
+async def restore_link(
+    link_id: int, user_id: int = Depends(require_user)
+) -> dict:
+    if not referral.restore_link(user_id, link_id):
+        raise HTTPException(status_code=404, detail="ссылка не найдена")
+    return {"ok": True}
+
+
 @router.get("/me/referral/bonuses")
 async def my_bonuses(
     limit: int = 50, offset: int = 0, user_id: int = Depends(require_user)

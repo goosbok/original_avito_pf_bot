@@ -49,10 +49,17 @@ function ReferralPage({ user, botConfig, onNavigate }) {
     setError('');
   };
 
-  const archive = async (id) => {
-    if (!confirm('Архивировать ссылку? Приведенные по ней рефералы сохранятся.')) return;
+  const hide = async (id) => {
+    if (!confirm('Скрыть ссылку? Она уйдёт в «Скрытые»: новых по ней не привести, но начисления по уже приведённым рефералам продолжатся. Вернуть можно в любой момент.')) return;
     setBusy(true); setError('');
     try { await api.delete('/api/me/referral/links/' + id); await load(); }
+    catch (e) { setError(e.message || 'Ошибка'); }
+    finally { setBusy(false); }
+  };
+
+  const restore = async (id) => {
+    setBusy(true); setError('');
+    try { await api.post('/api/me/referral/links/' + id + '/restore'); await load(); }
     catch (e) { setError(e.message || 'Ошибка'); }
     finally { setBusy(false); }
   };
@@ -60,6 +67,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
   if (!data) return <div className="page"><div style={{ color: 'var(--text-3)' }}>Загрузка...</div></div>;
 
   const active = data.links.filter(l => !l.archived_at);
+  const hidden = data.links.filter(l => l.archived_at);
 
   return (
     <div className="page" style={{ paddingTop: 20 }}>
@@ -110,11 +118,33 @@ function ReferralPage({ user, botConfig, onNavigate }) {
                 <button className="btn btn--ghost btn--sm" onClick={() => copy(botLink(l), 'bot' + l.id)}>
                   {copied === 'bot' + l.id ? '✓ Скопировано' : '🤖 Ссылка на бота'}
                 </button>
-                <button className="btn btn--ghost btn--sm" onClick={() => archive(l.id)} disabled={busy}>Архив</button>
+                <button className="btn btn--ghost btn--sm" onClick={() => hide(l.id)} disabled={busy}>Скрыть</button>
               </div>
             </div>
           ))}
       </div>
+
+      {hidden.length > 0 && (
+        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>Скрытые ссылки</h3>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: 6 }}>
+            Новых рефералов по ним не привести, но начисления по уже приведённым продолжаются. Можно вернуть в активные.
+          </div>
+          {hidden.map(l => (
+            <div key={l.id} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                <strong style={{ color: 'var(--text-3)' }}>{l.slug}</strong>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
+                  {l.effective_percent}% · клики: {l.clicks} · регистрации: {l.registrations} · заработано: {l.earned.toLocaleString('ru-RU')} ₽
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="btn btn--ghost btn--sm" onClick={() => restore(l.id)} disabled={busy}>Показать</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card" style={{ padding: '16px 20px' }}>
         <h3 style={{ fontSize: '1rem', marginBottom: 10 }}>История начислений</h3>

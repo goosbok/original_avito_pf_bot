@@ -84,6 +84,27 @@ def test_archive_foreign_link_fails(tmp_db: Path) -> None:
     assert archive_link(2, link["id"]) is False
 
 
+def test_restore_link(tmp_db: Path) -> None:
+    from services.referral import archive_link, create_link, list_links, restore_link
+    _mk_user(tmp_db, 1)
+    link = create_link(1, "promo")
+    assert archive_link(1, link["id"]) is True
+    assert list_links(1)[0]["archived_at"] is not None
+    assert restore_link(1, link["id"]) is True
+    assert list_links(1)[0]["archived_at"] is None
+    # повторный restore на уже активную → False
+    assert restore_link(1, link["id"]) is False
+
+
+def test_restore_foreign_link_fails(tmp_db: Path) -> None:
+    from services.referral import archive_link, create_link, restore_link
+    _mk_user(tmp_db, 1)
+    _mk_user(tmp_db, 2)
+    link = create_link(1, "promo")
+    archive_link(1, link["id"])
+    assert restore_link(2, link["id"]) is False
+
+
 def test_create_link_unknown_user_raises_integrity_not_slugtaken(tmp_db: Path) -> None:
     """FK на несуществующего user_id — это баг вызывающего, НЕ SlugTaken."""
     import sqlite3

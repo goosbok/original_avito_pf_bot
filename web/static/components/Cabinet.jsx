@@ -126,6 +126,8 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
       <div className="cabinet">
         <div className="container">
 
+          <InstallBanner />
+
           <div className="cabinet-top-row" style={{
             display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
             gap: 16, flexWrap: 'wrap', marginBottom: 28

@@ -25,6 +25,9 @@
   <!-- API helper (must be before Babel scripts) -->
   <script src="/api.js"></script>
 
+  <!-- Add-to-Home-Screen state (must load before React to catch beforeinstallprompt) -->
+  <script src="/a2hs.js"></script>
+
   <!-- Date formatters (Moscow time, ISO→dd.mm.yyyy HH:MM) -->
   <script src="/dates.js"></script>
 
@@ -39,6 +42,7 @@
   <!-- Components (dependency order — imported by app.jsx) -->
   <script type="text/babel" src="/components/NotificationsBell.jsx"></script>
   <script type="text/babel" src="/components/Notifications.jsx"></script>
+  <script type="text/babel" src="/components/InstallPrompt.jsx"></script>
   <script type="text/babel" src="/components/AppHeader.jsx"></script>
   <script type="text/babel" src="/components/PhoneLogin.jsx"></script>
   <script type="text/babel" src="/components/Auth.jsx"></script>

@@ -952,3 +952,86 @@ p  { line-height: 1.65; }
 }
 .notif-page__text { font-size: 0.9375rem; color: var(--text-1); line-height: 1.4; }
 .notif-page__time { font-size: 0.75rem; color: var(--text-3); }
+
+/* ============ A2HS (add to home screen) ============ */
+.a2hs-banner {
+  display: flex; align-items: center; gap: 14px;
+  /* right padding reserves the ✕ corner so it never overlaps the CTA */
+  padding: 14px 44px 14px 18px; margin-bottom: 24px;
+  position: relative; flex-wrap: wrap;
+}
+.a2hs-banner__icon { border-radius: 10px; flex-shrink: 0; }
+.a2hs-banner__text { flex: 1 1 200px; min-width: 0; }
+.a2hs-banner__title { font-weight: 700; font-size: 0.9375rem; }
+.a2hs-banner__desc { font-size: 0.8125rem; color: var(--text-2); margin-top: 2px; }
+.a2hs-banner__cta { white-space: nowrap; }
+.a2hs-banner__close {
+  position: absolute; top: 2px; right: 4px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); font-size: 0.875rem; line-height: 1; padding: 10px;
+}
+.a2hs-banner__close:hover { color: var(--text-1); }
+
+/* Mirrors .bell__btn so header icons look uniform */
+.a2hs-header-btn {
+  background: transparent;
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  color: var(--text-1);
+  box-sizing: border-box;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.a2hs-header-btn:hover {
+  background: var(--surface-2);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Ultra-narrow phones (<=359px): the header row (logo + bell + theme +
+   burger) has no room for another 36px icon — the burger gets clipped.
+   The cabinet banner stays as the entry point at these widths. */
+@media (max-width: 359px) {
+  .a2hs-header-btn { display: none; }
+}
+
+.a2hs-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(10, 14, 20, 0.5);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.a2hs-sheet {
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  width: 100%; max-width: 480px;
+  padding: 14px 20px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+}
+.a2hs-sheet__grab {
+  width: 36px; height: 4px; border-radius: 99px;
+  background: var(--border); margin: 0 auto 14px;
+}
+.a2hs-sheet__head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.a2hs-sheet__title { font-weight: 700; font-size: 1rem; }
+.a2hs-sheet__steps {
+  margin: 0 0 16px; padding-left: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  font-size: 0.875rem; color: var(--text-2);
+}
+.a2hs-sheet__steps b { color: var(--text-1); }
+.a2hs-sheet__steps svg { vertical-align: -3px; color: var(--primary); }
+.a2hs-sheet__actions { display: flex; gap: 8px; }
+
+/* A2HS is a mobile action (add to home screen), so both entry points are
+   hidden on desktop-width viewports — matching the stylesheet's single
+   768/769px cut and its .mobile-only convention. The feature therefore only
+   ever appears ≤768px, and the guide sheet is always a bottom sheet. */
+@media (min-width: 769px) {
+  .a2hs-banner,
+  .a2hs-header-btn { display: none; }
+}

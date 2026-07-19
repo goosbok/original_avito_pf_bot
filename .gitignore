@@ -11,3 +11,4 @@ log.txt
 storage/
 .venv-test/
 *.session
+docker-compose.override.yml

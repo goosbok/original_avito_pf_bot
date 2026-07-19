@@ -56,8 +56,26 @@ async def main_start(message: Message, state: FSMContext, user_id: int, is_new_u
         from handlers.connect import prompt_for_contact
         await prompt_for_contact(message)
         return
+    if args and args.startswith('ref_'):
+        from services.referral import attribute
+        code = args[4:]
+        status_, referrer_id = attribute(user_id, code)
+        if status_ == 'ok':
+            ref_name = await get_refer_name(referrer_id)
+            await message.answer(
+                start_text_ref(ref_first_name=ref_name) + bonus_line,
+                reply_markup=get_menu_kb(),
+            )
+        elif status_ == 'self':
+            await message.answer(invite_yourself)
+        elif status_ == 'already':
+            ref_name = await get_refer_name(referrer_id)
+            await message.answer(f"{yes_refer.format(name, ref_name)}")
+        else:  # unknown
+            await message.answer(f"{refer_not_in_base.format(name, code)}")
+        return
     if args:
-        if user['ref_user_name'] is not None:
+        if user['ref_id'] is not None:
             ref_name = await get_refer_name(user['ref_id'])
             await message.answer(f"{yes_refer.format(name, ref_name)}")
         else:

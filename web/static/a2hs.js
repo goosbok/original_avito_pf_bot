@@ -51,6 +51,11 @@
   window.addEventListener('appinstalled', function () {
     deferredPrompt = null;
     installedThisSession = true;
+    // Clear any prior dismissal: once installed the flag is meaningless, and
+    // leaving it set would keep both entry points hidden forever if the user
+    // later uninstalls the app.
+    memDismissed = false;
+    try { localStorage.removeItem('a2hs_dismissed'); } catch (_) {}
     notify();
   });
 
@@ -83,9 +88,16 @@
         return Promise.resolve(null);
       }
       if (shown && shown.catch) shown.catch(function () {});
-      return p.userChoice
+      // Some Chromium variants expose prompt() without a userChoice promise —
+      // guard the access so this contract truly never throws.
+      var choice = p.userChoice;
+      if (!choice || typeof choice.then !== 'function') {
+        notify();
+        return Promise.resolve(null);
+      }
+      return choice
         .catch(function () { return null; })
-        .then(function (choice) { notify(); return choice || null; });
+        .then(function (c) { notify(); return c || null; });
     },
     subscribe: function (cb) {
       subscribers.push(cb);

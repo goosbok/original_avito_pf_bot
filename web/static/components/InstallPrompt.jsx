@@ -44,8 +44,11 @@ function InstallBanner() {
 }
 
 function InstallHeaderButton() {
-  const { state } = useA2HS();
-  if (state !== 'installable' && state !== 'ios') return null;
+  const { state, dismissed } = useA2HS();
+  // Same gate as the banner: ✕ / «Готово, добавил» set the dismissed flag and
+  // both entry points disappear together. appinstalled clears the flag, so
+  // after an uninstall the icon can return.
+  if (dismissed || (state !== 'installable' && state !== 'ios')) return null;
   return (
     <button
       className="a2hs-header-btn"
@@ -63,16 +66,25 @@ function InstallHeaderButton() {
 
 function InstallGuideSheet() {
   const [open, setOpen] = useA2hsState(false);
+  // Permanent listener: opens the sheet on the CustomEvent from a2hsActivate.
   useA2hsEffect(() => {
     const h = () => setOpen(true);
-    const onKey = e => { if (e.key === 'Escape') setOpen(false); };
     window.addEventListener('a2hs-open-guide', h);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('a2hs-open-guide', h);
-      window.removeEventListener('keydown', onKey);
-    };
+    return () => window.removeEventListener('a2hs-open-guide', h);
   }, []);
+  // Escape + body scroll-lock only while the sheet is actually open, so the
+  // global keydown handler isn't bound for the whole session.
+  useA2hsEffect(() => {
+    if (!open) return undefined;
+    const onKey = e => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
   if (!open) return null;
   const done = () => { if (window.a2hs) window.a2hs.dismiss(); setOpen(false); };
   return (

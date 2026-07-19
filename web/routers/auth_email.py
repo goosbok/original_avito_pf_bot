@@ -66,6 +66,14 @@ async def register_verify_endpoint(body: EmailRegisterVerifyRequest) -> TokenRes
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except (InvalidCredentials, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if body.ref_code:
+        # register-verify существует только для новых регистраций — атрибуцируем.
+        # Сбой атрибуции не должен ронять регистрацию (OTP уже израсходован).
+        try:
+            from services import referral
+            referral.attribute(user_id, body.ref_code)
+        except Exception:
+            logger.exception("referral attribution failed: user_id=%s", user_id)
     return TokenResponse(access_token=create_jwt(user_id))
 
 

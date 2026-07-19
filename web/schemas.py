@@ -41,6 +41,7 @@ class EmailLoginRequest(BaseModel):
 class EmailRegisterVerifyRequest(BaseModel):
     email: EmailStr
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    ref_code: str | None = Field(None, max_length=64)
 
 
 class LinkEmailRequestStep1(BaseModel):

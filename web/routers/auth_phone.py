@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from services import identity, otp, sms
 from services.exceptions import OTPCooldown, OTPExpired
@@ -31,6 +31,7 @@ class RequestCodeBody(BaseModel):
 class VerifyBody(BaseModel):
     phone: str
     code: str
+    ref_code: str | None = Field(None, max_length=64)
 
 
 @router.post("/request-code")
@@ -75,5 +76,15 @@ async def verify(body: VerifyBody) -> TokenResponse:
         raise HTTPException(status_code=400, detail="Неверный код")
 
     # Phone verified via SMS-OTP → создаём user с verified=True или находим существующего.
+    existing = identity.find_user_id_by_provider("phone", phone)
     user_id = identity.find_or_create_user_by_phone(phone, verified=True)
+    if existing is None and body.ref_code:
+        # Атрибуция ТОЛЬКО для реально нового юзера. Любой сбой (битый код,
+        # залоченная БД) не должен ронять регистрацию: OTP уже сожжен, и 500
+        # здесь оставил бы юзера без JWT при созданном аккаунте.
+        try:
+            from services import referral
+            referral.attribute(user_id, body.ref_code)
+        except Exception:
+            logger.exception("referral attribution failed: user_id=%s", user_id)
     return TokenResponse(access_token=create_jwt(user_id))

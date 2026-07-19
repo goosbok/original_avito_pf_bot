@@ -169,3 +169,51 @@ def test_bonuses_history_endpoint(tmp_db: Path) -> None:
         )
     rows = _client().get("/api/me/referral/bonuses", headers=_auth(1)).json()
     assert rows[0]["amount"] == 100
+
+
+# --------------------------------------------------- admin
+
+def _seed_admin(tmp_db: Path) -> None:
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO settings(parametr, description, value) "
+            "VALUES ('admins', 'admins', '1')"
+        )
+
+
+def test_admin_referral_requires_admin(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    _mk_user(tmp_db, 10)
+    _seed_admin(tmp_db)
+    c = _client()
+    assert c.get("/api/admin/users/10/referral",
+                 headers=_auth(10)).status_code == 403
+    assert c.get("/api/admin/users/10/referral",
+                 headers=_auth(1)).status_code == 200
+
+
+def test_admin_sets_custom_percent(tmp_db: Path) -> None:
+    from services.referral import create_link, get_bonus_percent
+    _mk_user(tmp_db, 1)
+    _mk_user(tmp_db, 10)
+    _seed_admin(tmp_db)
+    link = create_link(10, "vip-deal")
+    c = _client()
+    r = c.patch(f"/api/admin/referral/links/{link['id']}",
+                json={"custom_percent": 30}, headers=_auth(1))
+    assert r.status_code == 200
+    assert get_bonus_percent(link["id"]) == 30
+    # Сброс
+    r = c.patch(f"/api/admin/referral/links/{link['id']}",
+                json={"custom_percent": None}, headers=_auth(1))
+    assert r.status_code == 200
+    assert get_bonus_percent(link["id"]) == 10
+    # Вне диапазона
+    assert c.patch(f"/api/admin/referral/links/{link['id']}",
+                   json={"custom_percent": 150}, headers=_auth(1)).status_code == 422
+    # Пустое тело — 422 (поле обязательное), а не молчаливый сброс процента
+    assert c.patch(f"/api/admin/referral/links/{link['id']}",
+                   json={}, headers=_auth(1)).status_code == 422
+    # Не существует
+    assert c.patch("/api/admin/referral/links/9999",
+                   json={"custom_percent": 30}, headers=_auth(1)).status_code == 404

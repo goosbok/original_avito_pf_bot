@@ -30,23 +30,6 @@ def _make_user(user_id: int, *, balance: int = 0, ref_id: int | None = None,
         con.commit()
 
 
-def test_is_first_refill_ignores_pending(tmp_db: Path):
-    """Юзер только с pending refill — ещё имеет право на реф-бонус."""
-    _make_user(42)
-    _insert_refill(user_id=42, amount=100, payment_id="pid-pending", status="pending")
-
-    from services.refill import _is_first_refill
-    assert _is_first_refill(42) is True
-
-
-def test_is_first_refill_false_after_succeeded(tmp_db: Path):
-    _make_user(42)
-    _insert_refill(user_id=42, amount=100, payment_id="pid-ok", status="succeeded")
-
-    from services.refill import _is_first_refill
-    assert _is_first_refill(42) is False
-
-
 def test_refill_result_has_was_newly_finalized(tmp_db: Path):
     """RefillResult должен иметь поле was_newly_finalized."""
     from services.refill import RefillResult
@@ -196,7 +179,7 @@ def test_finalize_with_referral_bonus_propagates_was_newly_finalized(tmp_db: Pat
 
 
 def test_referral_bonus_not_double_credited(tmp_db: Path):
-    """Реф-бонус должен начисляться РОВНО ОДИН раз: на первой successful finalize."""
+    """Реф-бонус за один payment_id начисляется РОВНО ОДИН раз (гонка)."""
     _make_user(100, balance=0)  # referrer
     _make_user(42, balance=0, ref_id=100)  # new user with referrer
     _insert_refill(user_id=42, amount=1000, payment_id="pid-first", status="pending")
@@ -204,8 +187,8 @@ def test_referral_bonus_not_double_credited(tmp_db: Path):
     from services.refill import finalize_with_referral_bonus
     r1 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
     assert r1.was_newly_finalized is True
-    assert r1.referrer_bonus == 300  # 30% of 1000
-    assert r1.referrer_new_balance == 300
+    assert r1.referrer_bonus == 100  # 10% of 1000
+    assert r1.referrer_new_balance == 100
 
     # Повторный finalize того же payment_id — НЕ должен повторно начислить ни юзеру, ни реферу.
     r2 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
@@ -214,7 +197,7 @@ def test_referral_bonus_not_double_credited(tmp_db: Path):
 
     with connect() as con:
         ref_bal = con.execute("SELECT balance FROM users WHERE id=100").fetchone()
-    assert ref_bal["balance"] == 300  # не 600
+    assert ref_bal["balance"] == 100  # не 200
 
 
 def test_create_invoice_inserts_pending_row(tmp_db: Path, monkeypatch):

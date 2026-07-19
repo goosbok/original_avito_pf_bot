@@ -179,26 +179,60 @@ class RefillResult:
     was_newly_finalized: bool = False
 
 
-def _is_first_refill(user_id: int) -> bool:
-    # welcome_bonus не считается пополнением: иначе реферер не получил бы
-    # 30% с первого реального депозита приглашённого (см. services/welcome_bonus.py)
-    with connect() as con:
-        row = con.execute(
-            "SELECT 1 FROM refills WHERE user_id = ? AND status = 'succeeded' "
-            "AND source_type != 'welcome_bonus' LIMIT 1",
-            (user_id,),
-        ).fetchone()
-    return row is None
-
-
 def _get_user_for_referral(user_id: int) -> dict:
     with connect() as con:
         row = con.execute(
-            "SELECT id, ref_id, is_vip FROM users WHERE id = ?", (user_id,)
+            "SELECT id, ref_id, ref_link_id, is_vip FROM users WHERE id = ?",
+            (user_id,),
         ).fetchone()
     if row is None:
         raise UserNotFound(f"user_id={user_id}")
     return row
+
+
+def _record_referral_bonus(
+    *,
+    referrer_id: int,
+    referred_user_id: int,
+    payment_id: str | None,
+    link_id: int | None,
+    bonus: int,
+    percent: int,
+    referrer_new_balance: int,
+) -> None:
+    """История начисления + durable web-уведомление реферу."""
+    import re
+
+    from utils.other import format_decimal, get_date
+    from utils.sqlite3 import get_string
+
+    with connect() as con:
+        refill_row = None
+        if payment_id is not None:
+            refill_row = con.execute(
+                "SELECT increment FROM refills WHERE payment_id = ?",
+                (payment_id,),
+            ).fetchone()
+        con.execute(
+            "INSERT INTO referral_bonuses(referrer_id, referred_user_id, refill_id, "
+            "link_id, amount, percent, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                referrer_id, referred_user_id,
+                refill_row["increment"] if refill_row else None,
+                link_id, bonus, percent, get_date(),
+            ),
+        )
+        text = get_string("str_ref_balance_refil").format(
+            format_decimal(bonus), format_decimal(referrer_new_balance)
+        )
+        # Строка — телеграмный HTML (<b>…</b>); веб-уведомления рендерятся
+        # плоским текстом (React экранирует), поэтому теги вырезаем.
+        text = re.sub(r"</?[a-zA-Z][^>]*>", "", text)
+        con.execute(
+            "INSERT INTO notifications(user_id, kind, text) VALUES (?, 'referral', ?)",
+            (referrer_id, text),
+        )
+        con.commit()
 
 
 def finalize_with_referral_bonus(
@@ -209,13 +243,15 @@ def finalize_with_referral_bonus(
     source_type: str = "telegram",
     source_app_id: int | None = None,
 ) -> RefillResult:
-    """Финализирует refill + (на первой успешной) начисляет реф-бонус 30% реферу.
+    """Финализирует refill + начисляет реферу процент с КАЖДОГО пополнения.
 
-    was_newly_finalized пробрасывается из finalize() — крон/web-flow используют его,
-    чтобы не задваивать уведомления при гонках.
+    Процент: custom_percent ссылки, через которую атрибуцирован плательщик,
+    иначе глобальный settings.ref_percent. Бонус — через credit() (НЕ finalize(),
+    чтобы у рефера не появлялась фиктивная запись в refills).
+    was_newly_finalized пробрасывается из finalize() — защита от двойного
+    начисления при гонках (web-status / крон / TG-handler).
     """
     user = _get_user_for_referral(user_id)
-    is_first_before = _is_first_refill(user_id)  # снимок ДО finalize
 
     new_balance, was_newly_finalized = finalize(
         user_id, amount, payment_id=payment_id,
@@ -226,19 +262,37 @@ def finalize_with_referral_bonus(
     bonus = 0
     referrer_new_balance: int | None = None
 
-    # Бонус начисляется ТОЛЬКО при реальном переходе pending→succeeded,
-    # И только если это был первый refill у юзера, И юзер не VIP.
-    if was_newly_finalized and is_first_before and not user["is_vip"] and referrer_id is not None:
-        bonus = int(amount * 0.3)
-        try:
-            referrer_new_balance = (
-                finalize(int(referrer_id), bonus,
-                         source_type=source_type, source_app_id=source_app_id)[0]
-                if bonus > 0 else None
-            )
-        except UserNotFound:
-            referrer_new_balance = None
-            bonus = 0
+    if was_newly_finalized and not user["is_vip"] and referrer_id is not None:
+        from services.referral import get_bonus_percent
+        percent = get_bonus_percent(user["ref_link_id"])
+        bonus = amount * percent // 100
+        if bonus > 0:
+            try:
+                referrer_new_balance = credit(int(referrer_id), bonus)
+            except UserNotFound:
+                referrer_new_balance = None
+                bonus = 0
+            else:
+                try:
+                    _record_referral_bonus(
+                        referrer_id=int(referrer_id),
+                        referred_user_id=user_id,
+                        payment_id=payment_id,
+                        link_id=user["ref_link_id"],
+                        bonus=bonus,
+                        percent=percent,
+                        referrer_new_balance=referrer_new_balance,
+                    )
+                except Exception:
+                    # Баланс реферу уже начислен — сбой записи истории или
+                    # уведомления НЕ должен превратить успешный платеж в ошибку
+                    # для плательщика. Логируем для ручного backfill.
+                    import logging
+                    logging.getLogger(__name__).exception(
+                        "referral bonus history write failed: referrer=%s "
+                        "payer=%s bonus=%s payment_id=%s",
+                        referrer_id, user_id, bonus, payment_id,
+                    )
 
     return RefillResult(
         user_balance=new_balance,

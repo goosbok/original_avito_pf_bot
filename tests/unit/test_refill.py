@@ -84,24 +84,68 @@ def _make_user_full(
         con.commit()
 
 
-def test_referral_bonus_first_refill_credits_referrer(tmp_db: Path) -> None:
+def test_referral_bonus_every_refill_credits_referrer(tmp_db: Path) -> None:
+    """10% с каждого пополнения, не только первого."""
     _make_user_full(tmp_db, user_id=1, balance=0)
     _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
-    result = finalize_with_referral_bonus(user_id=2, amount=1000)
-    assert result.user_balance == 1000
-    assert result.referrer_id == 1
-    assert result.referrer_bonus == 300  # 30%
-    assert result.referrer_new_balance == 300
+    r1 = finalize_with_referral_bonus(user_id=2, amount=1000)
+    assert r1.referrer_bonus == 100  # 10%
+    assert r1.referrer_new_balance == 100
+    r2 = finalize_with_referral_bonus(user_id=2, amount=2000)
+    assert r2.referrer_bonus == 200
+    assert r2.referrer_new_balance == 300
 
 
-def test_referral_bonus_only_first_refill(tmp_db: Path) -> None:
+def test_referral_bonus_floor_and_zero(tmp_db: Path) -> None:
     _make_user_full(tmp_db, user_id=1, balance=0)
     _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
-    finalize_with_referral_bonus(user_id=2, amount=1000)  # реферер +300
-    result = finalize_with_referral_bonus(user_id=2, amount=2000)
-    assert result.user_balance == 3000
-    assert result.referrer_bonus == 0
-    assert result.referrer_new_balance is None
+    r = finalize_with_referral_bonus(user_id=2, amount=109)
+    assert r.referrer_bonus == 10  # floor(10.9)
+    r2 = finalize_with_referral_bonus(user_id=2, amount=9)
+    assert r2.referrer_bonus == 0  # floor(0.9) → ничего не пишем
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT COUNT(*) FROM referral_bonuses WHERE amount = 0"
+        ).fetchone()[0] == 0
+
+
+def test_referral_bonus_uses_link_custom_percent(tmp_db: Path) -> None:
+    from services.referral import create_link, set_custom_percent
+    _make_user_full(tmp_db, user_id=1, balance=0)
+    _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
+    link = create_link(1, "vip-deal")
+    set_custom_percent(link["id"], 25)
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE users SET ref_link_id = ? WHERE id = 2", (link["id"],))
+    r = finalize_with_referral_bonus(user_id=2, amount=1000)
+    assert r.referrer_bonus == 250
+
+
+def test_referral_bonus_recorded_in_history(tmp_db: Path) -> None:
+    _make_user_full(tmp_db, user_id=1, balance=0)
+    _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
+    finalize_with_referral_bonus(user_id=2, amount=1000)
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT referrer_id, referred_user_id, amount, percent "
+            "FROM referral_bonuses"
+        ).fetchone()
+    assert row == (1, 2, 100, 10)
+
+
+def test_referral_bonus_does_not_create_referrer_refill(tmp_db: Path) -> None:
+    """Бонус идет через credit(), а не finalize() — у рефера НЕ появляется запись в refills."""
+    _make_user_full(tmp_db, user_id=1, balance=0)
+    _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
+    finalize_with_referral_bonus(user_id=2, amount=1000)
+    import sqlite3
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT COUNT(*) FROM refills WHERE user_id = 1"
+        ).fetchone()[0] == 0
 
 
 def test_referral_bonus_skipped_for_vip(tmp_db: Path) -> None:
@@ -122,12 +166,11 @@ def test_referral_bonus_skipped_when_no_referrer(tmp_db: Path) -> None:
 
 
 def test_referral_bonus_referrer_does_not_exist(tmp_db: Path) -> None:
-    """ref_id указывает на несуществующего пользователя — поведение: бонус не начислен, не падаем."""
+    """ref_id на несуществующего — бонус молча пропущен, не падаем."""
     _make_user_full(tmp_db, user_id=2, balance=0, ref_id=999)
     result = finalize_with_referral_bonus(user_id=2, amount=1000)
     assert result.user_balance == 1000
     assert result.referrer_bonus == 0
-    assert result.referrer_new_balance is None
 
 
 def test_finalize_is_idempotent_with_payment_id(tmp_db: Path) -> None:

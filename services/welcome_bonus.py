@@ -7,8 +7,9 @@ status='succeeded', payment_id=NULL.
 
 Сознательно НЕ через services.refill.finalize(): normalize() пускает только
 source ∈ {telegram, web, api}, а welcome-бонус — внутренняя операция, не платёж.
-_is_first_refill() исключает 'welcome_bonus', чтобы реф-бонус 30% по-прежнему
-срабатывал на первом реальном депозите.
+Реф-бонус начисляется реферу с каждого реального пополнения (см.
+services.refill.finalize_with_referral_bonus), а не с welcome-бонуса — эта
+операция не проходит через finalize_with_referral_bonus.
 """
 from __future__ import annotations
 

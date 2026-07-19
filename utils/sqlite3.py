@@ -1219,6 +1219,10 @@ def apply_phase2_migrations():
             "CREATE INDEX IF NOT EXISTS idx_referral_bonuses_link "
             "ON referral_bonuses(link_id)"
         )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_ref_link_id "
+            "ON users(ref_link_id)"
+        )
         # Сидим строку настройки: экран настроек в боте листает ТОЛЬКО строки
         # из БД (get_all_settings), дефолт в _SETTING_DEFAULTS там не виден.
         # ON CONFLICT DO NOTHING — правки админа не затираются при рестартах.

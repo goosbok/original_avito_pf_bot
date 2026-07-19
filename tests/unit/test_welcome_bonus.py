@@ -121,8 +121,8 @@ def test_merge_guest_into_registered_no_double_bonus(tmp_db, monkeypatch):
 # ── совместимость с реф-бонусом ─────────────────────────────────────────────
 
 def test_referral_bonus_survives_welcome_bonus(tmp_db, monkeypatch):
-    """Welcome-строка не должна занимать слот «первого пополнения»: реферер
-    обязан получить 30% с первого РЕАЛЬНОГО депозита приглашённого."""
+    """Welcome-bonus строка в refills не мешает расчёту реф-бонуса: реферер
+    получает 10% с депозита приглашённого."""
     monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
     from services import refill
     from utils.sqlite3 import update_user
@@ -137,7 +137,7 @@ def test_referral_bonus_survives_welcome_bonus(tmp_db, monkeypatch):
 
     assert res.was_newly_finalized
     assert res.referrer_id == referrer_id
-    assert res.referrer_bonus == 300  # 30% от 1 000 ₽
+    assert res.referrer_bonus == 100  # 10% от 1 000 ₽
     assert res.user_balance == 1_100  # 100 welcome + 1 000 депозит
 
 

@@ -83,5 +83,21 @@ window.api = {
     if (res.status === 204) return null;
     const text = await res.text();
     return text ? JSON.parse(text) : null;
+  },
+
+  async delete(path) {
+    const token = this._token();
+    const res = await fetch(path, {
+      method: 'DELETE',
+      headers: token ? { 'Authorization': 'Bearer ' + token } : {}
+    });
+    if (res.status === 401) return { __unauthorized: true };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      const e = new Error(this._formatDetail(err.detail));
+      e.status = res.status;
+      throw e;
+    }
+    return res.status === 204 ? {} : res.json();
   }
 };

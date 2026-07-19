@@ -228,7 +228,7 @@ function App() {
   const handleNavigate = (target, payload) => {
     // Auth-gated routes. 'order-new' / 'order-detail' are PUBLIC now
     // (guest can create unpaid orders and view payment status without a session).
-    if (['cabinet', 'orders', 'profile', 'notifications'].includes(target) && !user) {
+    if (['cabinet', 'orders', 'profile', 'notifications', 'referral'].includes(target) && !user) {
       setAuthMode('login');
       setRoute('auth');
       return;
@@ -318,6 +318,7 @@ function App() {
                                     onNavigate={handleNavigate}
                                   />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;
+      case 'referral': return <ReferralPage user={user} botConfig={botConfig} onNavigate={handleNavigate} />;
       default:         return <OrderFormPage
                                 user={user} balance={balance}
                                 prefilledFrom={prefilledOrder}

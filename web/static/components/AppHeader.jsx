@@ -58,8 +58,9 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
   useHeaderEffect(() => { setMenuOpen(false); setUserDropOpen(false); }, [route]);
 
   const navItems = [
-    { label: 'Кабинет',  route: 'cabinet', icon: '🏠' },
-    { label: 'Заказы',   route: 'orders',  icon: '📋' },
+    { label: 'Кабинет',   route: 'cabinet',  icon: '🏠' },
+    { label: 'Заказы',    route: 'orders',   icon: '📋' },
+    { label: 'Партнерка', route: 'referral', icon: '🤝' },
   ];
 
   // Клик по балансу → к форме пополнения в кабинете. Если уже в кабинете —
@@ -301,6 +302,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                   {[
                     { label: 'Кабинет',     route: 'cabinet' },
                     { label: 'Мои заказы',  route: 'orders' },
+                    { label: 'Партнерка',   route: 'referral' },
                     { label: 'Профиль',     route: 'profile' },
                     { label: 'Заказать ПФ', route: 'order-new' },
                   ].map(item => (

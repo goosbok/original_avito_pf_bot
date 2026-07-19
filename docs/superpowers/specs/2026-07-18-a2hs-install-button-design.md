@@ -101,7 +101,7 @@ Click routing (shared handler): `state === 'installable'` → `a2hs.prompt()`; `
 
 ### 3. Mount points
 
-- `Cabinet.jsx` — `<InstallBanner />` right after `.cabinet-top-row`, before the services catalog. Full-width card.
+- `Cabinet.jsx` — `<InstallBanner />` as the first child of `.container`, above the greeting/balance top-row. Full-width card.
 - `AppHeader.jsx` — `<InstallHeaderButton />` immediately left of `<NotificationsBell />`; rendered only when `isApp && user && !adminMode`. There is a single `.header__actions` group (~line 115) serving both breakpoints — one mount point.
 - `app.jsx` — `<InstallGuideSheet />` mounted at root alongside `SupportChat`.
 - `index.html` — `<script src="/a2hs.js">` after `api.js`; `InstallPrompt.jsx` script tag before `AppHeader.jsx` (dependency order).

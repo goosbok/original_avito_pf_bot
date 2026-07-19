@@ -23,7 +23,7 @@
 | `web/static/a2hs.js` | New — event capture + `window.a2hs` state API |
 | `web/static/components/InstallPrompt.jsx` | New — `useA2HS`, `InstallBanner`, `InstallHeaderButton`, `InstallGuideSheet` |
 | `web/static/index.html` | Two script tags (a2hs.js, InstallPrompt.jsx) |
-| `web/static/components/Cabinet.jsx` | Mount `<InstallBanner />` after top-row (~line 254) |
+| `web/static/components/Cabinet.jsx` | Mount `<InstallBanner />` as first child of `.container` (above top-row) |
 | `web/static/components/AppHeader.jsx` | Mount `<InstallHeaderButton />` before `<NotificationsBell />` (~line 131) |
 | `web/static/app.jsx` | Mount `<InstallGuideSheet />` at root (~line 312) |
 | `web/static/platform.css` | New `.a2hs-*` styles block (append at end) |
@@ -373,12 +373,14 @@ git commit -m "feat(web): add install prompt components and iOS guide sheet"
 
 - [ ] **Step 1: Add banner to `Cabinet.jsx`**
 
-Between the closing `</div>` of `.cabinet-top-row` (line ~254) and the `{/* Catalog */}` comment:
+As the first child of `.container`, immediately above the `.cabinet-top-row` (greeting + balance):
 
 ```jsx
+        <div className="container">
+
           <InstallBanner />
 
-          {/* Catalog */}
+          <div className="cabinet-top-row" style={{
 ```
 
 - [ ] **Step 2: Add icon button to `AppHeader.jsx`**

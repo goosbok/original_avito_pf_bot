@@ -85,6 +85,29 @@ window.api = {
     return text ? JSON.parse(text) : null;
   },
 
+  async patch(path, body) {
+    const token = this._token();
+    const res = await fetch(path, {
+      method: 'PATCH',
+      headers: Object.assign(
+        { 'Content-Type': 'application/json' },
+        token ? { 'Authorization': 'Bearer ' + token } : {}
+      ),
+      body: JSON.stringify(body)
+    });
+    if (res.status === 401) return { __unauthorized: true };
+    if (!res.ok) {
+      const retryAfter = res.headers.get('Retry-After');
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      const e = new Error(this._formatDetail(err.detail));
+      e.status = res.status;
+      e.detail = err.detail;
+      if (retryAfter) e.retry_after = parseInt(retryAfter, 10) || retryAfter;
+      throw e;
+    }
+    return res.status === 204 ? {} : res.json();
+  },
+
   async delete(path) {
     const token = this._token();
     const res = await fetch(path, {

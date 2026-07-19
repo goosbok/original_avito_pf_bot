@@ -81,6 +81,8 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
   const [busy, setBusy] = useAdmUState(false);
   const [error, setError] = useAdmUState('');
   const [okMsg, setOkMsg] = useAdmUState('');
+  const [refData, setRefData] = useAdmUState(null);
+  const [pctDraft, setPctDraft] = useAdmUState({});
 
   const reload = async () => {
     try {
@@ -89,7 +91,14 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
     } catch (e) { setError(e.message || 'Ошибка загрузки'); }
   };
 
-  useAdmUEffect(() => { reload(); }, [userId]);
+  const reloadReferral = async () => {
+    try {
+      const fresh = await api.get('/api/admin/users/' + userId + '/referral');
+      if (!fresh.__unauthorized) setRefData(fresh);
+    } catch (e) { /* партнерки может не быть — не валим drawer */ }
+  };
+
+  useAdmUEffect(() => { reload(); reloadReferral(); }, [userId]);
 
   const credit = async () => {
     if (!delta || delta <= 0) return setError('Сумма должна быть > 0');
@@ -112,6 +121,20 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
       await api.post('/api/admin/users/' + userId + '/vip', { is_vip: !data.is_vip });
       await reload();
       onUserChanged && onUserChanged();
+    } catch (e) { setError(e.message || 'Ошибка'); }
+    finally { setBusy(false); }
+  };
+
+  const savePercent = async (linkId) => {
+    const raw = pctDraft[linkId];
+    const val = raw === '' || raw === undefined ? null : Number(raw);
+    if (val !== null && (!Number.isInteger(val) || val < 1 || val > 100)) {
+      return setError('Процент: целое 1-100 или пусто (глобальный)');
+    }
+    setBusy(true); setError('');
+    try {
+      await api.patch('/api/admin/referral/links/' + linkId, { custom_percent: val });
+      await reloadReferral();
     } catch (e) { setError(e.message || 'Ошибка'); }
     finally { setBusy(false); }
   };
@@ -188,6 +211,45 @@ function AdminUserDrawer({ userId, onClose, onUserChanged }) {
                     </div>
                 ))
               }
+            </div>
+
+            <div className="card" style={{ padding: '16px 20px', marginTop: 16 }}>
+              <h3 style={{ fontSize: '1rem', marginBottom: 10 }}>Партнерка</h3>
+              {!refData ? <div style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Загрузка...</div> : (
+                <>
+                  <div style={{ fontSize: '0.85rem', marginBottom: 10 }}>
+                    Рефералов: <strong>{refData.referrals_count}</strong> ·
+                    заработано: <strong>{refData.total_earned.toLocaleString('ru-RU')} ₽</strong> ·
+                    глобальный процент: {refData.percent}%
+                  </div>
+                  {refData.links.length === 0
+                    ? <div style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>Ссылок нет</div>
+                    : refData.links.map(l => (
+                      <div key={l.id} style={{ borderTop: '1px solid var(--border)', padding: '10px 0', fontSize: '0.85rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                          <span><strong>{l.slug}</strong>{l.archived_at ? ' (архив)' : ''}</span>
+                          <span style={{ color: 'var(--text-3)' }}>
+                            клики {l.clicks} · рег. {l.registrations} · {l.earned.toLocaleString('ru-RU')} ₽
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+                          <input
+                            className="input" type="number" min={1} max={100}
+                            style={{ width: 110, padding: '4px 8px' }}
+                            placeholder={`${refData.percent} — глоб.`}
+                            value={pctDraft[l.id] !== undefined ? pctDraft[l.id]
+                                   : (l.custom_percent === null ? '' : l.custom_percent)}
+                            onChange={e => setPctDraft({ ...pctDraft, [l.id]: e.target.value })}
+                          />
+                          <span>%</span>
+                          <button className="btn btn--ghost btn--sm" onClick={() => savePercent(l.id)} disabled={busy}>
+                            Сохранить
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </>
+              )}
             </div>
           </>
         )}

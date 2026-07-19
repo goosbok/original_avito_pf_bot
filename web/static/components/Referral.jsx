@@ -29,14 +29,24 @@ function ReferralPage({ user, botConfig, onNavigate }) {
     catch (e) { setError('Не удалось скопировать'); }
   };
 
-  const createLink = async (random) => {
+  const createLink = async () => {
     setBusy(true); setError('');
     try {
-      await api.post('/api/me/referral/links', random ? {} : { slug: slug.trim().toLowerCase() });
+      await api.post('/api/me/referral/links', { slug: slug.trim().toLowerCase() });
       setSlug('');
       await load();
     } catch (e) { setError(e.message || 'Ошибка'); }
     finally { setBusy(false); }
+  };
+
+  // «Случайная» лишь подставляет валидный слаг в поле — ссылка создаётся
+  // только после явного нажатия «Создать».
+  const fillRandomSlug = () => {
+    const abc = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    let s = '';
+    for (let i = 0; i < 8; i++) s += abc[Math.floor(Math.random() * abc.length)];
+    setSlug(s);
+    setError('');
   };
 
   const archive = async (id) => {
@@ -52,7 +62,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
   const active = data.links.filter(l => !l.archived_at);
 
   return (
-    <div className="page">
+    <div className="page" style={{ paddingTop: 20 }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Партнерка</h1>
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
@@ -74,9 +84,9 @@ function ReferralPage({ user, botConfig, onNavigate }) {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input className="input" style={{ flex: '1 1 180px' }} placeholder="свой-слаг (латиница, 3-32)"
                  value={slug} onChange={e => setSlug(e.target.value)} disabled={busy} />
-          <button className="btn btn--primary" onClick={() => createLink(false)}
+          <button className="btn btn--primary" onClick={createLink}
                   disabled={busy || slug.trim().length < 3}>Создать</button>
-          <button className="btn btn--ghost" onClick={() => createLink(true)}
+          <button className="btn btn--ghost" onClick={fillRandomSlug}
                   disabled={busy}>🎲 Случайная</button>
         </div>
       </div>

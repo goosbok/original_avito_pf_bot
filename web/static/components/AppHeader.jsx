@@ -60,7 +60,6 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
   const navItems = [
     { label: 'Кабинет',   route: 'cabinet',  icon: '🏠' },
     { label: 'Заказы',    route: 'orders',   icon: '📋' },
-    { label: 'Партнерка', route: 'referral', icon: '🤝' },
   ];
 
   // Клик по балансу → к форме пополнения в кабинете. Если уже в кабинете —
@@ -224,6 +223,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                     { icon: '🏠', label: 'Кабинет',      action: () => onNavigate('cabinet') },
                     { icon: '📋', label: 'Мои заказы',   action: () => onNavigate('orders') },
                     { icon: '👤', label: 'Профиль',       action: () => onNavigate('profile') },
+                    { icon: '🤝', label: 'Партнерка',     action: () => onNavigate('referral') },
                   ].map((item, i) => (
                     <button
                       key={i}

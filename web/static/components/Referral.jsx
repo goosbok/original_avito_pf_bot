@@ -70,7 +70,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
   const hidden = data.links.filter(l => l.archived_at);
 
   return (
-    <div className="page" style={{ paddingTop: 20 }}>
+    <div className="page" style={{ paddingTop: 20, paddingBottom: 96 }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Партнерка</h1>
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>

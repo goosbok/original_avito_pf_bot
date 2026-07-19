@@ -7,6 +7,7 @@ users.id == telegram_id удалён.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
@@ -289,6 +290,59 @@ def _merge_phone_only_into(
             "UPDATE users SET balance = balance + ? WHERE id=?",
             (int(src_row["balance"] or 0), target_user_id),
         )
+    # Перенос партнерских данных source → target.
+    # 1) Его собственный реферер — если у target еще нет:
+    src_ref = con.execute(
+        "SELECT ref_id, ref_link_id, ref_user_name FROM users WHERE id=?",
+        (source_user_id,),
+    ).fetchone()
+    if src_ref and src_ref["ref_id"] is not None:
+        con.execute(
+            "UPDATE users SET ref_id=?, ref_link_id=?, ref_user_name=? "
+            "WHERE id=? AND ref_id IS NULL",
+            (src_ref["ref_id"], src_ref["ref_link_id"], src_ref["ref_user_name"],
+             target_user_id),
+        )
+    # 2) Его рефералы, ссылки и история бонусов — иначе после DELETE source
+    #    ref_id рефералов повиснет на несуществующем юзере: бонусы молча
+    #    перестанут начисляться, а /api/me/referral покажет нули.
+    try:
+        con.execute(
+            "UPDATE users SET ref_id=? WHERE ref_id=?",
+            (target_user_id, source_user_id),
+        )
+        from services.referral import generate_slug
+        for _link in con.execute(
+            "SELECT id, slug FROM referral_links WHERE user_id=?",
+            (source_user_id,),
+        ).fetchall():
+            candidate = _link["slug"]   # сначала пробуем сохранить исходный слаг
+            for _attempt in range(6):
+                try:
+                    con.execute(
+                        "UPDATE referral_links SET user_id=?, slug=? WHERE id=?",
+                        (target_user_id, candidate, _link["id"]),
+                    )
+                    break
+                except sqlite3.IntegrityError:
+                    # UNIQUE(user_id, slug): у target уже есть такой слаг.
+                    # Берём случайный валидный слаг (8 симв., ≤32, [a-z0-9]) —
+                    # длина и набор гарантированы, повторная коллизия ~невозможна.
+                    candidate = generate_slug()
+        con.execute(
+            "UPDATE referral_bonuses SET referrer_id=? WHERE referrer_id=?",
+            (target_user_id, source_user_id),
+        )
+        con.execute(
+            "UPDATE referral_bonuses SET referred_user_id=? WHERE referred_user_id=?",
+            (target_user_id, source_user_id),
+        )
+    except sqlite3.OperationalError:
+        pass  # схемы без партнерских таблиц (нет referral_* — как refills/notifications выше)
+
+    # Примечание: после мерджа активных ссылок может стать больше лимита —
+    # MAX_ACTIVE_LINKS проверяется только при создании, это осознанно.
+
     # Удаляем source
     con.execute("DELETE FROM users WHERE id=?", (source_user_id,))
 

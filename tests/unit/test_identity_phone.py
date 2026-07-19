@@ -203,3 +203,120 @@ def test_link_phone_provider_raises_conflict_when_phone_verified_on_other_user(t
 
     with pytest.raises(AccountMergeConflict):
         identity.link_phone_provider(target_id, "+79991234567", set_verified=True)
+
+
+def test_merge_transfers_ref_when_target_has_none(tmp_db: Path) -> None:
+    """У phone-only источника был реферер, у цели нет → ref переносится."""
+    import sqlite3
+    from services import identity
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (42, 0)")          # реферер
+        con.execute("INSERT INTO users(id, balance) VALUES (200, 0)")         # target
+        con.execute(
+            "INSERT INTO users(id, balance, ref_id, ref_link_id) VALUES (100, 0, 42, NULL)"
+        )  # phone-only source с реферером
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009900', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '555', '2026-07-18', 1)"
+        )
+    identity.link_phone_provider(200, "+79990009900", set_verified=True)
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT ref_id FROM users WHERE id = 200"
+        ).fetchone()[0] == 42
+
+
+def test_merge_keeps_target_ref(tmp_db: Path) -> None:
+    """У цели уже есть реферер → не перезаписываем."""
+    import sqlite3
+    from services import identity
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (42, 0)")
+        con.execute("INSERT INTO users(id, balance) VALUES (43, 0)")
+        con.execute("INSERT INTO users(id, balance, ref_id) VALUES (200, 0, 43)")
+        con.execute("INSERT INTO users(id, balance, ref_id) VALUES (100, 0, 42)")
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009901', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '556', '2026-07-18', 1)"
+        )
+    identity.link_phone_provider(200, "+79990009901", set_verified=True)
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT ref_id FROM users WHERE id = 200"
+        ).fetchone()[0] == 43
+
+
+def test_merge_repoints_partner_data(tmp_db: Path) -> None:
+    """source сам был партнером: его рефералы, ссылки и бонусы переезжают на target."""
+    import sqlite3
+    from services import identity
+    from services.referral import create_link
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (100, 0)")   # source-партнер
+        con.execute("INSERT INTO users(id, balance) VALUES (200, 0)")   # target
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009902', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '557', '2026-07-18', 1)"
+        )
+    link = create_link(100, "promo")
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO users(id, balance, ref_id, ref_link_id) VALUES (300, 0, 100, ?)",
+            (link["id"],),
+        )  # реферал source-партнера
+        con.execute(
+            "INSERT INTO referral_bonuses(referrer_id, referred_user_id, refill_id,"
+            " link_id, amount, percent, created_at)"
+            " VALUES (100, 300, NULL, ?, 50, 10, '2026-07-18')",
+            (link["id"],),
+        )
+    identity.link_phone_provider(200, "+79990009902", set_verified=True)
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute("SELECT ref_id FROM users WHERE id = 300").fetchone()[0] == 200
+        assert con.execute(
+            "SELECT user_id FROM referral_links WHERE id = ?", (link["id"],)
+        ).fetchone()[0] == 200
+        assert con.execute(
+            "SELECT referrer_id FROM referral_bonuses"
+        ).fetchone()[0] == 200
+
+
+def test_merge_link_slug_collision_resolved(tmp_db: Path) -> None:
+    """source и target владеют ссылкой с одинаковым слагом → слаг source
+    переименовывается на валидный, мердж НЕ падает, дублей слагов нет."""
+    import sqlite3
+    from services import identity
+    from services.referral import create_link
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance) VALUES (100, 0)")   # source
+        con.execute("INSERT INTO users(id, balance) VALUES (200, 0)")   # target
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009903', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '558', '2026-07-18', 1)"
+        )
+    create_link(100, "promo")   # source owns 'promo'
+    create_link(200, "promo")   # target ALSO owns 'promo'
+    identity.link_phone_provider(200, "+79990009903", set_verified=True)  # must NOT raise
+    with sqlite3.connect(tmp_db) as con:
+        rows = con.execute("SELECT user_id, slug FROM referral_links").fetchall()
+        assert all(r[0] == 200 for r in rows)                       # both links now target's
+        slugs = [r[1].lower() for r in rows]
+        assert len(slugs) == len(set(slugs))                        # no duplicate slugs
+        assert "promo" in slugs                                     # target's original preserved
+        assert con.execute("SELECT COUNT(*) FROM users WHERE id=100").fetchone()[0] == 0  # source gone

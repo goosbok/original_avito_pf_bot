@@ -8,6 +8,8 @@ function ReferralPage({ user, botConfig, onNavigate }) {
   const [busy, setBusy] = useRefState(false);
   const [error, setError] = useRefState('');
   const [copied, setCopied] = useRefState('');
+  const [tab, setTab] = useRefState('active');   // 'active' | 'hidden'
+  const [page, setPage] = useRefState(0);
 
   const load = async () => {
     try {
@@ -69,6 +71,13 @@ function ReferralPage({ user, botConfig, onNavigate }) {
   const active = data.links.filter(l => !l.archived_at);
   const hidden = data.links.filter(l => l.archived_at);
 
+  const PAGE_SIZE = 5;
+  const shown = tab === 'active' ? active : hidden;
+  const pageCount = Math.max(1, Math.ceil(shown.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageItems = shown.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+  const switchTab = (t) => { setTab(t); setPage(0); };
+
   return (
     <div className="page" style={{ paddingTop: 20, paddingBottom: 96 }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Партнерка</h1>
@@ -100,51 +109,59 @@ function ReferralPage({ user, botConfig, onNavigate }) {
       </div>
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-        <h3 style={{ fontSize: '1rem', marginBottom: 10 }}>Мои ссылки</h3>
-        {active.length === 0
-          ? <div style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Пока нет — создайте первую выше.</div>
-          : active.map(l => (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+          <button className={'btn btn--sm ' + (tab === 'active' ? 'btn--primary' : 'btn--ghost')}
+                  onClick={() => switchTab('active')}>Активные ({active.length})</button>
+          <button className={'btn btn--sm ' + (tab === 'hidden' ? 'btn--primary' : 'btn--ghost')}
+                  onClick={() => switchTab('hidden')}>Скрытые ({hidden.length})</button>
+        </div>
+
+        {tab === 'hidden' && hidden.length > 0 && (
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: 6 }}>
+            Новых рефералов по ним не привести, но начисления по уже приведённым продолжаются. Можно вернуть в активные.
+          </div>
+        )}
+
+        {shown.length === 0
+          ? <div style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>
+              {tab === 'active' ? 'Пока нет — создайте первую выше.' : 'Скрытых ссылок нет.'}
+            </div>
+          : pageItems.map(l => (
             <div key={l.id} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <strong>{l.slug}</strong>
+                <strong style={tab === 'hidden' ? { color: 'var(--text-3)' } : undefined}>{l.slug}</strong>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
                   {l.effective_percent}% · клики: {l.clicks} · регистрации: {l.registrations} · заработано: {l.earned.toLocaleString('ru-RU')} ₽
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                <button className="btn btn--ghost btn--sm" onClick={() => copy(siteLink(l), 'site' + l.id)}>
-                  {copied === 'site' + l.id ? '✓ Скопировано' : '🌐 Ссылка на сайт'}
-                </button>
-                <button className="btn btn--ghost btn--sm" onClick={() => copy(botLink(l), 'bot' + l.id)}>
-                  {copied === 'bot' + l.id ? '✓ Скопировано' : '🤖 Ссылка на бота'}
-                </button>
-                <button className="btn btn--ghost btn--sm" onClick={() => hide(l.id)} disabled={busy}>Скрыть</button>
+                {tab === 'active' ? (
+                  <>
+                    <button className="btn btn--ghost btn--sm" onClick={() => copy(siteLink(l), 'site' + l.id)}>
+                      {copied === 'site' + l.id ? '✓ Скопировано' : '🌐 Ссылка на сайт'}
+                    </button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => copy(botLink(l), 'bot' + l.id)}>
+                      {copied === 'bot' + l.id ? '✓ Скопировано' : '🤖 Ссылка на бота'}
+                    </button>
+                    <button className="btn btn--ghost btn--sm" onClick={() => hide(l.id)} disabled={busy}>Скрыть</button>
+                  </>
+                ) : (
+                  <button className="btn btn--ghost btn--sm" onClick={() => restore(l.id)} disabled={busy}>Показать</button>
+                )}
               </div>
             </div>
           ))}
-      </div>
 
-      {hidden.length > 0 && (
-        <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
-          <h3 style={{ fontSize: '1rem', marginBottom: 4 }}>Скрытые ссылки</h3>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: 6 }}>
-            Новых рефералов по ним не привести, но начисления по уже приведённым продолжаются. Можно вернуть в активные.
+        {pageCount > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12, fontSize: '0.85rem' }}>
+            <button className="btn btn--ghost btn--sm" disabled={safePage === 0}
+                    onClick={() => setPage(safePage - 1)}>← Назад</button>
+            <span style={{ color: 'var(--text-3)' }}>{safePage + 1} / {pageCount}</span>
+            <button className="btn btn--ghost btn--sm" disabled={safePage >= pageCount - 1}
+                    onClick={() => setPage(safePage + 1)}>Вперёд →</button>
           </div>
-          {hidden.map(l => (
-            <div key={l.id} style={{ borderTop: '1px solid var(--border)', padding: '12px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <strong style={{ color: 'var(--text-3)' }}>{l.slug}</strong>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
-                  {l.effective_percent}% · клики: {l.clicks} · регистрации: {l.registrations} · заработано: {l.earned.toLocaleString('ru-RU')} ₽
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className="btn btn--ghost btn--sm" onClick={() => restore(l.id)} disabled={busy}>Показать</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="card" style={{ padding: '16px 20px' }}>
         <h3 style={{ fontSize: '1rem', marginBottom: 10 }}>История начислений</h3>

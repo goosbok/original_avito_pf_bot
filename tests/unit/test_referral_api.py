@@ -98,3 +98,74 @@ def test_email_verify_new_user_attributed(tmp_db: Path, monkeypatch) -> None:
         assert con.execute(
             "SELECT ref_id FROM users WHERE id = ?", (new_user_id,)
         ).fetchone()[0] == 42
+
+
+# --------------------------------------------------- /api/me/referral
+
+def test_me_referral_requires_auth(tmp_db: Path) -> None:
+    assert _client().get("/api/me/referral").status_code == 401
+
+
+def test_create_and_list_links(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    c = _client()
+    r = c.post("/api/me/referral/links", json={"slug": "youtube"}, headers=_auth(1))
+    assert r.status_code == 201
+    assert r.json()["slug"] == "youtube"
+    r = c.post("/api/me/referral/links", json={}, headers=_auth(1))  # случайный
+    assert r.status_code == 201
+    summary = c.get("/api/me/referral", headers=_auth(1)).json()
+    assert summary["percent"] == 10
+    assert len(summary["links"]) == 2
+
+
+def test_create_link_conflict_and_invalid(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    c = _client()
+    c.post("/api/me/referral/links", json={"slug": "youtube"}, headers=_auth(1))
+    assert c.post("/api/me/referral/links", json={"slug": "youtube"},
+                  headers=_auth(1)).status_code == 409
+    assert c.post("/api/me/referral/links", json={"slug": "БАД слаг"},
+                  headers=_auth(1)).status_code == 422
+
+
+def test_archive_link_endpoint(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    c = _client()
+    link = c.post("/api/me/referral/links", json={"slug": "youtube"},
+                  headers=_auth(1)).json()
+    assert c.delete(f"/api/me/referral/links/{link['id']}",
+                    headers=_auth(1)).status_code == 204
+    assert c.delete(f"/api/me/referral/links/{link['id']}",
+                    headers=_auth(1)).status_code == 404  # уже архивная
+
+
+def test_click_endpoint_public_and_silent(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    c = _client()
+    link = c.post("/api/me/referral/links", json={"slug": "youtube"},
+                  headers=_auth(1)).json()
+    assert c.post("/api/referral/click?code=1-youtube").status_code == 200
+    assert c.post("/api/referral/click?code=мусор").status_code == 200
+    with sqlite3.connect(tmp_db) as con:
+        assert con.execute(
+            "SELECT clicks FROM referral_links WHERE id = ?", (link["id"],)
+        ).fetchone()[0] == 1
+
+
+def test_create_link_deleted_user_is_404_not_500(tmp_db: Path) -> None:
+    """JWT валиден, но пользователя нет (удалён/влит при merge) → 404, не 500."""
+    r = _client().post("/api/me/referral/links", json={"slug": "youtube"}, headers=_auth(777))
+    assert r.status_code == 404
+
+
+def test_bonuses_history_endpoint(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    with sqlite3.connect(tmp_db) as con:
+        con.execute(
+            "INSERT INTO referral_bonuses(referrer_id, referred_user_id, refill_id,"
+            " link_id, amount, percent, created_at)"
+            " VALUES (1, 2, NULL, NULL, 100, 10, '2026-07-18')"
+        )
+    rows = _client().get("/api/me/referral/bonuses", headers=_auth(1)).json()
+    assert rows[0]["amount"] == 100

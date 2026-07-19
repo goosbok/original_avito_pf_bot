@@ -85,6 +85,10 @@ from web.routers.notifications import router as notifications_router  # noqa: E4
 
 app.include_router(notifications_router)
 
+from web.routers.referral import router as referral_router  # noqa: E402
+
+app.include_router(referral_router)
+
 from web.routers.support import router as support_router  # noqa: E402
 
 app.include_router(support_router)

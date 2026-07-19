@@ -6,7 +6,7 @@ from pathlib import Path
 def test_tmp_db_has_users_table(tmp_db: Path) -> None:
     with sqlite3.connect(tmp_db) as con:
         rows = con.execute("PRAGMA table_info(users)").fetchall()
-    assert len(rows) == 10
+    assert len(rows) == 11
 
 
 def test_tmp_db_can_insert_user(tmp_db: Path) -> None:

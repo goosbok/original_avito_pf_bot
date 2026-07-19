@@ -182,6 +182,7 @@ _SETTING_DEFAULTS: dict[str, str] = {
     "manager_nick": "support",
     "channel_link": "https://t.me/pf_avito_top",
     "egg_sticker": "",
+    "ref_percent": "10",
 }
 
 # Defaults for the `settings` table when used as prices (numeric or dict-as-string).
@@ -784,8 +785,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "ref_id INTEGER,"
             "is_vip BOOLEN,"
             "magic TEXT,"
-            "referals TEXT)",
-            10,
+            "referals TEXT,"
+            "ref_link_id INTEGER)",
+            11,
         ),
         (
             "refills",
@@ -980,6 +982,37 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "cached_at TIMESTAMP NOT NULL)",
             4,  # column count
         ),
+        (
+            "referral_links",
+            "CREATE TABLE IF NOT EXISTS referral_links("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "slug TEXT NOT NULL COLLATE NOCASE,"
+            "clicks INTEGER NOT NULL DEFAULT 0,"
+            "custom_percent INTEGER,"
+            "created_at TIMESTAMP NOT NULL,"
+            "archived_at TIMESTAMP,"
+            "UNIQUE (user_id, slug),"
+            "FOREIGN KEY (user_id) REFERENCES users(id))",
+            7,
+        ),
+        (
+            "referral_bonuses",
+            "CREATE TABLE IF NOT EXISTS referral_bonuses("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "referrer_id INTEGER NOT NULL,"
+            "referred_user_id INTEGER NOT NULL,"
+            "refill_id INTEGER,"
+            "link_id INTEGER,"
+            "amount INTEGER NOT NULL,"
+            "percent INTEGER NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (referrer_id) REFERENCES users(id),"
+            "FOREIGN KEY (referred_user_id) REFERENCES users(id),"
+            "FOREIGN KEY (refill_id) REFERENCES refills(increment),"
+            "FOREIGN KEY (link_id) REFERENCES referral_links(id))",
+            8,
+        ),
     ]
 
 
@@ -1141,6 +1174,66 @@ def apply_phase2_migrations():
                 )
             con.execute("DROP TABLE guest_orders")
             print(f"guest_orders migrated ({len(guest_rows)} rows) and dropped")
+
+        # === referral program (multi-link) ===
+        existing_users = {row['name'] for row in con.execute("PRAGMA table_info(users)").fetchall()}
+        if 'ref_link_id' not in existing_users:
+            con.execute("ALTER TABLE users ADD COLUMN ref_link_id INTEGER")
+            print("users.ref_link_id added")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS referral_links("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "slug TEXT NOT NULL COLLATE NOCASE,"
+            "clicks INTEGER NOT NULL DEFAULT 0,"
+            "custom_percent INTEGER,"
+            "created_at TIMESTAMP NOT NULL,"
+            "archived_at TIMESTAMP,"
+            "UNIQUE (user_id, slug),"
+            "FOREIGN KEY (user_id) REFERENCES users(id))"
+        )
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS referral_bonuses("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "referrer_id INTEGER NOT NULL,"
+            "referred_user_id INTEGER NOT NULL,"
+            "refill_id INTEGER,"
+            "link_id INTEGER,"
+            "amount INTEGER NOT NULL,"
+            "percent INTEGER NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (referrer_id) REFERENCES users(id),"
+            "FOREIGN KEY (referred_user_id) REFERENCES users(id),"
+            "FOREIGN KEY (refill_id) REFERENCES refills(increment),"
+            "FOREIGN KEY (link_id) REFERENCES referral_links(id))"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_referral_links_user "
+            "ON referral_links(user_id)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_referral_bonuses_referrer "
+            "ON referral_bonuses(referrer_id, id DESC)"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_referral_bonuses_link "
+            "ON referral_bonuses(link_id)"
+        )
+        # Сидим строку настройки: экран настроек в боте листает ТОЛЬКО строки
+        # из БД (get_all_settings), дефолт в _SETTING_DEFAULTS там не виден.
+        # ON CONFLICT DO NOTHING — правки админа не затираются при рестартах.
+        # settings таблица есть во всех реальных БД; guard нужен только для
+        # тестовых фикстур с минимальной легаси-схемой (tests/unit/test_refills_migration.py).
+        settings_exists = con.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='settings'"
+        ).fetchone()
+        if settings_exists:
+            con.execute(
+                "INSERT INTO settings(parametr, description, value) "
+                "VALUES ('ref_percent', "
+                "'Партнерка: % с каждого пополнения реферала', '10') "
+                "ON CONFLICT(parametr) DO NOTHING"
+            )
 
         con.commit()
 

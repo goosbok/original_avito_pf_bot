@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from aiogram.dispatcher import FSMContext
 from aiogram.types import CallbackQuery
@@ -106,8 +107,10 @@ async def _handle_yookassa_payment(
             logger.debug("could not delete message")
 
     try:
-        payment_url, payment_id = svc_create_invoice(
-            user_id, int(amount),
+        # YK SDK синхронный — в отдельный поток, чтобы не блокировать event loop
+        # (зависший к YooKassa запрос иначе замораживает весь polling бота).
+        payment_url, payment_id = await asyncio.to_thread(
+            svc_create_invoice, user_id, int(amount),
             source_type="telegram", source_app_id=None,
         )
     except PaymentError:

@@ -67,11 +67,13 @@ async def _notify_refill_error(user_id: int, amount: int, error: str) -> None:
         logger.exception("failed to notify admins about refill error")
 
 
-def _yookassa_status(payment_id: str, *, user_id: int) -> str:
+async def _yookassa_status(payment_id: str, *, user_id: int) -> str:
     Configuration.account_id = SHOP_ID
     Configuration.secret_key = SECRET_KEY
     try:
-        payment = Payment.find_one(payment_id)
+        # YK SDK синхронный — в отдельный поток, чтобы не блокировать event loop
+        # (зависший к YooKassa запрос иначе замораживает весь API-процесс).
+        payment = await asyncio.to_thread(Payment.find_one, payment_id)
     except Exception as exc:
         # Log + alert admins; surface only a generic error to the client.
         asyncio.create_task(
@@ -95,8 +97,10 @@ async def create_refill(
             detail="Необходимо принять политику конфиденциальности и оферту",
         )
     try:
-        url, pid = create_invoice(
-            caller.user_id, payload.amount,
+        # YK SDK синхронный — в отдельный поток, чтобы не блокировать event loop
+        # (зависший к YooKassa запрос иначе замораживает весь API-процесс).
+        url, pid = await asyncio.to_thread(
+            create_invoice, caller.user_id, payload.amount,
             source_type=caller.source_type,
             source_app_id=caller.source_app_id,
         )
@@ -117,12 +121,12 @@ async def refill_status(
     payment_id: str,
     caller: CurrentCaller = Depends(current_caller),
 ) -> RefillStatusResponse:
-    yookassa_status = _yookassa_status(payment_id, user_id=caller.user_id)
+    yookassa_status = await _yookassa_status(payment_id, user_id=caller.user_id)
 
     if yookassa_status == "succeeded":
         Configuration.account_id = SHOP_ID
         Configuration.secret_key = SECRET_KEY
-        payment = Payment.find_one(payment_id)
+        payment = await asyncio.to_thread(Payment.find_one, payment_id)
         amount = int(float(payment.amount.value))
         try:
             result = finalize_with_referral_bonus(

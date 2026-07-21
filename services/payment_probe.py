@@ -4,6 +4,7 @@ Runs probe_yookassa() (sync) on a schedule and fires an admin alert on failure.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -83,7 +84,9 @@ async def probe_and_alert() -> None:
         _log.debug("payment probe: yookassa disabled or not configured, skipping")
         return
 
-    result = probe_yookassa()
+    # probe_yookassa — синхронный (requests-SDK) — в отдельный поток, чтобы
+    # зависший к YooKassa запрос не замораживал весь event loop бота.
+    result = await asyncio.to_thread(probe_yookassa)
 
     if result.ok:
         _log.info("payment probe: OK (%.0f ms)", result.latency_ms)

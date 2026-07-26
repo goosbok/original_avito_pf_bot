@@ -318,7 +318,7 @@ function App() {
                                     onNavigate={handleNavigate}
                                   />;
       case 'profile':  return <ProfilePage user={user} onNavigate={handleNavigate} botConfig={botConfig} />;
-      case 'referral': return <ReferralPage user={user} botConfig={botConfig} onNavigate={handleNavigate} />;
+      case 'referral': return <ReferralPage user={user} botConfig={botConfig} onNavigate={handleNavigate} refreshBalance={refreshBalance} />;
       default:         return <OrderFormPage
                                 user={user} balance={balance}
                                 prefilledFrom={prefilledOrder}

@@ -1,7 +1,7 @@
 // Referral — партнерская программа: ссылки-кампании, статистика, история начислений.
 const { useState: useRefState, useEffect: useRefEffect } = React;
 
-function ReferralPage({ user, botConfig, onNavigate }) {
+function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
   const [data, setData] = useRefState(null);
   const [bonuses, setBonuses] = useRefState([]);
   const [slug, setSlug] = useRefState('');
@@ -66,6 +66,16 @@ function ReferralPage({ user, botConfig, onNavigate }) {
     finally { setBusy(false); }
   };
 
+  const withdraw = async () => {
+    setBusy(true); setError('');
+    try {
+      await api.post('/api/me/referral/withdraw', {});
+      setData(d => ({ ...d, referral_balance: 0 }));
+      refreshBalance();
+    } catch (e) { setError(e.message || 'Ошибка'); }
+    finally { setBusy(false); }
+  };
+
   if (!data) return <div className="page"><div style={{ color: 'var(--text-3)' }}>Загрузка...</div></div>;
 
   const active = data.links.filter(l => !l.archived_at);
@@ -86,11 +96,19 @@ function ReferralPage({ user, botConfig, onNavigate }) {
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Как это работает</div>
         <div style={{ fontSize: '0.875rem', color: 'var(--text-2)' }}>
           Делитесь ссылкой — получайте <strong>{data.percent}%</strong> с каждого
-          пополнения приведенных пользователей на баланс сервиса. Пожизненно.
+          пополнения приведенных пользователей на реферальный баланс. Пожизненно.
+          Вывести его на основной счёт можно здесь же.
         </div>
-        <div style={{ display: 'flex', gap: 24, marginTop: 12, fontSize: '0.875rem' }}>
+        <div style={{ display: 'flex', gap: 24, marginTop: 12, fontSize: '0.875rem', flexWrap: 'wrap' }}>
           <div>Рефералов: <strong>{data.referrals_count}</strong></div>
           <div>Заработано: <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>{data.total_earned.toLocaleString('ru-RU')} ₽</strong></div>
+          <div>Доступно к выводу: <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>{data.referral_balance.toLocaleString('ru-RU')} ₽</strong></div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button className="btn btn--primary btn--sm" onClick={withdraw}
+                  disabled={busy || data.referral_balance === 0}>
+            Вывести на баланс
+          </button>
         </div>
       </div>
 

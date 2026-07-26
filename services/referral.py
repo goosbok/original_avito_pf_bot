@@ -12,6 +12,7 @@ import sqlite3 as _sqlite3
 import string
 
 from services.db import connect
+from services.exceptions import NothingToWithdraw, UserNotFound, WithdrawConflict
 from utils.other import get_date
 
 SLUG_RE = re.compile(r"^[a-z0-9_-]{3,32}$")
@@ -273,6 +274,66 @@ def set_custom_percent(link_id: int, percent: int | None) -> bool:
     return cur.rowcount == 1
 
 
+# ---------------------------------------------------------------- баланс
+
+def credit_referral_balance(user_id: int, amount: int) -> int:
+    """Атомарно увеличить referral_balance. Возвращает новый остаток.
+
+    Бросает UserNotFound, если user_id не существует — так же, как
+    services.balance.credit() для основного баланса. Это НЕ опционально:
+    finalize_with_referral_bonus ловит именно UserNotFound для реферера,
+    чей аккаунт с тех пор удалили/смёржили, и должна деградировать
+    (bonus=0), а не падать с TypeError.
+    """
+    with connect() as con:
+        cur = con.execute(
+            "UPDATE users SET referral_balance = COALESCE(referral_balance, 0) + ? "
+            "WHERE id = ? RETURNING referral_balance",
+            (amount, user_id),
+        )
+        row = cur.fetchone()
+        con.commit()
+    if row is None:
+        raise UserNotFound(f"user_id={user_id}")
+    return int(row["referral_balance"])
+
+
+def withdraw_to_main_balance(user_id: int) -> tuple[int, int]:
+    """Переносит весь referral_balance в balance. Возвращает (withdrawn, new_balance).
+
+    Оптимистичная блокировка: WHERE referral_balance = <прочитанное значение>
+    защищает от гонки с новым бонусом между SELECT и UPDATE — в этом случае
+    UPDATE не найдёт строку и мы бросаем WithdrawConflict (retry на стороне
+    вызывающего/фронта), а не тихо теряем часть суммы.
+    """
+    with connect() as con:
+        row = con.execute(
+            "SELECT referral_balance FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            raise UserNotFound(f"user_id={user_id}")
+        amount = int(row["referral_balance"])
+        if amount <= 0:
+            raise NothingToWithdraw(user_id)
+        cur = con.execute(
+            "UPDATE users SET balance = balance + referral_balance, "
+            "referral_balance = 0 "
+            "WHERE id = ? AND referral_balance = ? "
+            "RETURNING balance",
+            (user_id, amount),
+        )
+        result = cur.fetchone()
+        if result is None:
+            raise WithdrawConflict(user_id)  # referral_balance изменился между SELECT и UPDATE
+        con.execute(
+            "INSERT INTO referral_withdrawals(user_id, amount, destination, created_at) "
+            "VALUES (?, ?, 'main_balance', ?)",
+            (user_id, amount, get_date()),
+        )
+        con.commit()
+    return amount, int(result["balance"])
+
+
 # ---------------------------------------------------------------- статистика
 
 def referrals_count(user_id: int) -> int:
@@ -291,16 +352,20 @@ def get_summary(user_id: int) -> dict:
             link["custom_percent"] if link["custom_percent"] is not None else g
         )
     with connect() as con:
-        earned = con.execute(
-            "SELECT COALESCE(SUM(amount), 0) AS s FROM referral_bonuses "
-            "WHERE referrer_id = ?",
-            (user_id,),
-        ).fetchone()["s"]
+        totals = con.execute(
+            "SELECT "
+            " (SELECT COALESCE(SUM(amount), 0) FROM referral_bonuses "
+            "  WHERE referrer_id = ?) AS earned, "
+            " COALESCE((SELECT referral_balance FROM users WHERE id = ?), 0) "
+            "  AS referral_balance",
+            (user_id, user_id),
+        ).fetchone()
     return {
         "percent": g,
         "links": links,
         "referrals_count": referrals_count(user_id),
-        "total_earned": earned,
+        "total_earned": totals["earned"],
+        "referral_balance": totals["referral_balance"],
     }
 
 

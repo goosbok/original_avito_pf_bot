@@ -90,7 +90,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
         </div>
         <div style={{ display: 'flex', gap: 24, marginTop: 12, fontSize: '0.875rem' }}>
           <div>Рефералов: <strong>{data.referrals_count}</strong></div>
-          <div>Заработано: <strong style={{ color: 'var(--primary)' }}>{data.total_earned.toLocaleString('ru-RU')} ₽</strong></div>
+          <div>Заработано: <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>{data.total_earned.toLocaleString('ru-RU')} ₽</strong></div>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ function ReferralPage({ user, botConfig, onNavigate }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <strong style={tab === 'hidden' ? { color: 'var(--text-3)' } : undefined}>{l.slug}</strong>
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-3)' }}>
-                  {l.effective_percent}% · клики: {l.clicks} · регистрации: {l.registrations} · заработано: {l.earned.toLocaleString('ru-RU')} ₽
+                  {l.effective_percent}% · клики: {l.clicks} · регистрации: {l.registrations} · заработано: <span style={{ whiteSpace: 'nowrap' }}>{l.earned.toLocaleString('ru-RU')} ₽</span>
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>

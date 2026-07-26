@@ -235,3 +235,44 @@ def test_admin_sets_custom_percent(tmp_db: Path) -> None:
     # Не существует
     assert c.patch("/api/admin/referral/links/9999",
                    json={"custom_percent": 30}, headers=_auth(1)).status_code == 404
+
+
+# --------------------------------------------------- вывод реферального баланса
+
+def test_withdraw_requires_auth(tmp_db: Path) -> None:
+    assert _client().post("/api/me/referral/withdraw").status_code == 401
+
+
+def test_withdraw_moves_referral_balance_to_main_balance(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE users SET referral_balance = 250 WHERE id = 1")
+        con.commit()
+    r = _client().post("/api/me/referral/withdraw", headers=_auth(1))
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"withdrawn": 250, "referral_balance": 0, "balance": 250}
+    summary = _client().get("/api/me/referral", headers=_auth(1)).json()
+    assert summary["referral_balance"] == 0
+
+
+def test_withdraw_with_zero_balance_is_400(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    r = _client().post("/api/me/referral/withdraw", headers=_auth(1))
+    assert r.status_code == 400
+
+
+def test_withdraw_nonexistent_user_is_404(tmp_db: Path) -> None:
+    """JWT валиден, но пользователя нет (удалён/влит при merge) → 404,
+    как create_link, а не 400 'нечего выводить'."""
+    r = _client().post("/api/me/referral/withdraw", headers=_auth(777))
+    assert r.status_code == 404
+
+
+def test_summary_includes_referral_balance(tmp_db: Path) -> None:
+    _mk_user(tmp_db, 1)
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE users SET referral_balance = 77 WHERE id = 1")
+        con.commit()
+    summary = _client().get("/api/me/referral", headers=_auth(1)).json()
+    assert summary["referral_balance"] == 77

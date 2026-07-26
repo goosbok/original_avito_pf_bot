@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from services import referral
+from services.exceptions import NothingToWithdraw, UserNotFound, WithdrawConflict
 from web.admin_deps import require_admin
 from web.deps import require_user
 
@@ -68,6 +69,19 @@ async def my_bonuses(
     return referral.list_bonuses(
         user_id, limit=max(1, min(limit, 200)), offset=max(0, offset)
     )
+
+
+@router.post("/me/referral/withdraw")
+async def withdraw_referral_balance(user_id: int = Depends(require_user)) -> dict:
+    try:
+        withdrawn, new_balance = referral.withdraw_to_main_balance(user_id)
+    except UserNotFound as exc:
+        raise HTTPException(status_code=404, detail="пользователь не найден") from exc
+    except NothingToWithdraw as exc:
+        raise HTTPException(status_code=400, detail="нечего выводить") from exc
+    except WithdrawConflict as exc:
+        raise HTTPException(status_code=409, detail="попробуйте ещё раз") from exc
+    return {"withdrawn": withdrawn, "referral_balance": 0, "balance": new_balance}
 
 
 @router.post("/referral/click")

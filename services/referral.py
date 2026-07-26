@@ -284,7 +284,22 @@ def credit_referral_balance(user_id: int, amount: int) -> int:
     finalize_with_referral_bonus ловит именно UserNotFound для реферера,
     чей аккаунт с тех пор удалили/смёржили, и должна деградировать
     (bonus=0), а не падать с TypeError.
+
+    Как и services.balance.credit(): amount < 0 — ValueError (программная
+    ошибка вызывающего, не доменная ситуация); amount == 0 — короткое
+    замыкание без записи в БД, но с тем же UserNotFound-инвариантом.
     """
+    if amount < 0:
+        raise ValueError(f"amount must be >= 0, got {amount}")
+    if amount == 0:
+        with connect() as con:
+            row = con.execute(
+                "SELECT referral_balance FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        if row is None:
+            raise UserNotFound(f"user_id={user_id}")
+        return int(row["referral_balance"] or 0)
+
     with connect() as con:
         cur = con.execute(
             "UPDATE users SET referral_balance = COALESCE(referral_balance, 0) + ? "

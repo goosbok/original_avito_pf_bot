@@ -1223,6 +1223,26 @@ def apply_phase2_migrations():
             "CREATE INDEX IF NOT EXISTS idx_users_ref_link_id "
             "ON users(ref_link_id)"
         )
+        # === referral balance (withdraw-only) ===
+        # NB: `existing_users` was already computed a few lines above for the
+        # ref_link_id migration and no ALTER TABLE users has run since — reuse
+        # it instead of re-querying PRAGMA table_info(users) again.
+        if 'referral_balance' not in existing_users:
+            con.execute("ALTER TABLE users ADD COLUMN referral_balance INTEGER NOT NULL DEFAULT 0")
+            print("users.referral_balance added")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS referral_withdrawals("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "user_id INTEGER NOT NULL,"
+            "amount INTEGER NOT NULL,"
+            "destination TEXT NOT NULL,"
+            "created_at TIMESTAMP NOT NULL,"
+            "FOREIGN KEY (user_id) REFERENCES users(id))"
+        )
+        con.execute(
+            "CREATE INDEX IF NOT EXISTS idx_referral_withdrawals_user "
+            "ON referral_withdrawals(user_id, id DESC)"
+        )
         # Сидим строку настройки: экран настроек в боте листает ТОЛЬКО строки
         # из БД (get_all_settings), дефолт в _SETTING_DEFAULTS там не виден.
         # ON CONFLICT DO NOTHING — правки админа не затираются при рестартах.

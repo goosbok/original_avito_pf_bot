@@ -47,6 +47,8 @@
 | Где кнопка вывода | Только веб-кабинет (партнёрка уже целиком там; в бот не дублируем) |
 | Влияет ли на «Заработано» / per-link earned | Нет — это лайфтайм-сумма по `referral_bonuses`, вывод её не уменьшает |
 | Миграция старых данных | Не нужна (см. контекст) |
+| Мердж аккаунтов (`services/identity.py`, `scripts/merge_duplicate_tg_users.py`) | `referral_withdrawals` имеет `FOREIGN KEY(user_id)` — оба скрипта уже переносят `balance`/`referral_links`/`referral_bonuses` перед `DELETE FROM users`; `referral_balance` и `referral_withdrawals` переносятся тем же способом (см. «Мердж аккаунтов» ниже). Без этого мердж пользователя, хоть раз выводившего баланс, падает `FOREIGN KEY constraint failed` |
+| Аудит вывода в `refills`/GSheets-экспорте | Осознанно НЕ пишем строку в `refills` — это таблица внешних платежей (YooKassa), вывод им не является; GSheets-отчёт «Пополнения по юзеру» не будет отражать выводы. Задокументировано как известное ограничение, не багфикс в рамках этой фичи |
 
 ## Данные (SQLite, схема в `utils/sqlite3.py`)
 
@@ -81,14 +83,23 @@ CREATE INDEX IF NOT EXISTS idx_referral_withdrawals_user
 
 ```python
 def credit_referral_balance(user_id: int, amount: int) -> int:
-    """Атомарно увеличить referral_balance. Возвращает новый остаток."""
+    """Атомарно увеличить referral_balance. Возвращает новый остаток.
+    Бросает UserNotFound, если user_id не существует — как credit()."""
 
 def withdraw_to_main_balance(user_id: int) -> tuple[int, int]:
     """Обнулить referral_balance, зачислить всю сумму в users.balance,
     записать строку в referral_withdrawals(destination='main_balance').
     Возвращает (withdrawn_amount, new_main_balance).
-    Бросает NothingToWithdraw, если referral_balance == 0."""
+    Бросает UserNotFound, если user_id не существует;
+    NothingToWithdraw, если referral_balance == 0."""
 ```
+
+`credit_referral_balance` — атомарный `UPDATE ... RETURNING`, как
+`services/balance.py::credit()`, и обязана повторить его же проверку
+`if row is None: raise UserNotFound(...)` — без неё `finalize_with_referral_bonus`
+(которая ловит именно `UserNotFound` для реферера, чей аккаунт с тех пор
+удалили/смёржили) упадёт с необработанным `TypeError` вместо мягкой
+деградации.
 
 `withdraw_to_main_balance` — одна транзакция с оптимистичной блокировкой
 (SQLite `RETURNING` отдаёт значение *после* апдейта, поэтому «сколько было»
@@ -99,7 +110,9 @@ with connect() as con:
     row = con.execute(
         "SELECT referral_balance FROM users WHERE id = ?", (user_id,)
     ).fetchone()
-    amount = row["referral_balance"]
+    if row is None:
+        raise UserNotFound(user_id)
+    amount = int(row["referral_balance"])
     if amount <= 0:
         raise NothingToWithdraw(user_id)
     cur = con.execute(
@@ -132,12 +145,35 @@ with connect() as con:
 web-router, payment_reconciler, backfill-скрипт), включая передачу в
 `notify_referrer`.
 
+## Мердж аккаунтов
+
+`services/identity.py::_merge_phone_only_into` уже переносит `balance`,
+`ref_id`/`ref_link_id`, `referral_links` и `referral_bonuses` с
+удаляемого source-юзера на target перед `DELETE FROM users`.
+`scripts/merge_duplicate_tg_users.py` делает то же для `balance` через
+универсальный список `_OWNED_TABLES_USER_ID` (`[(table, column), ...]` →
+`UPDATE {table} SET {col} = ? WHERE {col} = ?` на каждую пару).
+
+Обе точки должны так же перенести:
+- **Значение** `referral_balance` — суммируется в target, как `balance`
+  (в `_merge_phone_only_into`; `merge_duplicate_tg_users.py` уже суммирует
+  `balance` тем же паттерном — `referral_balance` добавляется рядом).
+- **Строки** `referral_withdrawals` — репривязка `user_id` на target
+  (в `_merge_phone_only_into` — рядом с `referral_links`/`referral_bonuses`,
+  внутри того же `try/except sqlite3.OperationalError`; в
+  `merge_duplicate_tg_users.py` — добавлением `("referral_withdrawals",
+  "user_id")` в `_OWNED_TABLES_USER_ID`).
+
+Без этого `DELETE FROM users WHERE id=?` (обе точки открывают соединение с
+`PRAGMA foreign_keys=ON`) падает `FOREIGN KEY constraint failed` для любого
+source-юзера, у которого есть хоть одна строка в `referral_withdrawals`.
+
 ## API (`web/routers/referral.py`)
 
 | Endpoint | Auth | Назначение |
 |---|---|---|
-| `GET /api/me/referral` | JWT | Как сейчас + новое поле `referral_balance` (текущий выводимый остаток) |
-| `POST /api/me/referral/withdraw` | JWT | Без тела — выводит весь `referral_balance`. 200 → `{"withdrawn": N, "referral_balance": 0, "balance": <новый основной баланс>}`. 400, если выводить нечего; 409 при гонке (см. ниже) — фронт может повторить запрос |
+| `GET /api/me/referral` | JWT | Как сейчас + новое поле `referral_balance` (текущий выводимый остаток); деградирует в 0, не падает, если `user_id` не существует (важно для админского `/admin/users/{id}/referral` — несуществующий `target_user_id` не должен давать 500) |
+| `POST /api/me/referral/withdraw` | JWT | Без тела — выводит весь `referral_balance`. 200 → `{"withdrawn": N, "referral_balance": 0, "balance": <новый основной баланс>}`. 404, если пользователь не найден (аккаунт удалён/смёржен, JWT ещё жив — как `create_link`); 400, если выводить нечего; 409 при гонке (см. ниже) — фронт может повторить запрос |
 
 ## UI (`web/static/components/Referral.jsx`)
 
@@ -167,10 +203,15 @@ web-router, payment_reconciler, backfill-скрипт), включая пере�
 - Обновить существующие тесты `finalize_with_referral_bonus` — бонус теперь
   должен попадать в `referral_balance`, а `users.balance` — не меняться.
 - Новые unit-тесты `credit_referral_balance` / `withdraw_to_main_balance`:
-  обычный путь, вывод при нулевом остатке (ошибка), что `users.balance`
-  затронут только выводом, а не начислением.
+  обычный путь, вывод при нулевом остатке (ошибка), вывод/начисление для
+  несуществующего user_id (`UserNotFound`), что `users.balance` затронут
+  только выводом, а не начислением.
 - Тест API `POST /api/me/referral/withdraw`: happy path, 400 при пустом
-  остатке, что `GET /api/me/referral` отражает `referral_balance` до и после.
+  остатке, 404 для несуществующего юзера, что `GET /api/me/referral`
+  отражает `referral_balance` до и после.
+- Тест на мердж: пользователь с ненулевым `referral_balance` и/или строкой в
+  `referral_withdrawals` мержится без `IntegrityError`, оба значения
+  корректно переносятся на target.
 
 ## Явно вне скоупа
 

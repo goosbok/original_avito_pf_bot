@@ -151,3 +151,19 @@ class ExecutorAPIRejected(ExecutorAPIError):
     Caller должен fallback'нуться в manual delivery_mode.
     Отличается от `ExecutorAPIError` тем, что повторная попытка не поможет.
     """
+
+
+class NothingToWithdraw(ServiceError):
+    """Попытка вывести реферальный баланс, когда он равен нулю."""
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"user_id={user_id}: referral_balance is 0, nothing to withdraw")
+        self.user_id = user_id
+
+
+class WithdrawConflict(ServiceError):
+    """referral_balance изменился между чтением и записью (гонка с новым бонусом)."""
+
+    def __init__(self, user_id: int) -> None:
+        super().__init__(f"user_id={user_id}: referral_balance changed concurrently, retry")
+        self.user_id = user_id

@@ -320,3 +320,33 @@ def test_merge_link_slug_collision_resolved(tmp_db: Path) -> None:
         assert len(slugs) == len(set(slugs))                        # no duplicate slugs
         assert "promo" in slugs                                     # target's original preserved
         assert con.execute("SELECT COUNT(*) FROM users WHERE id=100").fetchone()[0] == 0  # source gone
+
+
+def test_merge_carries_referral_balance_and_repoints_withdrawals(tmp_db: Path) -> None:
+    """source has referral_balance + a withdrawal row → merges without
+    IntegrityError; referral_balance is summed into target, the withdrawal
+    row is repointed to target (mirrors how balance/referral_bonuses merge)."""
+    import sqlite3
+    from services import identity
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("INSERT INTO users(id, balance, referral_balance) VALUES (100, 0, 500)")
+        con.execute("INSERT INTO users(id, balance, referral_balance) VALUES (200, 0, 100)")
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (100, 'phone', '+79990009903', '2026-07-18', 0)"
+        )
+        con.execute(
+            "INSERT INTO auth_providers(user_id, provider, identifier, created_at, verified) "
+            "VALUES (200, 'telegram', '558', '2026-07-18', 1)"
+        )
+        con.execute(
+            "INSERT INTO referral_withdrawals(user_id, amount, destination, created_at) "
+            "VALUES (100, 500, 'main_balance', '2026-07-18')"
+        )
+        con.commit()
+    identity.link_phone_provider(200, "+79990009903", set_verified=True)
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT referral_balance FROM users WHERE id = 200").fetchone()
+        assert row[0] == 600  # 100 + 500
+        withdrawal_row = con.execute("SELECT user_id FROM referral_withdrawals").fetchone()
+        assert withdrawal_row[0] == 200

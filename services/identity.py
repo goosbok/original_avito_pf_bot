@@ -281,14 +281,16 @@ def _merge_phone_only_into(
         "WHERE provider='phone' AND user_id=?",
         (target_user_id, 1 if set_verified else 0, source_user_id),
     )
-    # Баланс source приклеиваем к target
+    # Баланс + реферальный баланс source приклеиваем к target
     src_row = con.execute(
-        "SELECT balance FROM users WHERE id=?", (source_user_id,)
+        "SELECT balance, referral_balance FROM users WHERE id=?", (source_user_id,)
     ).fetchone()
     if src_row:
         con.execute(
-            "UPDATE users SET balance = balance + ? WHERE id=?",
-            (int(src_row["balance"] or 0), target_user_id),
+            "UPDATE users SET balance = balance + ?, "
+            "referral_balance = referral_balance + ? WHERE id=?",
+            (int(src_row["balance"] or 0), int(src_row["referral_balance"] or 0),
+             target_user_id),
         )
     # Перенос партнерских данных source → target.
     # 1) Его собственный реферер — если у target еще нет:
@@ -335,6 +337,10 @@ def _merge_phone_only_into(
         )
         con.execute(
             "UPDATE referral_bonuses SET referred_user_id=? WHERE referred_user_id=?",
+            (target_user_id, source_user_id),
+        )
+        con.execute(
+            "UPDATE referral_withdrawals SET user_id=? WHERE user_id=?",
             (target_user_id, source_user_id),
         )
     except sqlite3.OperationalError:

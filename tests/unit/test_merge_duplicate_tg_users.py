@@ -177,7 +177,7 @@ def test_provider_conflict_legacy_wins_on_integrity_error(tmp_db: Path):
         def fetchall(self):
             return self._rows
 
-    fake_dup_row = {"balance": 0, "user_name": None, "first_name": None}
+    fake_dup_row = {"balance": 0, "referral_balance": 0, "user_name": None, "first_name": None}
     fake_ap_rows = [{"id": 99, "provider": "telegram", "identifier": "700003"}]
 
     execute_call_count = [0]
@@ -249,3 +249,31 @@ def test_rerun_after_merge_returns_zero(tmp_db: Path):
 
     second = merge_duplicates()
     assert second == 0
+
+
+def test_merge_referral_balance_and_withdrawals(tmp_db: Path):
+    """Duplicate's referral_balance lands on legacy; referral_withdrawals rows
+    repoint to legacy — no FOREIGN KEY crash on the merge DELETE."""
+    tg_id = 700002
+    legacy_id = _seed_legacy_user(tmp_db, tg_id, balance=0)
+    dup_id = _seed_duplicate_user(tmp_db, tg_id, balance=0)
+    with sqlite3.connect(tmp_db) as con:
+        con.execute("UPDATE users SET referral_balance = 500 WHERE id = ?", (dup_id,))
+        con.execute(
+            "INSERT INTO referral_withdrawals(user_id, amount, destination, created_at) "
+            "VALUES (?, 200, 'main_balance', '2026-07-18')",
+            (dup_id,),
+        )
+        con.commit()
+
+    from scripts.merge_duplicate_tg_users import merge_duplicates
+    merged = merge_duplicates()
+    assert merged == 1
+
+    with sqlite3.connect(tmp_db) as con:
+        legacy_row = con.execute(
+            "SELECT referral_balance FROM users WHERE id = ?", (legacy_id,)
+        ).fetchone()
+        assert int(legacy_row[0]) == 500
+        withdrawal_row = con.execute("SELECT user_id FROM referral_withdrawals").fetchone()
+        assert int(withdrawal_row[0]) == legacy_id

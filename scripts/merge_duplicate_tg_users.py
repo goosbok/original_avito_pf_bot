@@ -27,6 +27,7 @@ _OWNED_TABLES_USER_ID = [
     ("funnel_events", "user_id"),
     ("support_messages", "user_id"),
     ("otp_codes", "user_id_to_link"),
+    ("referral_withdrawals", "user_id"),
 ]
 
 
@@ -40,19 +41,21 @@ def _merge_one(con, *, legacy_id: int, duplicate_id: int) -> None:
 
     # 2. Balance + names
     dup_row = con.execute(
-        "SELECT balance, user_name, first_name FROM users WHERE id = ?",
+        "SELECT balance, referral_balance, user_name, first_name FROM users WHERE id = ?",
         (duplicate_id,),
     ).fetchone()
     if dup_row:
         dup_balance = int(dup_row["balance"] or 0) if hasattr(dup_row, "keys") else int(dup_row[0] or 0)
-        dup_user_name = dup_row["user_name"] if hasattr(dup_row, "keys") else dup_row[1]
-        dup_first_name = dup_row["first_name"] if hasattr(dup_row, "keys") else dup_row[2]
+        dup_referral_balance = int(dup_row["referral_balance"] or 0) if hasattr(dup_row, "keys") else int(dup_row[1] or 0)
+        dup_user_name = dup_row["user_name"] if hasattr(dup_row, "keys") else dup_row[2]
+        dup_first_name = dup_row["first_name"] if hasattr(dup_row, "keys") else dup_row[3]
         con.execute(
             "UPDATE users SET balance = COALESCE(balance, 0) + ?, "
+            "  referral_balance = COALESCE(referral_balance, 0) + ?, "
             "  user_name = COALESCE(user_name, ?), "
             "  first_name = COALESCE(first_name, ?) "
             "WHERE id = ?",
-            (dup_balance, dup_user_name, dup_first_name, legacy_id),
+            (dup_balance, dup_referral_balance, dup_user_name, dup_first_name, legacy_id),
         )
 
     # 3. Re-target auth_providers; on UNIQUE conflict drop duplicate's row

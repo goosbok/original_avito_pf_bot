@@ -168,9 +168,12 @@ function ReferralPage({ user, botConfig, onNavigate }) {
         {bonuses.length === 0
           ? <div style={{ color: 'var(--text-3)', fontSize: '0.875rem' }}>Начислений пока нет.</div>
           : bonuses.map(b => (
-            <div key={b.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: '0.875rem' }}>
-              <span>{formatDate ? formatDate(b.created_at) : b.created_at} · реферал #{b.referred_user_id}{b.link_slug ? ` · ${b.link_slug}` : ''} · {b.percent}%</span>
-              <strong style={{ color: 'var(--primary)' }}>+{b.amount.toLocaleString('ru-RU')} ₽</strong>
+            <div key={b.id} style={{ padding: '8px 0', borderTop: '1px solid var(--border)', fontSize: '0.875rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <span>{formatDate ? formatDate(b.created_at) : b.created_at}</span>
+                <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap', flexShrink: 0 }}>+{b.amount.toLocaleString('ru-RU')} ₽</strong>
+              </div>
+              <div style={{ color: 'var(--text-3)', marginTop: 2 }}>реферал #{b.referred_user_id}{b.link_slug ? ` · ${b.link_slug}` : ''} · {b.percent}%</div>
             </div>
           ))}
       </div>

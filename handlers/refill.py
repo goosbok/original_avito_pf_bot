@@ -175,7 +175,7 @@ async def _handle_yookassa_payment(
         await notify_admins_success(user_id, int(amount), result.user_balance)
         if result.referrer_bonus > 0 and result.referrer_id is not None:
             await notify_referrer(result.referrer_id, result.referrer_bonus,
-                                  result.referrer_new_balance or 0)
+                                  result.referrer_new_referral_balance or 0)
         logger.info("payment success: user_id=%s amount=%s (TG-sync)", user_id, amount)
     else:
         logger.info("payment already finalized (race): user_id=%s amount=%s pid=%s",

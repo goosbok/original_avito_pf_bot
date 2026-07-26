@@ -90,10 +90,11 @@ def test_referral_bonus_every_refill_credits_referrer(tmp_db: Path) -> None:
     _make_user_full(tmp_db, user_id=2, balance=0, ref_id=1)
     r1 = finalize_with_referral_bonus(user_id=2, amount=1000)
     assert r1.referrer_bonus == 100  # 10%
-    assert r1.referrer_new_balance == 100
+    assert r1.referrer_new_referral_balance == 100
+    assert get_balance(1) == 0  # бонус НЕ попал в основной баланс реферера
     r2 = finalize_with_referral_bonus(user_id=2, amount=2000)
     assert r2.referrer_bonus == 200
-    assert r2.referrer_new_balance == 300
+    assert r2.referrer_new_referral_balance == 300
 
 
 def test_referral_bonus_floor_and_zero(tmp_db: Path) -> None:
@@ -154,7 +155,7 @@ def test_referral_bonus_skipped_for_vip(tmp_db: Path) -> None:
     result = finalize_with_referral_bonus(user_id=2, amount=1000)
     assert result.user_balance == 1000
     assert result.referrer_bonus == 0
-    assert result.referrer_new_balance is None
+    assert result.referrer_new_referral_balance is None
 
 
 def test_referral_bonus_skipped_when_no_referrer(tmp_db: Path) -> None:

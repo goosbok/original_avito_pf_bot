@@ -82,7 +82,7 @@ async def _handle_yk_status(row: dict, p) -> None:
             await notify_admins_success(row["user_id"], row["amount"], result.user_balance)
             if result.referrer_bonus > 0 and result.referrer_id is not None:
                 await notify_referrer(result.referrer_id, result.referrer_bonus,
-                                      result.referrer_new_balance or 0)
+                                      result.referrer_new_referral_balance or 0)
         else:
             logger.info("reconciler: pid=%s already finalized (no-op)", pid)
 

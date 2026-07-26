@@ -110,7 +110,7 @@ async def main() -> int:
             await notify_admins_success(uid, amount, result.user_balance)
             if result.referrer_bonus > 0 and result.referrer_id is not None:
                 await notify_referrer(result.referrer_id, result.referrer_bonus,
-                                      result.referrer_new_balance or 0)
+                                      result.referrer_new_referral_balance or 0)
 
     logger.info("=== DONE: credited=%d skipped=%d errored=%d ===",
                 credited, skipped, errored)

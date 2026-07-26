@@ -37,7 +37,7 @@ def test_refill_result_has_was_newly_finalized(tmp_db: Path):
         user_balance=100,
         referrer_id=None,
         referrer_bonus=0,
-        referrer_new_balance=None,
+        referrer_new_referral_balance=None,
         was_newly_finalized=True,
     )
     assert r.was_newly_finalized is True
@@ -188,7 +188,7 @@ def test_referral_bonus_not_double_credited(tmp_db: Path):
     r1 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
     assert r1.was_newly_finalized is True
     assert r1.referrer_bonus == 100  # 10% of 1000
-    assert r1.referrer_new_balance == 100
+    assert r1.referrer_new_referral_balance == 100
 
     # Повторный finalize того же payment_id — НЕ должен повторно начислить ни юзеру, ни реферу.
     r2 = finalize_with_referral_bonus(42, 1000, payment_id="pid-first")
@@ -196,8 +196,11 @@ def test_referral_bonus_not_double_credited(tmp_db: Path):
     assert r2.referrer_bonus == 0  # бонус не начисляется повторно
 
     with connect() as con:
-        ref_bal = con.execute("SELECT balance FROM users WHERE id=100").fetchone()
-    assert ref_bal["balance"] == 100  # не 200
+        ref_bal = con.execute(
+            "SELECT balance, referral_balance FROM users WHERE id=100"
+        ).fetchone()
+    assert ref_bal["balance"] == 0            # основной баланс реферера не тронут
+    assert ref_bal["referral_balance"] == 100  # бонус зачислен один раз, не 200
 
 
 def test_create_invoice_inserts_pending_row(tmp_db: Path, monkeypatch):

@@ -175,7 +175,7 @@ class RefillResult:
     user_balance: int
     referrer_id: int | None
     referrer_bonus: int
-    referrer_new_balance: int | None
+    referrer_new_referral_balance: int | None
     was_newly_finalized: bool = False
 
 
@@ -198,7 +198,7 @@ def _record_referral_bonus(
     link_id: int | None,
     bonus: int,
     percent: int,
-    referrer_new_balance: int,
+    referrer_new_referral_balance: int,
 ) -> None:
     """История начисления + durable web-уведомление реферу."""
     import re
@@ -223,7 +223,7 @@ def _record_referral_bonus(
             ),
         )
         text = get_string("str_ref_balance_refil").format(
-            format_decimal(bonus), format_decimal(referrer_new_balance)
+            format_decimal(bonus), format_decimal(referrer_new_referral_balance)
         )
         # Строка — телеграмный HTML (<b>…</b>); веб-уведомления рендерятся
         # плоским текстом (React экранирует), поэтому теги вырезаем.
@@ -246,8 +246,10 @@ def finalize_with_referral_bonus(
     """Финализирует refill + начисляет реферу процент с КАЖДОГО пополнения.
 
     Процент: custom_percent ссылки, через которую атрибуцирован плательщик,
-    иначе глобальный settings.ref_percent. Бонус — через credit() (НЕ finalize(),
-    чтобы у рефера не появлялась фиктивная запись в refills).
+    иначе глобальный settings.ref_percent. Бонус идёт в users.referral_balance
+    (services.referral.credit_referral_balance) — НЕ в основной баланс и НЕ
+    через finalize(), чтобы у рефера не появлялась фиктивная запись в refills
+    и деньги не были сразу доступны для трат (вывод — отдельным действием).
     was_newly_finalized пробрасывается из finalize() — защита от двойного
     начисления при гонках (web-status / крон / TG-handler).
     """
@@ -260,17 +262,17 @@ def finalize_with_referral_bonus(
 
     referrer_id: int | None = user["ref_id"]
     bonus = 0
-    referrer_new_balance: int | None = None
+    referrer_new_referral_balance: int | None = None
 
     if was_newly_finalized and not user["is_vip"] and referrer_id is not None:
-        from services.referral import get_bonus_percent
+        from services.referral import credit_referral_balance, get_bonus_percent
         percent = get_bonus_percent(user["ref_link_id"])
         bonus = amount * percent // 100
         if bonus > 0:
             try:
-                referrer_new_balance = credit(int(referrer_id), bonus)
+                referrer_new_referral_balance = credit_referral_balance(int(referrer_id), bonus)
             except UserNotFound:
-                referrer_new_balance = None
+                referrer_new_referral_balance = None
                 bonus = 0
             else:
                 try:
@@ -281,7 +283,7 @@ def finalize_with_referral_bonus(
                         link_id=user["ref_link_id"],
                         bonus=bonus,
                         percent=percent,
-                        referrer_new_balance=referrer_new_balance,
+                        referrer_new_referral_balance=referrer_new_referral_balance,
                     )
                 except Exception:
                     # Баланс реферу уже начислен — сбой записи истории или
@@ -298,6 +300,6 @@ def finalize_with_referral_bonus(
         user_balance=new_balance,
         referrer_id=int(referrer_id) if referrer_id is not None else None,
         referrer_bonus=bonus,
-        referrer_new_balance=referrer_new_balance,
+        referrer_new_referral_balance=referrer_new_referral_balance,
         was_newly_finalized=was_newly_finalized,
     )

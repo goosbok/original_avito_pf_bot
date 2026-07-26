@@ -6,6 +6,7 @@ POST /api/auth/phone/verify — проверяет код, создаёт user �
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -53,7 +54,8 @@ async def request_code(body: RequestCodeBody) -> dict:
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
     try:
-        sms.get_gateway().send_code(phone, code)
+        gateway = sms.get_gateway()
+        await asyncio.to_thread(gateway.send_code, phone, code)
     except Exception:
         logger.exception("SMS send failed for %s", phone)
         raise HTTPException(status_code=502, detail="Не удалось отправить SMS, попробуйте позже")

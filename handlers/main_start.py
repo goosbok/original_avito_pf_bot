@@ -33,11 +33,11 @@ async def get_refer_name(user_id):
         elif user['first_name']:
             name = user['first_name']
             return name
-        elif user['id']:
-            name = user['id']
-            return name
         else:
-            return None
+            # Referrer signed up via web (phone/email) and never opened the
+            # bot — no Telegram profile data to show, so avoid leaking the
+            # raw internal user_id to the referred user.
+            return "партнёр"
     else:
         return None
 

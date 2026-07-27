@@ -203,7 +203,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user.first_name}</div>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>
-                          @{user.user_name || 'user'}
+                          ID {user.user_id}
                         </div>
                       </div>
                     </div>
@@ -289,7 +289,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                       <Avatar name={user.first_name} size={34} />
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{user.first_name}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>@{user.user_name || 'user'}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-3)' }}>ID {user.user_id}</div>
                       </div>
                     </div>
                     <button

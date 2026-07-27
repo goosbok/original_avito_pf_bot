@@ -16,7 +16,7 @@ from __future__ import annotations
 from data import config
 from services.balance import credit
 from services.db import connect
-from utils.other import get_date
+from utils.other import format_decimal, get_date
 
 SOURCE_TYPE = "welcome_bonus"
 
@@ -57,6 +57,14 @@ def grant_welcome_bonus(user_id: int) -> int:
             "INSERT INTO refills(amount, date, user_id, payment_id, source_type, source_app_id, status) "
             "VALUES (?, ?, ?, NULL, ?, NULL, 'succeeded')",
             (amount, get_date(), user_id, SOURCE_TYPE),
+        )
+        con.execute(
+            "INSERT INTO notifications(user_id, kind, text) VALUES (?, 'welcome_bonus', ?)",
+            (
+                user_id,
+                f"🎁 Добро пожаловать! Вам начислен приветственный бонус "
+                f"{format_decimal(amount)} ₽ на баланс.",
+            ),
         )
         con.commit()
 

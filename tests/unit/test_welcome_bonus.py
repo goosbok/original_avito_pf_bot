@@ -36,6 +36,26 @@ def test_grant_credits_balance_and_writes_refill(tmp_db, monkeypatch):
     assert rows[0]["payment_id"] is None
 
 
+def test_grant_writes_notification(tmp_db, monkeypatch):
+    """Веб-регистрация (phone/email) не проходит через /start в боте — без
+    отдельной notifications-строки пользователь не узнает, откуда взялись
+    деньги на балансе."""
+    monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
+    from services.welcome_bonus import grant_welcome_bonus
+
+    user_id = identity._create_user(first_name="test")
+    grant_welcome_bonus(user_id)
+
+    with sqlite3.connect(tmp_db) as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT kind, text FROM notifications WHERE user_id=? AND kind='welcome_bonus'",
+            (user_id,),
+        ).fetchone()
+    assert row is not None
+    assert "100" in row["text"]
+
+
 def test_grant_is_idempotent(tmp_db, monkeypatch):
     monkeypatch.setattr("data.config.WELCOME_BONUS_RUB", 100, raising=False)
     from services.welcome_bonus import grant_welcome_bonus

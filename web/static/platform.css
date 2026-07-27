@@ -538,7 +538,7 @@ p  { line-height: 1.65; }
   position: fixed; bottom: 0; right: 24px;
   width: 320px; border-radius: 16px 16px 0 0; overflow: hidden;
   box-shadow: var(--shadow-lg); border: 1px solid var(--border); background: var(--surface);
-  display: flex; flex-direction: column; max-height: 80vh;
+  display: flex; flex-direction: column; max-height: min(80vh, 520px);
   z-index: 200;
 }
 .chat-panel__header {
@@ -666,7 +666,9 @@ p  { line-height: 1.65; }
   /* Support chat: full-width on mobile (base rule already anchors to
      viewport bottom). Just stretch edge-to-edge so it acts like a
      native bottom-sheet. */
-  .chat-panel { left: 0; right: 0; width: auto; }
+  /* Mobile bottom-sheet: the 520px desktop cap would leave a lot of dead
+     space below the panel on tall phones — go back to the fuller 80vh here. */
+  .chat-panel { left: 0; right: 0; width: auto; max-height: 80vh; }
   /* Bell dropdown: on mobile the bell button sits mid-header, so the
      default `position: absolute; right: 0` (relative to .bell) puts the
      panel's left edge ~80px off-screen. Switch to viewport-anchored

@@ -76,7 +76,7 @@ function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
     finally { setBusy(false); }
   };
 
-  if (!data) return <div className="page"><div style={{ color: 'var(--text-3)' }}>Загрузка...</div></div>;
+  if (!data) return <div className="container"><div style={{ color: 'var(--text-3)' }}>Загрузка...</div></div>;
 
   const active = data.links.filter(l => !l.archived_at);
   const hidden = data.links.filter(l => l.archived_at);
@@ -89,7 +89,7 @@ function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
   const switchTab = (t) => { setTab(t); setPage(0); };
 
   return (
-    <div className="page" style={{ paddingTop: 20, paddingBottom: 96 }}>
+    <div className="container" style={{ paddingTop: 20, paddingBottom: 96 }}>
       <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Партнерка</h1>
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>

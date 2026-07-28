@@ -51,7 +51,7 @@ function PhoneLogin({ onSuccess }) {
 
   const verify = async () => {
     if (!code || code.length < 4) return setError('Введите код из SMS');
-    setLoading(true); setError('');
+    setLoading(true); setError(''); setSuccess('');
     try {
       const data = await api.post('/api/auth/phone/verify',
         { phone, code, ref_code: window.getRefCode ? window.getRefCode() : null });

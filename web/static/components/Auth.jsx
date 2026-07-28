@@ -1,10 +1,17 @@
 // Auth screens: Email login, Telegram OTP login, Email register
 const { useState, useEffect } = React;
 
-// TG-регистрация: вкл с 2026-06-19. Backend endpoints (/api/auth/telegram/*)
-// и интеграция с ботом готовы; разделяем register/login через единый флаг.
-// Чтобы снова спрятать TG-регистрацию — flip в false.
-const TG_AUTH_ENABLED = true;
+// TG-регистрация: выкл с 2026-07-28 — регистрация только по SMS (вход через
+// Telegram для существующих юзеров ниже не трогаем, см. комментарий в
+// default-режиме). Backend endpoints (/api/auth/telegram/*) и интеграция с
+// ботом никуда не делись; разделяем register/login через единый флаг.
+// Чтобы вернуть TG-регистрацию — flip в true.
+const TG_AUTH_ENABLED = false;
+
+// Email-регистрация: выкл с 2026-07-28 по той же причине — регистрация
+// только по SMS. Вход по email (/api/auth/email/login) для существующих
+// юзеров не трогаем — см. default-режим ниже.
+const EMAIL_REGISTER_ENABLED = false;
 
 const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
   const [mode, setMode] = useState(initialMode || 'login');
@@ -324,79 +331,83 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
             </>
           )}
 
-          {/* ── Email ────────────────────────────────────────────────────── */}
-          <button
-            type="button"
-            className={`method-btn${activeMethod === 'email' ? ' active' : ''}`}
-            onClick={() => pickMethod('email')}
-          >
-            По Email
-          </button>
-          {activeMethod === 'email' && (
-            <div className="method-form">
-              {error && <div className="alert alert--error">{error}</div>}
-              {success && regStep === 'code' && <div className="alert alert--success">{success}</div>}
-              {regStep === 'form' ? (
-                <>
-                  <div className="form-field">
-                    <label className="form-label">Имя (необязательно)</label>
-                    <input className="input" placeholder="Алексей" value={name} onChange={e => setName(e.target.value)} />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">Email</label>
-                    <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">Пароль</label>
-                    <input
-                      className="input" type="password" placeholder="Минимум 8 символов"
-                      value={password} onChange={e => setPassword(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handleRegisterRequest()}
-                    />
-                    <div className="form-hint">Минимум 8 символов</div>
-                  </div>
-                  <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterRequest} disabled={loading}>
-                    {loading ? 'Отправка кода...' : 'Получить код'}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="form-field">
-                    <label className="form-label">6-значный код из email</label>
-                    <input
-                      className="input"
-                      placeholder="123456"
-                      value={regCode}
-                      maxLength={6}
-                      inputMode="numeric"
-                      onChange={e => setRegCode(e.target.value.replace(/\D/g, ''))}
-                      onKeyDown={e => e.key === 'Enter' && handleRegisterVerify()}
-                      style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
-                      autoFocus
-                    />
-                    <div className="form-hint">Код отправлен на {email}. Действителен 10 минут.</div>
-                  </div>
-                  <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterVerify} disabled={loading}>
-                    {loading ? 'Проверка...' : 'Создать аккаунт'}
-                  </button>
-                  <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
-                    <span style={{ color: 'var(--text-3)' }}>Не пришёл код?</span>{' '}
-                    <span
-                      onClick={() => { if (!loading) handleResendRegisterCode(); }}
-                      style={{ color: 'var(--primary)', fontWeight: 600, cursor: loading ? 'default' : 'pointer' }}
-                    >
-                      Отправить заново
-                    </span>
-                  </div>
-                  <button
-                    className="btn btn--ghost btn--sm btn--full"
-                    onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); }}
-                  >
-                    ← Назад
-                  </button>
-                </>
+          {EMAIL_REGISTER_ENABLED && (
+            <>
+              {/* ── Email ────────────────────────────────────────────────────── */}
+              <button
+                type="button"
+                className={`method-btn${activeMethod === 'email' ? ' active' : ''}`}
+                onClick={() => pickMethod('email')}
+              >
+                По Email
+              </button>
+              {activeMethod === 'email' && (
+                <div className="method-form">
+                  {error && <div className="alert alert--error">{error}</div>}
+                  {success && regStep === 'code' && <div className="alert alert--success">{success}</div>}
+                  {regStep === 'form' ? (
+                    <>
+                      <div className="form-field">
+                        <label className="form-label">Имя (необязательно)</label>
+                        <input className="input" placeholder="Алексей" value={name} onChange={e => setName(e.target.value)} />
+                      </div>
+                      <div className="form-field">
+                        <label className="form-label">Email</label>
+                        <input className="input" type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} />
+                      </div>
+                      <div className="form-field">
+                        <label className="form-label">Пароль</label>
+                        <input
+                          className="input" type="password" placeholder="Минимум 8 символов"
+                          value={password} onChange={e => setPassword(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleRegisterRequest()}
+                        />
+                        <div className="form-hint">Минимум 8 символов</div>
+                      </div>
+                      <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterRequest} disabled={loading}>
+                        {loading ? 'Отправка кода...' : 'Получить код'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="form-field">
+                        <label className="form-label">6-значный код из email</label>
+                        <input
+                          className="input"
+                          placeholder="123456"
+                          value={regCode}
+                          maxLength={6}
+                          inputMode="numeric"
+                          onChange={e => setRegCode(e.target.value.replace(/\D/g, ''))}
+                          onKeyDown={e => e.key === 'Enter' && handleRegisterVerify()}
+                          style={{ textAlign: 'center', fontSize: '1.5rem', letterSpacing: '0.2em', fontWeight: 700 }}
+                          autoFocus
+                        />
+                        <div className="form-hint">Код отправлен на {email}. Действителен 10 минут.</div>
+                      </div>
+                      <button className="btn btn--primary btn--lg btn--full" onClick={handleRegisterVerify} disabled={loading}>
+                        {loading ? 'Проверка...' : 'Создать аккаунт'}
+                      </button>
+                      <div style={{ textAlign: 'center', fontSize: '0.875rem' }}>
+                        <span style={{ color: 'var(--text-3)' }}>Не пришёл код?</span>{' '}
+                        <span
+                          onClick={() => { if (!loading) handleResendRegisterCode(); }}
+                          style={{ color: 'var(--primary)', fontWeight: 600, cursor: loading ? 'default' : 'pointer' }}
+                        >
+                          Отправить заново
+                        </span>
+                      </div>
+                      <button
+                        className="btn btn--ghost btn--sm btn--full"
+                        onClick={() => { setRegStep('form'); setRegCode(''); setError(''); setSuccess(''); }}
+                      >
+                        ← Назад
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
 
           <button type="button" className={`method-btn${activeMethod === 'sms' ? ' active' : ''}`} onClick={() => pickMethod('sms')}>По SMS</button>
@@ -497,8 +508,9 @@ const AuthPage = ({ mode: initialMode, onLogin, onNavigate, botConfig }) => {
           {/* ── Telegram ─────────────────────────────────────────────────── */}
           {/* NB: kept on the LOGIN screen even though registration via TG is
               disabled — 14k+ existing users have TG-only accounts and must
-              still be able to log in. Registration's TG block is gated by
-              TG_AUTH_ENABLED above. */}
+              still be able to log in. Same story for Email below. Registration's
+              TG/Email blocks are gated by TG_AUTH_ENABLED / EMAIL_REGISTER_ENABLED
+              above (both false since 2026-07-28: registration is SMS-only now). */}
           <button
             type="button"
             className={`method-btn${activeMethod === 'tg' ? ' active' : ''}`}

@@ -39,6 +39,15 @@ class EnterData(StatesGroup):
     pf = State()
 
 
+async def _reask_period(message, state: FSMContext):
+    """FSM-данные без 'days': стейт стёрт («Назад»/меню делают state.finish()),
+    а старая клавиатура с pf:enter-pf осталась в чате. Просим период заново
+    вместо KeyError."""
+    STR = get_string('str_enter_days')
+    await message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
+    await state.set_state(EnterData.period.state)
+
+
 @dp.callback_query_handler(text_startswith="tarifs:", state='*')
 async def tarif(call: CallbackQuery, state: FSMContext, user_id: int):
     logger.info("tarif callback: tg_id=%s data=%s", call.from_user.id, call.data)
@@ -81,9 +90,13 @@ async def pf(call: CallbackQuery, state: FSMContext, user_id: int):
         await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
         await EnterData.period.set()
     elif call_data[1] == "enter-pf":
-        STR = get_string('str_enter_pf')
-        await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
-        await EnterData.pf.set()
+        state_data = await state.get_data()
+        if 'days' not in state_data:
+            await _reask_period(call.message, state)
+        else:
+            STR = get_string('str_enter_pf')
+            await call.message.answer(STR, reply_markup=user_back_kb('tarifs:pf'))
+            await EnterData.pf.set()
     else:
         async with state.proxy() as data:
             days = call.data.split("-")[0].split(":")[1]
@@ -128,7 +141,10 @@ async def enter_period_func(message: types.Message, state: FSMContext, user_id: 
 @dp.message_handler(state=EnterData.pf)
 async def enter_pf_func(message: types.Message, state: FSMContext, user_id: int):
     state_data = await state.get_data()
-    days = state_data['days']
+    days = state_data.get('days')
+    if days is None:
+        await _reask_period(message, state)
+        return
     if message.text.isdigit() and int(message.text) >= 5:
         async with state.proxy() as data:
             days_str = get_days_suffix(days)

@@ -19,6 +19,26 @@ from services.order_links_dispatcher import run_dispatcher_loop
 from services.payment_expiry import run_expiry_loop
 from utils.sqlite3 import create_db
 
+def configure_logging() -> None:
+    """Настраивает root-логгер, если это ещё не сделал __main__.py.
+
+    Standalone uvicorn (docker-compose, сервис api) не проходит через
+    __main__.py — единственное место, где раньше вызывался
+    logging.basicConfig(...). Без этого root-логгер остаётся на уровне
+    WARNING без хендлеров, и любой logger.info() из кода приложения
+    (services/*, web/routers/*) молча пропадает из `docker logs`.
+    logging.basicConfig — no-op, если root уже настроен, поэтому в
+    совмещённом bot+api процессе (__main__.py уже вызвал basicConfig до
+    импорта web.main) повторный вызов ничего не меняет.
+    """
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+
+
+configure_logging()
+
 logger = logging.getLogger(__name__)
 
 

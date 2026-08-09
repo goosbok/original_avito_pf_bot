@@ -970,8 +970,9 @@ def get_schema_statements() -> list[tuple[str, str, int]]:
             "external_id TEXT,"
             "created_at TIMESTAMP NOT NULL,"
             "dispatch_attempts INTEGER NOT NULL DEFAULT 0,"
+            "search_link TEXT,"
             "FOREIGN KEY (order_id) REFERENCES orders(increment))",
-            13,
+            14,
         ),
         (
             "avito_ad_phrase_cache",
@@ -1100,6 +1101,16 @@ def apply_phase2_migrations():
             if 'dispatch_attempts' not in existing_ol:
                 con.execute("ALTER TABLE order_links ADD COLUMN dispatch_attempts INTEGER NOT NULL DEFAULT 0")
                 print("order_links.dispatch_attempts added (existing rows defaulted to 0)")
+
+        # === order_links.search_link (поисковая фраза, отправленная в биза) ===
+        # Заполняется dispatcher'ом при переводе ссылки в in_work. Для строк,
+        # отправленных до релиза, восстанавливается скриптом
+        # scripts/backfill_order_links_search_link.py из avito_ad_phrase_cache.
+        if ol_exists:
+            existing_ol_sl = {row['name'] for row in con.execute("PRAGMA table_info(order_links)").fetchall()}
+            if 'search_link' not in existing_ol_sl:
+                con.execute("ALTER TABLE order_links ADD COLUMN search_link TEXT")
+                print("order_links.search_link added (existing rows default to NULL)")
 
         # === auth_providers.verified ===
         existing_ap = {row['name'] for row in con.execute("PRAGMA table_info(auth_providers)").fetchall()}

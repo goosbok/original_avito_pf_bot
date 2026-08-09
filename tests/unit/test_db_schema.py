@@ -77,7 +77,7 @@ def test_order_links_table_in_schema(tmp_db):
         "id", "order_id", "url", "status", "delivery_mode",
         "deadline_at", "started_at", "done_at", "failed_at",
         "failure_reason", "external_id", "created_at",
-        "dispatch_attempts",
+        "dispatch_attempts", "search_link",
     }
 
 

@@ -149,7 +149,8 @@ def _dispatch_one(link_id: int, order: dict) -> None:
             _breaker.record_success()
             from services.order_links import mark_in_work
             mark_in_work(link_id, delivery_mode="auto",
-                         deadline_at=compute_deadline(order), external_id=existing)
+                         deadline_at=compute_deadline(order), external_id=existing,
+                         search_link=phrase)
             logger.info("dispatch.dedup link=%s adopted external_id=%s",
                         link_id, existing)
             return
@@ -162,7 +163,8 @@ def _dispatch_one(link_id: int, order: dict) -> None:
     from services.order_links import mark_in_work
     deadline = compute_deadline(order)
     mark_in_work(link_id, delivery_mode="auto",
-                 deadline_at=deadline, external_id=external_id)
+                 deadline_at=deadline, external_id=external_id,
+                 search_link=phrase)
 
 
 DISPATCHER_LOOP_INTERVAL_SECONDS = 5 * 60  # 5 минут
@@ -395,7 +397,8 @@ def force_dispatch(
         from services.order_links import mark_in_work
         try:
             mark_in_work(link_id, delivery_mode="auto",
-                         deadline_at=deadline_cached, external_id=external_id)
+                         deadline_at=deadline_cached, external_id=external_id,
+                         search_link=phrase)
         except InvalidLinkTransition as exc:
             # Race: штатный dispatcher успел забрать ссылку между нашими
             # SELECT и UPDATE. submit_link уже создал задачу в API — у

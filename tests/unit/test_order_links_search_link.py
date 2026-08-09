@@ -1,5 +1,6 @@
 """Колонка order_links.search_link: схема, персист, dispatcher."""
 import sqlite3
+from unittest.mock import patch
 
 from services.db import connect
 from services.order_links import create_links
@@ -99,3 +100,80 @@ def test_repeated_mark_in_work_does_not_overwrite_phrase(tmp_db):
         row = con.execute("SELECT search_link FROM order_links WHERE id=?",
                           (link_id,)).fetchone()
     assert row[0] == "первая-фраза"
+
+
+def _seed_pending_auto_link(tmp_db, url="https://www.avito.ru/moskva/mebel/divan_1234567890"):
+    """Заказ + одна pending-ссылка. Возвращает (order_id, link_id)."""
+    oid = _seed_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=oid, urls=[url])
+        con.commit()
+    with connect() as con:
+        link_id = int(con.execute("SELECT id FROM order_links").fetchone()["id"])
+    return oid, link_id
+
+
+def test_dispatch_one_writes_phrase_on_success(tmp_db):
+    from services.order_links_dispatcher import _dispatch_one
+
+    oid, link_id = _seed_pending_auto_link(tmp_db)
+    with connect() as con:
+        order = dict(con.execute("SELECT * FROM orders WHERE increment=?",
+                                 (oid,)).fetchone())
+
+    with patch("services.order_links_dispatcher.classify",
+               return_value=("auto", "https://avito.ru/search?q=диван")), \
+         patch("services.order_links_dispatcher.submit_link",
+               return_value="ext-1"):
+        _dispatch_one(link_id, order)
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT status, external_id, search_link "
+                          "FROM order_links WHERE id=?", (link_id,)).fetchone()
+    assert row[0] == "in_work"
+    assert row[1] == "ext-1"
+    assert row[2] == "https://avito.ru/search?q=диван"
+
+
+def test_dispatch_one_writes_phrase_on_adopt(tmp_db):
+    """API упал, но задача у биза уже есть — усыновляем и всё равно пишем фразу."""
+    from services.exceptions import ExecutorAPIError
+    from services.order_links_dispatcher import _dispatch_one
+
+    oid, link_id = _seed_pending_auto_link(tmp_db)
+    with connect() as con:
+        order = dict(con.execute("SELECT * FROM orders WHERE increment=?",
+                                 (oid,)).fetchone())
+
+    with patch("services.order_links_dispatcher.classify",
+               return_value=("auto", "фраза-adopt")), \
+         patch("services.order_links_dispatcher.submit_link",
+               side_effect=ExecutorAPIError("500")), \
+         patch("services.order_links_dispatcher.find_existing_task",
+               return_value="ext-adopted"):
+        _dispatch_one(link_id, order)
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT status, external_id, search_link "
+                          "FROM order_links WHERE id=?", (link_id,)).fetchone()
+    assert row[0] == "in_work"
+    assert row[1] == "ext-adopted"
+    assert row[2] == "фраза-adopt"
+
+
+def test_force_dispatch_writes_phrase(tmp_db):
+    from services.order_links_dispatcher import force_dispatch
+
+    oid, link_id = _seed_pending_auto_link(tmp_db)
+
+    with patch("services.order_links_dispatcher.classify",
+               return_value=("auto", "фраза-force")), \
+         patch("services.order_links_dispatcher.submit_link",
+               return_value="ext-force"):
+        results = force_dispatch(oid, [link_id])
+
+    assert results[0].success is True
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT search_link FROM order_links WHERE id=?",
+                          (link_id,)).fetchone()
+    assert row[0] == "фраза-force"

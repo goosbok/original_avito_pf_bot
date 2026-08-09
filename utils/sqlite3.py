@@ -632,6 +632,34 @@ def get_pending_manual_links_due_today():
         )
         return con.execute(sql).fetchall()
 
+
+def get_auto_launched_links(days: int = 30):
+    """Auto-ссылки, отправленные в биза за последние `days` дней.
+
+    Источник вкладки «Авто запуски». Фильтр по `started_at` — это момент,
+    когда ссылка реально ушла исполнителю (проставляется mark_in_work).
+    `delivery_mode='auto' AND started_at IS NOT NULL` отсекает и manual, и
+    pending-ссылки, которые до биза не доехали.
+
+    Порядок — новыми сверху, чтобы вчерашняя партия была на первом экране.
+    """
+    with sqlite3.connect(path_db) as con:
+        con.row_factory = dict_factory
+        sql = (
+            "SELECT "
+            "  o.increment AS order_id, o.user_id, o.position_name, o.contacts, "
+            "  ol.url, ol.search_link, ol.status AS link_status, "
+            "  ol.started_at, ol.deadline_at, ol.external_id "
+            "FROM order_links ol "
+            "JOIN orders o ON o.increment = ol.order_id "
+            "WHERE ol.delivery_mode='auto' "
+            "AND ol.started_at IS NOT NULL "
+            "AND date(ol.started_at) >= date('now', ?) "
+            "ORDER BY ol.started_at DESC, ol.id DESC"
+        )
+        return con.execute(sql, (f"-{int(days)} days",)).fetchall()
+
+
 # Получение всех заказов в зависимости от статуса
 def all_orders_by_status(status):
     array = []

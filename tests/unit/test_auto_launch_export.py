@@ -1,6 +1,6 @@
 """Планировщик ежедневной выгрузки авто-запусков."""
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -97,3 +97,75 @@ async def test_run_once_on_failure_keeps_day_unmarked(tmp_db):
 
     assert ale._last_run_date() is None
     assert sent[0][1] == "errors"
+
+
+@pytest.mark.asyncio
+async def test_loop_returns_immediately_when_disabled(tmp_db):
+    """При выключенном флаге луп не должен даже смотреть на _is_due/run_once."""
+    from services import auto_launch_export as ale
+
+    with patch.object(ale.config, "PF_AUTO_EXPORT_ENABLED", False), \
+         patch.object(ale, "run_once", AsyncMock()) as run_once_mock, \
+         patch.object(ale, "_is_due") as is_due_mock:
+        await ale.run_auto_export_loop()
+
+    run_once_mock.assert_not_called()
+    is_due_mock.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_boot_check_failure_does_not_crash_loop(tmp_db):
+    """sqlite-ошибка в _is_due на старте не должна ронять корутину лупа."""
+    from services import auto_launch_export as ale
+
+    class _StopLoop(Exception):
+        pass
+
+    sleep_calls = []
+
+    async def _fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        raise _StopLoop()
+
+    with patch.object(ale.config, "PF_AUTO_EXPORT_ENABLED", True), \
+         patch.object(ale, "_is_due", side_effect=RuntimeError("database is locked")), \
+         patch.object(ale, "run_once", AsyncMock()) as run_once_mock, \
+         patch.object(ale.asyncio, "sleep", _fake_sleep):
+        with pytest.raises(_StopLoop):
+            await ale.run_auto_export_loop()
+
+    # Boot-check упал целиком, поэтому catch-up run_once не вызывался, но
+    # выполнение продолжилось в while-цикл (о чём говорит сам факт,
+    # что мы дошли до _fake_sleep и получили _StopLoop, а не RuntimeError).
+    run_once_mock.assert_not_called()
+    assert sleep_calls
+
+
+@pytest.mark.asyncio
+async def test_loop_iter_failure_falls_back_to_fixed_delay(tmp_db):
+    """Падение до собственного sleep (например, при расчёте delay) не должно
+    превращать while True в busy-loop — луп обязан заснуть на фиксированную
+    паузу перед следующей попыткой."""
+    from services import auto_launch_export as ale
+
+    class _StopLoop(Exception):
+        pass
+
+    sleep_calls = []
+
+    async def _fake_sleep(seconds):
+        sleep_calls.append(seconds)
+        if len(sleep_calls) >= 2:
+            raise _StopLoop()
+
+    with patch.object(ale.config, "PF_AUTO_EXPORT_ENABLED", True), \
+         patch.object(ale, "_is_due", return_value=False), \
+         patch.object(ale, "next_run_at", side_effect=RuntimeError("database is locked")), \
+         patch.object(ale.asyncio, "sleep", _fake_sleep):
+        with pytest.raises(_StopLoop):
+            await ale.run_auto_export_loop()
+
+    assert sleep_calls == [
+        ale._LOOP_ERROR_RETRY_DELAY_SEC,
+        ale._LOOP_ERROR_RETRY_DELAY_SEC,
+    ]

@@ -1338,8 +1338,32 @@ async def run_once() -> None:
         logger.exception("auto_export.notify_failed date=%s", today)
 
 
+# Фолбэк-пауза перед повторной попыткой, если итерация лупа упала до того,
+# как успела заснуть сама (например, _is_due/next_run_at словили
+# "database is locked"). Без него падение на вычислении задержки превратило
+# бы while True в busy-loop, молотящий CPU без единой паузы.
+_LOOP_ERROR_RETRY_DELAY_SEC = 300
+
+
 async def run_auto_export_loop() -> None:
-    """Cron-луп: догон пропуска при старте, дальше раз в сутки в час X."""
+    """Cron-луп: догон пропуска при старте, дальше раз в сутки в час X.
+
+    В отличие от соседних лупов (run_refresh_loop, run_deadline_loop), которые
+    спят фиксированный интервал, этот спит до конкретного времени hour:00 МСК —
+    так и должно быть для «запусти ровно в 06:00», а не «раз в 24 часа от
+    произвольного момента старта контейнера». run_once() всегда берёт текущую
+    дату заново в момент своего вызова (не из снапшота `now`, сделанного до
+    sleep), поэтому скачок системных часов во время сна в худшем случае
+    сдвинет фактический час запуска, но не приведёт ни к пропуску дня, ни к
+    пометке в settings не той даты.
+
+    Тело каждой итерации обёрнуто в try/except (по образцу run_refresh_loop):
+    сырые вызовы sqlite3 в _is_due/_mark_run_done могут бросить
+    OperationalError ("database is locked") в проекте с несколькими
+    писателями, и без защиты это исключение выходило бы из корутины и
+    молча убивало бы фоновую задачу до рестарта контейнера — без единого
+    алерта, потому что send_admins на этом пути даже не вызывается.
+    """
     if not config.PF_AUTO_EXPORT_ENABLED:
         logger.info("auto_export.loop disabled (PF_AUTO_EXPORT_ENABLED=false)")
         return
@@ -1347,16 +1371,26 @@ async def run_auto_export_loop() -> None:
     hour = config.PF_AUTO_EXPORT_HOUR_MSK
     logger.info("auto_export.loop start hour=%s МСК", hour)
 
-    now = now_msk()
-    if _is_due(now):
-        logger.info("auto_export.catchup date=%s", now.date().isoformat())
-        await run_once()
+    try:
+        now = now_msk()
+        if _is_due(now):
+            logger.info("auto_export.catchup date=%s", now.date().isoformat())
+            await run_once()
+    except Exception:  # noqa: BLE001
+        logger.exception("auto_export.boot_check_failed")
 
     while True:
-        now = now_msk()
-        delay = (next_run_at(now, hour=hour) - now).total_seconds()
-        await asyncio.sleep(max(delay, 1.0))
-        await run_once()
+        try:
+            now = now_msk()
+            delay = (next_run_at(now, hour=hour) - now).total_seconds()
+            await asyncio.sleep(max(delay, 1.0))
+            await run_once()
+        except Exception:  # noqa: BLE001
+            logger.exception("auto_export.loop_iter_failed")
+            # Падение могло случиться до asyncio.sleep выше (например, при
+            # вычислении delay) — досыпаем фиксированную паузу, чтобы не
+            # уйти в busy-loop, крутящийся без единой остановки.
+            await asyncio.sleep(_LOOP_ERROR_RETRY_DELAY_SEC)
 ```
 
 - [ ] **Step 4: Убедиться, что тесты расписания проходят**

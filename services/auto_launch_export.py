@@ -12,7 +12,6 @@ from datetime import datetime, timedelta, timezone
 
 from data import config
 from utils.googlesheets import create_auto_tasks_sheet
-from utils.sender import send_admins
 from utils.sqlite3 import edit_setting, get_setting
 
 logger = logging.getLogger(__name__)
@@ -58,6 +57,13 @@ def _is_due(now: datetime) -> bool:
 
 async def run_once() -> None:
     """Одна выгрузка + уведомление. Ошибки логирует, наружу не пускает."""
+    # Ленивый импорт: send_admins тянет data.loader (реальный Bot(token=...)),
+    # который валидирует BOT_TOKEN уже на импорте. Top-level импорт сломал бы
+    # старт api-контейнера без .env — по образцу соседних лупов/сервисов
+    # (services/notifications.py, services/order_links_dispatcher.py и т.д.),
+    # тянущих utils.sender лениво.
+    from utils.sender import send_admins
+
     today = now_msk().date().isoformat()
     logger.info("auto_export.start date=%s", today)
     try:

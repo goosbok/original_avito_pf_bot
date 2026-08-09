@@ -68,7 +68,7 @@ async def test_run_once_marks_day_and_notifies(tmp_db):
 
     with patch.object(ale, "export_auto_launches",
                       return_value="https://example.test/auto"), \
-         patch.object(ale, "send_admins", _fake_send), \
+         patch("utils.sender.send_admins", _fake_send), \
          patch.object(ale, "now_msk",
                       return_value=datetime(2026, 8, 9, 6, 1, tzinfo=_MSK)):
         await ale.run_once()
@@ -90,7 +90,7 @@ async def test_run_once_on_failure_keeps_day_unmarked(tmp_db):
 
     with patch.object(ale, "export_auto_launches",
                       side_effect=RuntimeError("google down")), \
-         patch.object(ale, "send_admins", _fake_send), \
+         patch("utils.sender.send_admins", _fake_send), \
          patch.object(ale, "now_msk",
                       return_value=datetime(2026, 8, 9, 6, 1, tzinfo=_MSK)):
         await ale.run_once()

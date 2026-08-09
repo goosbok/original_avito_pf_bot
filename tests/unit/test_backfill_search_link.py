@@ -1,5 +1,6 @@
 """Бэкфилл order_links.search_link из avito_ad_phrase_cache."""
 import sqlite3
+from unittest.mock import patch
 
 from utils.dates import now_iso
 
@@ -87,6 +88,40 @@ def test_backfill_is_idempotent(tmp_db):
 
     assert first["filled"] == 1
     assert second["filled"] == 0
+
+
+def test_backfill_does_not_overwrite_concurrent_write(tmp_db):
+    """Guard search_link IS NULL в UPDATE защищает от гонки с dispatcher'ом:
+    если между нашим SELECT и UPDATE кто-то параллельно уже проставил
+    search_link (например, dispatcher отправил задачу в биза прямо сейчас),
+    бэкфилл не должен затирать это значение фразой из кэша."""
+    from scripts.backfill_order_links_search_link import backfill
+
+    _seed_cache(tmp_db, "4444444444", "фраза-из-кэша")
+    ids = _seed(tmp_db, [
+        ("https://www.avito.ru/a/x_4444444444", "auto", None),
+    ])
+    link_id = ids[0]
+
+    def racing_lookup(ad_id):
+        # Имитируем конкурента: он пишет в БД до того, как lookup() вернёт
+        # результат бэкфиллу.
+        with sqlite3.connect(tmp_db) as con:
+            con.execute(
+                "UPDATE order_links SET search_link=? WHERE id=?",
+                ("фраза-от-конкурента", link_id),
+            )
+            con.commit()
+        return "фраза-из-кэша"
+
+    with patch("scripts.backfill_order_links_search_link.lookup",
+               side_effect=racing_lookup):
+        backfill()
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT search_link FROM order_links WHERE id=?",
+                          (link_id,)).fetchone()
+    assert row[0] == "фраза-от-конкурента"
 
 
 def test_backfill_counts_misses_without_crashing(tmp_db):

@@ -73,6 +73,7 @@ def _transition(
     deadline_at: str | None = None,
     external_id: str | None = None,
     failure_reason: str | None = None,
+    search_link: str | None = None,
 ) -> None:
     """Атомарно перевести ссылку в новый статус.
 
@@ -116,6 +117,9 @@ def _transition(
         if external_id is not None:
             fields.append("external_id = ?")
             values.append(external_id)
+        if search_link is not None:
+            fields.append("search_link = ?")
+            values.append(search_link)
     elif to_status == "done":
         fields.append("done_at = ?")
         values.append(now)
@@ -217,8 +221,13 @@ def mark_in_work(
     delivery_mode: str,
     deadline_at: str,
     external_id: str | None = None,
+    search_link: str | None = None,
 ) -> tuple[str, str] | None:
     """pending → in_work. Пересчитывает order.status в той же транзакции.
+
+    `search_link` — поисковая фраза, реально отправленная в биза. None
+    оставляет колонку нетронутой (manual-ссылки, legacy-вызовы).
+
     Возвращает (old, new) если статус заказа сменился, иначе None.
     Caller отвечает за дёрнуть notify_order_status_changed при не-None возврате."""
     with connect() as con:
@@ -226,7 +235,7 @@ def mark_in_work(
         _transition(
             con, link_id=link_id, to_status="in_work",
             delivery_mode=delivery_mode, deadline_at=deadline_at,
-            external_id=external_id,
+            external_id=external_id, search_link=search_link,
         )
         result = _recompute_order_status(con, order_id)
         con.commit()

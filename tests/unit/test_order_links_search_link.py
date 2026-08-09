@@ -35,3 +35,67 @@ def test_search_link_defaults_to_null(tmp_db):
     with sqlite3.connect(tmp_db) as con:
         row = con.execute("SELECT search_link FROM order_links").fetchone()
     assert row[0] is None
+
+
+def test_mark_in_work_persists_search_link(tmp_db):
+    from services.order_links import mark_in_work
+
+    oid = _seed_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=oid, urls=["https://avito.ru/a_1234567890"])
+        con.commit()
+    with connect() as con:
+        link_id = int(con.execute("SELECT id FROM order_links").fetchone()["id"])
+
+    mark_in_work(link_id, delivery_mode="auto", deadline_at="2026-08-20T00:00:00+03:00",
+                 external_id="777", search_link="https://avito.ru/search?q=диван")
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute(
+            "SELECT status, external_id, search_link FROM order_links WHERE id=?",
+            (link_id,),
+        ).fetchone()
+    assert row[0] == "in_work"
+    assert row[1] == "777"
+    assert row[2] == "https://avito.ru/search?q=диван"
+
+
+def test_mark_in_work_without_search_link_leaves_null(tmp_db):
+    from services.order_links import mark_in_work
+
+    oid = _seed_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=oid, urls=["https://avito.ru/a_1234567890"])
+        con.commit()
+    with connect() as con:
+        link_id = int(con.execute("SELECT id FROM order_links").fetchone()["id"])
+
+    mark_in_work(link_id, delivery_mode="manual",
+                 deadline_at="2026-08-20T00:00:00+03:00")
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT search_link FROM order_links WHERE id=?",
+                          (link_id,)).fetchone()
+    assert row[0] is None
+
+
+def test_repeated_mark_in_work_does_not_overwrite_phrase(tmp_db):
+    """Повторный вызов — no-op по контракту _transition, фраза сохраняется."""
+    from services.order_links import mark_in_work
+
+    oid = _seed_order(tmp_db)
+    with connect() as con:
+        create_links(con, order_id=oid, urls=["https://avito.ru/a_1234567890"])
+        con.commit()
+    with connect() as con:
+        link_id = int(con.execute("SELECT id FROM order_links").fetchone()["id"])
+
+    mark_in_work(link_id, delivery_mode="auto", deadline_at="2026-08-20T00:00:00+03:00",
+                 search_link="первая-фраза")
+    mark_in_work(link_id, delivery_mode="auto", deadline_at="2026-08-20T00:00:00+03:00",
+                 search_link="вторая-фраза")
+
+    with sqlite3.connect(tmp_db) as con:
+        row = con.execute("SELECT search_link FROM order_links WHERE id=?",
+                          (link_id,)).fetchone()
+    assert row[0] == "первая-фраза"

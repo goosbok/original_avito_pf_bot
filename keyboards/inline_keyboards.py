@@ -1051,6 +1051,12 @@ def orders_kb():
         )
         keyboard.row(
             InlineKeyboardButton(
+                text="🤖 Авто запуски в шит",
+                callback_data="gsheets_auto"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
                 text="🧪 Test auto",
                 callback_data="test_auto_dispatch",
             )

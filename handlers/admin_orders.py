@@ -948,6 +948,41 @@ async def gsheets_manual(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
 
+@dp.callback_query_handler(text="gsheets_auto", state='*')
+async def gsheets_auto(call: types.CallbackQuery, state: FSMContext):
+    """Обновить вкладку «Авто запуски» по требованию.
+
+    Работает независимо от PF_AUTO_EXPORT_ENABLED — флаг гейтит только
+    фоновый луп."""
+    from utils.googlesheets import create_auto_tasks_sheet
+    chat_id = call.message.chat.id
+    try:
+        await call.message.delete()
+    except Exception:
+        logger.debug("could not delete message")
+    STICKER = get_setting('wait_sticker')
+    msg = await bot.send_message(chat_id=chat_id,
+                                  text="⏳ Готовлю Авто запуски...")
+    stick = await bot.send_sticker(chat_id=chat_id, sticker=STICKER) if STICKER else None
+    try:
+        sheet_url = create_auto_tasks_sheet()
+        await bot.send_message(chat_id=chat_id, text=sheet_complete,
+                                reply_markup=gsheets_url(sheet_url))
+    except Exception:
+        logger.exception('googlesheets: auto tasks failed')
+        await bot.send_message(chat_id=chat_id,
+                                text="⚠️ Ошибка при генерации Авто запусков!")
+    finally:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg.message_id)
+            if stick:
+                await bot.delete_message(chat_id=chat_id,
+                                          message_id=stick.message_id)
+        except Exception:
+            logger.debug("could not delete progress messages")
+    await state.finish()
+
+
 @dp.callback_query_handler(text="fail_order", state='*')
 async def fail_order_prompt(call: types.CallbackQuery, state: FSMContext):
     """Шаг 1: спросить ID заказа."""

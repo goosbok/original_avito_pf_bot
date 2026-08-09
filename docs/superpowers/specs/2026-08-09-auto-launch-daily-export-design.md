@@ -241,8 +241,13 @@ wait-стикер, вызвать `create_auto_tasks_sheet()`, отдать сс
 | Бэкфилл: промах кэша | строка пропускается, считается в лог, не ошибка |
 | `mark_in_work` без `search_link` | `NULL`, выгрузка покажет пустую ячейку — не падаем |
 
-Логи: `auto_export.start`, `auto_export.done rows=N url=…`,
-`auto_export.failed`, `auto_export.catchup date=…`.
+Логи: `auto_export.start`, `auto_export.done date=… url=…`,
+`auto_export.failed`, `auto_export.catchup date=…`,
+`auto_export.boot_check_failed`, `auto_export.loop_iter_failed`.
+
+Число выгруженных строк пишет соседняя строка из `utils/googlesheets.py`
+(`gsheets: 'Авто запуски' updated, N rows, url=…`) — дублировать его в
+`auto_export.done` не стали.
 
 ## Тесты
 

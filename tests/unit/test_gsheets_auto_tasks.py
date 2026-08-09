@@ -12,6 +12,19 @@ def _iso_days_ago(days: int) -> str:
             - timedelta(days=days)).isoformat()
 
 
+def _iso_evening_days_ago(days: int) -> str:
+    """UTC ISO на 23:30 конкретных суток — вечерний запуск.
+
+    В МСК (UTC+3) это уже 02:30 СЛЕДУЮЩЕГО календарного дня. Нужен тесту
+    на конверсию колонки «Старт»: если бы дата бралась сырым срезом ISO
+    без перевода в МСК, она бы совпала с UTC-датой, а не ушла на день
+    вперёд — тест должен ловить именно эту регрессию.
+    """
+    base_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
+    return datetime(base_date.year, base_date.month, base_date.day, 23, 30,
+                    tzinfo=timezone.utc).isoformat()
+
+
 def _seed_link(tmp_db, *, delivery_mode, started_at, status='in_work',
                url='https://www.avito.ru/a/x_1234567890', search_link='фраза',
                external_id='ext-1', deadline_at=None, position_name='3/100',
@@ -149,6 +162,27 @@ def test_create_auto_tasks_sheet_headers_and_order(tmp_db):
     assert captured["columns"][7][1] == 'biza-42'
     assert captured["columns"][8][1] == 1
     assert captured["columns"][9][1] == 'in_work'
+
+
+def test_start_column_converts_to_msk_not_raw_utc_slice(tmp_db):
+    """Регрессия: «Старт» обязан идти через _fmt_msk_date, а не сырой срез ISO.
+
+    Вечерний UTC-запуск (23:30 UTC) в московском времени — это уже
+    следующие сутки. Если бы колонка «Старт» строилась срезом первых 10
+    символов started_at без конверсии в МСК, она показала бы UTC-дату —
+    тест бы этого не заметил в другом сценарии, а тут ловит явно.
+    """
+    started_at = _iso_evening_days_ago(1)
+    started_dt = datetime.fromisoformat(started_at)
+    expected_msk_date = (started_dt + timedelta(hours=3)).strftime('%d.%m.%Y')
+    raw_utc_date = started_dt.strftime('%d.%m.%Y')
+    assert expected_msk_date != raw_utc_date  # sanity: сценарий действительно пересекает полночь
+
+    _seed_link(tmp_db, delivery_mode='auto', started_at=started_at)
+
+    _, captured = _run_export()
+
+    assert captured["columns"][4][1] == expected_msk_date
 
 
 def test_contacts_no_and_broken_position_name(tmp_db):

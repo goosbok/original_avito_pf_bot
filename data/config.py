@@ -97,6 +97,16 @@ PF_AUTO_DISPATCH_ENABLED: bool = (
     os.getenv("PF_AUTO_DISPATCH_ENABLED", "false").lower() in ("1", "true", "yes")
 )
 
+# Ежедневная выгрузка авто-запусков в Google Sheets. Флаг гейтит ТОЛЬКО
+# фоновый луп — админская кнопка «Авто запуски в шит» работает всегда,
+# чтобы выгрузку можно было дёрнуть руками до включения расписания.
+PF_AUTO_EXPORT_ENABLED: bool = (
+    os.getenv("PF_AUTO_EXPORT_ENABLED", "false").lower() in ("1", "true", "yes")
+)
+PF_AUTO_EXPORT_HOUR_MSK: int = max(
+    0, min(23, int(os.getenv("PF_AUTO_EXPORT_HOUR_MSK", "6")))
+)
+
 PF_PHRASE_CACHE_CHUNK_DAYS: int = int(
     os.getenv("PF_PHRASE_CACHE_CHUNK_DAYS", "4")
 )

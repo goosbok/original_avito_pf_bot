@@ -77,6 +77,8 @@ def _make_config_stub() -> types.ModuleType:
     stub.PF_AUTO_RATE_METRIC_INTERVAL_H = 1
     stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
     stub.PF_DEFAULT_START_HOUR = 0
+    stub.PF_AUTO_EXPORT_ENABLED = False
+    stub.PF_AUTO_EXPORT_HOUR_MSK = 6
     stub.BIZA_MAX_PER_MIN = 60
     stub.BIZA_BREAKER_ERRORS = 3
     stub.BIZA_COOLDOWN_MIN = 30

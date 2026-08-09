@@ -1,6 +1,7 @@
 """Вкладка 'Авто запуски': запрос выборки и сборка колонок."""
 import sqlite3
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 from utils.dates import now_iso
 
@@ -91,3 +92,86 @@ def test_row_carries_all_export_fields(tmp_db):
     assert row['link_status'] == 'in_work'
     assert row['deadline_at'] == '2026-09-01T00:00:00+03:00'
     assert row['external_id'] == 'biza-42'
+
+
+def _capture_sheet():
+    """Патчит Sheets API и возвращает (context manager, captured dict)."""
+    captured = {}
+
+    def _fake_write(tab, sid, cols, widths):
+        captured["tab"] = tab
+        captured["columns"] = cols
+        captured["widths"] = widths
+        return "https://example.test/auto"
+
+    ctx = [
+        patch("utils.googlesheets._init", return_value=None),
+        patch("utils.googlesheets._require_target", return_value=None),
+        patch("utils.googlesheets._get_or_create_tab", return_value=7),
+        patch("utils.googlesheets._write_tab", side_effect=_fake_write),
+    ]
+    return ctx, captured
+
+
+def _run_export():
+    from utils import googlesheets as gs
+    ctx, captured = _capture_sheet()
+    for c in ctx:
+        c.start()
+    try:
+        url = gs.create_auto_tasks_sheet()
+    finally:
+        for c in ctx:
+            c.stop()
+    return url, captured
+
+
+def test_create_auto_tasks_sheet_headers_and_order(tmp_db):
+    _seed_link(tmp_db, delivery_mode='auto', started_at=_iso_days_ago(1),
+               deadline_at='2026-09-01T00:00:00+03:00', contacts=1,
+               position_name='5/20', external_id='biza-42',
+               search_link='фраза-1')
+
+    url, captured = _run_export()
+
+    assert url == "https://example.test/auto"
+    assert captured["tab"] == "Авто запуски"
+    headers = [col[0] for col in captured["columns"]]
+    assert headers == [
+        'Ссылка с поисковым запросом', 'Ссылка на объявление', 'Контакты',
+        'ПФ в день', 'Старт', 'Крутим до', 'Номер заказа', 'Задача в биза',
+        'ID клиента', 'Статус ссылки',
+    ]
+    assert captured["columns"][0][1] == 'фраза-1'
+    assert captured["columns"][2][1] == 'Да'
+    assert captured["columns"][3][1] == '20'
+    assert captured["columns"][5][1] == '01.09.2026'
+    assert captured["columns"][7][1] == 'biza-42'
+    assert captured["columns"][8][1] == 1
+    assert captured["columns"][9][1] == 'in_work'
+
+
+def test_contacts_no_and_broken_position_name(tmp_db):
+    _seed_link(tmp_db, delivery_mode='auto', started_at=_iso_days_ago(1),
+               contacts=0, position_name='мусор')
+
+    _, captured = _run_export()
+
+    assert captured["columns"][2][1] == 'Нет'
+    assert captured["columns"][3][1] == ''
+
+
+def test_missing_phrase_renders_empty_cell(tmp_db):
+    _seed_link(tmp_db, delivery_mode='auto', started_at=_iso_days_ago(1),
+               search_link=None)
+
+    _, captured = _run_export()
+
+    assert captured["columns"][0][1] == ''
+
+
+def test_empty_selection_writes_headers_only(tmp_db):
+    _, captured = _run_export()
+
+    for col in captured["columns"]:
+        assert len(col) == 1

@@ -10,6 +10,7 @@ email'у с правом Editor, и бот переписывает содерж
     create_sheet()              → "Все заказы"
     create_orders_report()      → "Заказы по юзеру"
     create_refills_report()     → "Пополнения по юзеру"
+    create_auto_tasks_sheet()   → "Авто запуски"
 
 Если какая-то вкладка отсутствует — она создаётся (addSheet).
 """
@@ -36,6 +37,7 @@ TAB_USER_ORDERS = 'Заказы по юзеру'
 TAB_USER_REFILLS = 'Пополнения по юзеру'
 TAB_REVIEWS = 'Отзывы'
 TAB_MANUAL_TASKS = 'Manual задачи'
+TAB_AUTO_TASKS = 'Авто запуски'
 
 
 def _init():
@@ -94,6 +96,27 @@ def _fmt_date_only(s):
         return d.strftime('%d.%m.%Y')
     except (ValueError, TypeError):
         return str(s)
+
+
+def _views_per_day(position_name):
+    """`дни/ПФ` → строка с количеством ПФ в день. Битое значение → ''."""
+    parts = str(position_name or '').split('/')
+    if len(parts) < 2:
+        return ''
+    value = parts[1].strip()
+    return value if value.isdigit() else ''
+
+
+def _fmt_msk_date(value):
+    """Любой известный формат даты → 'dd.mm.yyyy' в московском времени.
+
+    `started_at`/`deadline_at` хранятся в UTC (utils.dates.now_iso), а
+    заказчик сверяется с дашбордом биза по московским суткам — срезать
+    первые 10 символов ISO-строки нельзя, будет сдвиг на день у вечерних
+    запусков. `format_display` уже делает конверсию в МСК и возвращает ''
+    на пустом/битом вводе.
+    """
+    return format_display(value)[:10]
 
 
 def _start_or_order_date(start_date, order_date):
@@ -498,6 +521,63 @@ def create_manual_tasks_sheet():
     )
     logger.info("gsheets: '%s' updated, %d rows, url=%s",
                 TAB_MANUAL_TASKS, len(no) - 1, url)
+    return url
+
+
+def create_auto_tasks_sheet(days=30):
+    """Ссылки, отправленные в биза автоматом за последние `days` дней.
+
+    Вкладка «Авто запуски» — рабочий инструмент заказчика для сверки с
+    дашбордом исполнителя: видно, что улетело, с какой фразой и до какой
+    даты крутим. Колонки 'Номер заказа' и 'Задача в биза' обе нужны —
+    первое наш инкремент, второе id задачи на стороне исполнителя.
+    """
+    _init()
+    _require_target()
+    sheet_id = _get_or_create_tab(TAB_AUTO_TASKS)
+
+    from utils.sqlite3 import get_auto_launched_links
+    rows = get_auto_launched_links(days=days)
+
+    search_links = ['Ссылка с поисковым запросом']
+    ad_links = ['Ссылка на объявление']
+    contacts = ['Контакты']
+    views = ['ПФ в день']
+    start = ['Старт']
+    deadline = ['Крутим до']
+    order_no = ['Номер заказа']
+    biza_no = ['Задача в биза']
+    client = ['ID клиента']
+    link_status = ['Статус ссылки']
+
+    for row in rows:
+        search_links.append(row['search_link'] or '')
+        ad_links.append(row['url'])
+        contacts.append('Да' if row['contacts'] else 'Нет')
+        views.append(_views_per_day(row['position_name']))
+        start.append(_fmt_msk_date(row['started_at']))
+        deadline.append(_fmt_msk_date(row['deadline_at']))
+        order_no.append(row['order_id'])
+        biza_no.append(row['external_id'] or '')
+        client.append(row['user_id'])
+        link_status.append(row['link_status'] or '')
+
+    column_widths = [
+        (0, 2, 500),    # обе ссылки
+        (2, 4, 90),     # Контакты, ПФ в день
+        (4, 6, 100),    # Старт, Крутим до
+        (6, 8, 110),    # Номер заказа, Задача в биза
+        (8, 9, 130),    # ID клиента
+        (9, 10, 110),   # Статус ссылки
+    ]
+    url = _write_tab(
+        TAB_AUTO_TASKS, sheet_id,
+        [search_links, ad_links, contacts, views, start, deadline,
+         order_no, biza_no, client, link_status],
+        column_widths,
+    )
+    logger.info("gsheets: '%s' updated, %d rows, url=%s",
+                TAB_AUTO_TASKS, len(search_links) - 1, url)
     return url
 
 

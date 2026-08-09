@@ -16,16 +16,23 @@
 
 **Тесты гоняются только в Docker.** Локальный `python3`/`pytest` в этом проекте не используется.
 
+**Флаг `--build` обязателен.** `Dockerfile` копирует код внутрь образа
+(`COPY . .`), а `docker compose run` без `--build` переиспользует старый образ —
+твои правки просто не доедут до pytest, и ты будешь смотреть на результаты
+предыдущей версии кода. Пересборка дешёвая: меняется только последний слой.
+
+**Базовая линия — 799 passed** в `tests/unit` на момент старта плана.
+
 Весь набор:
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Один файл или один тест (команда контейнера переопределяется аргументами):
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_auto_launch_export.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_auto_launch_export.py -v
 ```
 
 **Фикстура `tmp_db`** (`tests/conftest.py`) создаёт временную БД с продовой схемой, подменяет `path_database` и прогоняет `apply_phase2_migrations()`. Любой тест, который трогает БД, обязан принимать `tmp_db` первым аргументом.
@@ -111,7 +118,7 @@ def test_search_link_defaults_to_null(tmp_db):
 - [ ] **Step 2: Убедиться, что тест падает**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: `test_order_links_has_search_link_column` FAIL — `assert 'search_link' in cols`.
@@ -164,7 +171,7 @@ docker compose --profile test run --rm test pytest tests/unit/test_order_links_s
 - [ ] **Step 5: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: 2 passed.
@@ -172,7 +179,7 @@ docker compose --profile test run --rm test pytest tests/unit/test_order_links_s
 - [ ] **Step 6: Прогнать весь набор**
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Ожидается: всё зелёное. Счётчик колонок `14` мог сломать тесты, сверяющие схему, — если что-то упало, чини в этом же шаге.
@@ -264,7 +271,7 @@ def test_repeated_mark_in_work_does_not_overwrite_phrase(tmp_db):
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: три новых теста FAIL — `TypeError: mark_in_work() got an unexpected keyword argument 'search_link'`.
@@ -328,7 +335,7 @@ def mark_in_work(
 - [ ] **Step 5: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: 5 passed.
@@ -440,7 +447,7 @@ def test_force_dispatch_writes_phrase(tmp_db):
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: три новых теста FAIL — `assert None == 'https://avito.ru/search?q=диван'` и аналоги.
@@ -484,7 +491,7 @@ docker compose --profile test run --rm test pytest tests/unit/test_order_links_s
 - [ ] **Step 4: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_search_link.py -v
 ```
 
 Ожидается: 8 passed.
@@ -492,7 +499,7 @@ docker compose --profile test run --rm test pytest tests/unit/test_order_links_s
 - [ ] **Step 5: Прогнать существующие тесты dispatcher'а**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_order_links_dispatcher_auto.py tests/unit/test_dispatcher_dedup.py tests/unit/test_force_dispatch.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_order_links_dispatcher_auto.py tests/unit/test_dispatcher_dedup.py tests/unit/test_force_dispatch.py -v
 ```
 
 Ожидается: всё зелёное — сигнатура расширена опциональным аргументом, старые вызовы не сломаны.
@@ -628,7 +635,7 @@ def test_backfill_counts_misses_without_crashing(tmp_db):
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_backfill_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_backfill_search_link.py -v
 ```
 
 Ожидается: 4 FAIL — `ModuleNotFoundError: No module named 'scripts.backfill_order_links_search_link'`.
@@ -718,7 +725,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_backfill_search_link.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_backfill_search_link.py -v
 ```
 
 Ожидается: 4 passed.
@@ -841,7 +848,7 @@ def test_row_carries_all_export_fields(tmp_db):
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_gsheets_auto_tasks.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_gsheets_auto_tasks.py -v
 ```
 
 Ожидается: 4 FAIL — `ImportError: cannot import name 'get_auto_launched_links'`.
@@ -881,7 +888,7 @@ def get_auto_launched_links(days: int = 30):
 - [ ] **Step 4: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_gsheets_auto_tasks.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_gsheets_auto_tasks.py -v
 ```
 
 Ожидается: 4 passed.
@@ -995,7 +1002,7 @@ def test_empty_selection_writes_headers_only(tmp_db):
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_gsheets_auto_tasks.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_gsheets_auto_tasks.py -v
 ```
 
 Ожидается: 4 новых теста FAIL — `AttributeError: module 'utils.googlesheets' has no attribute 'create_auto_tasks_sheet'`.
@@ -1107,7 +1114,7 @@ def create_auto_tasks_sheet(days=30):
 - [ ] **Step 6: Убедиться, что тесты проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_gsheets_auto_tasks.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_gsheets_auto_tasks.py -v
 ```
 
 Ожидается: 8 passed.
@@ -1170,7 +1177,7 @@ PF_AUTO_EXPORT_HOUR_MSK=6             # час выгрузки (0-23 МСК)
 - [ ] **Step 4: Прогнать весь набор**
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Ожидается: всё зелёное, регрессий нет.
@@ -1233,7 +1240,7 @@ def test_next_run_crosses_month_boundary():
 - [ ] **Step 2: Убедиться, что тесты падают**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_auto_launch_export.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_auto_launch_export.py -v
 ```
 
 Ожидается: 4 FAIL — `ModuleNotFoundError: No module named 'services.auto_launch_export'`.
@@ -1355,7 +1362,7 @@ async def run_auto_export_loop() -> None:
 - [ ] **Step 4: Убедиться, что тесты расписания проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_auto_launch_export.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_auto_launch_export.py -v
 ```
 
 Ожидается: 4 passed.
@@ -1435,7 +1442,7 @@ async def test_run_once_on_failure_keeps_day_unmarked(tmp_db):
 - [ ] **Step 6: Убедиться, что все тесты модуля проходят**
 
 ```bash
-docker compose --profile test run --rm test pytest tests/unit/test_auto_launch_export.py -v
+docker compose --profile test run --rm --build test pytest tests/unit/test_auto_launch_export.py -v
 ```
 
 Ожидается: 9 passed. Тесты `_is_due` и `run_once` зелёные сразу — логика уже
@@ -1492,7 +1499,7 @@ from services.auto_launch_export import run_auto_export_loop
 - [ ] **Step 3: Проверить, что приложение импортируется**
 
 ```bash
-docker compose --profile test run --rm test python -c "import web.main; print('ok')"
+docker compose --profile test run --rm --build test python -c "import web.main; print('ok')"
 ```
 
 Ожидается: `ok`.
@@ -1500,7 +1507,7 @@ docker compose --profile test run --rm test python -c "import web.main; print('o
 - [ ] **Step 4: Прогнать весь набор**
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Ожидается: всё зелёное.
@@ -1576,7 +1583,7 @@ async def gsheets_auto(call: types.CallbackQuery, state: FSMContext):
 - [ ] **Step 3: Проверить, что модуль импортируется**
 
 ```bash
-docker compose --profile test run --rm test python -c "import handlers.admin_orders; print('ok')"
+docker compose --profile test run --rm --build test python -c "import handlers.admin_orders; print('ok')"
 ```
 
 Ожидается: `ok`. Если ругается на неизвестное имя (`sheet_complete`,
@@ -1586,7 +1593,7 @@ docker compose --profile test run --rm test python -c "import handlers.admin_ord
 - [ ] **Step 4: Прогнать весь набор**
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Ожидается: всё зелёное.
@@ -1631,7 +1638,7 @@ id задачи у исполнителя, id клиента, статус сс�
 - [ ] **Step 2: Прогнать весь набор тестов**
 
 ```bash
-docker compose --profile test run --rm test
+docker compose --profile test run --rm --build test
 ```
 
 Ожидается: всё зелёное, ни одного skip по новым тестам.

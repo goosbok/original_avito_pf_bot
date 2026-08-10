@@ -56,6 +56,7 @@ class SmspilotGateway:
         if not apikey:
             raise ValueError("SMSPILOT_APIKEY is not set")
         self._apikey = apikey
+        self.last_balance: float | None = None
 
     def send_code(self, phone: str, code: str) -> None:
         to = phone.lstrip("+")
@@ -78,6 +79,13 @@ class SmspilotGateway:
             raise RuntimeError(f"SMSPILOT request failed: {exc}") from exc
 
         payload = resp.json()
+        balance = payload.get("balance")
+        if balance is not None:
+            try:
+                self.last_balance = float(balance)
+            except (TypeError, ValueError):
+                logger.warning("SMSPILOT: could not parse balance %r", balance)
+
         error = payload.get("error")
         if error:
             description = error.get("description_ru") or error.get("description")

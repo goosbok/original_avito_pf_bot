@@ -137,6 +137,31 @@ def test_unlink_when_only_one_provider_400(client, tmp_db):
     assert r.status_code == 400
 
 
+def test_link_telegram_request_bot_cant_reach_user_returns_400(client, tmp_db, monkeypatch):
+    """Telegram 'chat not found' (user never started the bot) must surface as
+    HTTP 400, not a bare 500 — mirrors web/routers/auth_telegram.py behavior."""
+    from unittest.mock import MagicMock
+
+    from services import auth_email
+
+    uid = auth_email.register("linkreach@example.com", "password123")
+
+    fake_response = MagicMock()
+    fake_response.status_code = 400
+    fake_response.text = '{"ok":false,"error_code":400,"description":"Bad Request: chat not found"}'
+    monkeypatch.setattr(
+        "services.auth_telegram.httpx.post",
+        lambda *a, **kw: fake_response,
+    )
+
+    r = client.post("/api/auth/link/telegram/request-code", json={
+        "identifier": "12345",
+    }, headers=_make_headers(uid))
+    assert r.status_code == 400
+    detail = r.json()["detail"]
+    assert "бот" in detail.lower() or "start" in detail.lower() or "bot" in detail.lower()
+
+
 def test_link_telegram_to_email_user(client, tmp_db, monkeypatch):
     from services import auth_email, auth_telegram
     uid = auth_email.register("linkme@example.com", "password123")

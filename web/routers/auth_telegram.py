@@ -5,6 +5,8 @@ POST /api/auth/telegram/verify-code — verify code and return JWT
 """
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException
 
 from services import auth_telegram
@@ -18,7 +20,10 @@ router = APIRouter(prefix="/api/auth/telegram", tags=["auth"])
 @router.post("/request-code", status_code=204, response_model=None)
 async def request_code(body: OTPRequestBody) -> None:
     try:
-        auth_telegram.request_code(body.identifier)
+        # request_code делает синхронный httpx.post к Telegram Bot API — в
+        # отдельный поток, чтобы не блокировать event loop (зависший запрос
+        # иначе замораживает весь API-процесс, как было с YooKassa 2026-07-20).
+        await asyncio.to_thread(auth_telegram.request_code, body.identifier)
     except OTPCooldown as exc:
         raise HTTPException(
             status_code=429,

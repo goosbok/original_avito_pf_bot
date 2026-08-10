@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from services import auth_email, auth_telegram, identity
 from services.exceptions import (
+    BotCantReachUser,
     EmailSendError,
     InvalidCredentials,
     OTPCooldown,
@@ -84,6 +85,8 @@ async def link_telegram_request(
             headers={"Retry-After": str(exc.retry_after_seconds)},
         ) from exc
     except OTPInvalid as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BotCantReachUser as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

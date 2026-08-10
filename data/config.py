@@ -142,3 +142,9 @@ BIZA_MAX_ATTEMPTS: int = max(1, int(os.getenv("BIZA_MAX_ATTEMPTS", "2")))
 # ── Welcome bonus ────────────────────────────────────────────────────────────
 # Приветственный бонус новым пользователям, в рублях. 0 = выключено.
 WELCOME_BONUS_RUB: int = int(os.getenv("WELCOME_BONUS_RUB", "0"))
+
+# SMS-регистрация — единственный способ входа; если баланс SMSPILOT кончится,
+# никто не сможет зарегистрироваться. Порог и кулдаун алертов админам —
+# см. web/routers/auth_phone.py.
+SMS_BALANCE_ALERT_THRESHOLD_RUB: int = int(os.getenv("SMS_BALANCE_ALERT_THRESHOLD_RUB", "200"))
+SMS_BALANCE_ALERT_COOLDOWN_MIN: int = int(os.getenv("SMS_BALANCE_ALERT_COOLDOWN_MIN", "60"))

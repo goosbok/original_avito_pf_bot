@@ -122,3 +122,48 @@ def test_get_gateway_returns_smspilot_when_env_set(monkeypatch):
     from services.sms import SmspilotGateway, get_gateway
     gw = get_gateway()
     assert isinstance(gw, SmspilotGateway)
+
+
+def test_smspilot_gateway_captures_balance_on_success(monkeypatch):
+    class _FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "send": [{"server_id": "1", "phone": "79001234567", "status": "0"}],
+                "balance": "187.50",
+            }
+
+    monkeypatch.setenv("SMSPILOT_APIKEY", "test-key")
+    monkeypatch.setattr("httpx.post", lambda *a, **kw: _FakeResponse())
+
+    from services.sms import SmspilotGateway
+    gw = SmspilotGateway()
+    assert gw.last_balance is None  # ничего не отправляли — баланс неизвестен
+    gw.send_code("+79001234567", "4521")
+    assert gw.last_balance == 187.50
+
+
+def test_smspilot_gateway_balance_stays_none_when_absent(monkeypatch):
+    """Ошибочный ответ без поля balance — last_balance не трогаем."""
+
+    class _FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"error": {"code": "111", "description": "Invalid phone"}}
+
+    monkeypatch.setenv("SMSPILOT_APIKEY", "test-key")
+    monkeypatch.setattr("httpx.post", lambda *a, **kw: _FakeResponse())
+
+    from services.sms import SmspilotGateway
+    gw = SmspilotGateway()
+    with pytest.raises(RuntimeError):
+        gw.send_code("+79001234567", "4521")
+    assert gw.last_balance is None

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from data import config
 from services import identity, otp, sms
 from services.exceptions import OTPCooldown, OTPExpired
+from services.sms import SmspilotGateway
 from utils.phones import normalize_phone
 from utils.sqlite3 import edit_setting, get_setting
 from web.auth import create_jwt
@@ -132,13 +133,8 @@ async def request_code(body: RequestCodeBody) -> dict:
         await _maybe_alert_send_failure(phone, exc)
         raise HTTPException(status_code=502, detail="Не удалось отправить SMS, попробуйте позже")
 
-    # Только SmspilotGateway (и совместимые по интерфейсу дублёры в тестах)
-    # выставляют last_balance — используем duck typing вместо isinstance,
-    # т.к. это согласуется с Protocol-based дизайном services/sms.py и не
-    # требует от тестовых дублёров наследоваться от конкретного класса.
-    last_balance = getattr(gateway, "last_balance", None)
-    if last_balance is not None:
-        await _maybe_alert_low_balance(last_balance)
+    if isinstance(gateway, SmspilotGateway) and gateway.last_balance is not None:
+        await _maybe_alert_low_balance(gateway.last_balance)
 
     return {"ok": True}
 

@@ -10,7 +10,7 @@ import pytest
 from services.sms import SmspilotGateway
 
 
-class _FakeLowBalanceGateway:
+class _FakeLowBalanceGateway(SmspilotGateway):
     """Успешная отправка, баланс ниже порога."""
 
     def __init__(self, balance: float) -> None:
@@ -20,7 +20,10 @@ class _FakeLowBalanceGateway:
         pass
 
 
-class _FakeFailingGateway:
+class _FakeFailingGateway(SmspilotGateway):
+    def __init__(self) -> None:
+        self.last_balance = None
+
     def send_code(self, phone: str, code: str) -> None:
         raise RuntimeError("SMSPILOT error 8: Недостаточно средств")
 

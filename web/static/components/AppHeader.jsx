@@ -15,9 +15,12 @@ function Avatar({ name, size = 30 }) {
   );
 }
 
-function NavLink({ label, active, onClick, icon }) {
+function NavLink({ label, active, onClick, icon, route }) {
   return (
     <button
+      className="nav-link"
+      data-route={route}
+      title={label}
       onClick={onClick}
       style={{
         background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -32,8 +35,8 @@ function NavLink({ label, active, onClick, icon }) {
       onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--text-1)'; }}
       onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--text-2)'; }}
     >
-      {icon && <span style={{ fontSize: '0.85em' }}>{icon}</span>}
-      {label}
+      {icon && <span className="nav-link__icon">{icon}</span>}
+      <span className="nav-link__label">{label}</span>
     </button>
   );
 }
@@ -58,8 +61,9 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
   useHeaderEffect(() => { setMenuOpen(false); setUserDropOpen(false); }, [route]);
 
   const navItems = [
-    { label: 'Кабинет',   route: 'cabinet',  icon: '🏠' },
-    { label: 'Заказы',    route: 'orders',   icon: '📋' },
+    { label: 'Кабинет',          route: 'cabinet',  icon: '🏠' },
+    { label: 'Заказы',           route: 'orders',   icon: '📋' },
+    { label: 'Пригласи друга',   route: 'referral', icon: '🤝' },
   ];
 
   // Клик по балансу → к форме пополнения в кабинете. Если уже в кабинете —
@@ -94,6 +98,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                 key={n.route}
                 label={n.label}
                 icon={n.icon}
+                route={n.route}
                 active={route === n.route}
                 onClick={() => onNavigate(n.route)}
               />
@@ -223,7 +228,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                     { icon: '🏠', label: 'Кабинет',      action: () => onNavigate('cabinet') },
                     { icon: '📋', label: 'Мои заказы',   action: () => onNavigate('orders') },
                     { icon: '👤', label: 'Профиль',       action: () => onNavigate('profile') },
-                    { icon: '🤝', label: 'Партнерка',     action: () => onNavigate('referral') },
+                    { icon: '🤝', label: 'Пригласи друга', action: () => onNavigate('referral') },
                   ].map((item, i) => (
                     <button
                       key={i}
@@ -302,7 +307,7 @@ function AppHeader({ route, user, balance, brandName, theme, adminMode, onToggle
                   {[
                     { label: 'Кабинет',     route: 'cabinet' },
                     { label: 'Мои заказы',  route: 'orders' },
-                    { label: 'Партнерка',   route: 'referral' },
+                    { label: 'Пригласи друга', route: 'referral' },
                     { label: 'Профиль',     route: 'profile' },
                     { label: 'Заказать ПФ', route: 'order-new' },
                   ].map(item => (

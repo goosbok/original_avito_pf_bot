@@ -91,7 +91,7 @@ function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
   return (
     <div className="page-wrap">
     <div className="container" style={{ paddingTop: 20, paddingBottom: 96 }}>
-      <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Партнерка</h1>
+      <h1 style={{ fontSize: '1.4rem', fontWeight: 800, marginBottom: 8 }}>🤝 Пригласи друга</h1>
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Как это работает</div>

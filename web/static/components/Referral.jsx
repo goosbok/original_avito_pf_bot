@@ -66,6 +66,12 @@ function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
     finally { setBusy(false); }
   };
 
+  // Вывод на карту делается вручную поддержкой: открываем чат с готовым сообщением.
+  const withdrawToCard = () => {
+    const text = 'хочу бабки на карту вывести';
+    window.dispatchEvent(new CustomEvent('support-chat-send', { detail: { text } }));
+  };
+
   const withdraw = async () => {
     setBusy(true); setError('');
     try {
@@ -95,20 +101,34 @@ function ReferralPage({ user, botConfig, onNavigate, refreshBalance }) {
 
       <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Как это работает</div>
-        <div style={{ fontSize: '0.875rem', color: 'var(--text-2)' }}>
-          Делитесь ссылкой — получайте <strong>{data.percent}%</strong> с каждого
-          пополнения приведенных пользователей на реферальный баланс. Пожизненно.
-          Вывести его на основной счёт можно здесь же.
+        <div style={{ fontSize: '0.875rem', color: 'var(--text-2)', display: 'grid', gap: 8 }}>
+          <div>
+            Делитесь ссылкой и получайте <strong>{data.percent}%</strong> с каждого
+            пополнения приглашённых пользователей на реферальный баланс.
+          </div>
+          <div>
+            <strong>Пожизненно:</strong> процент начисляется с каждого их платежа, а не только
+            с первого. Чем больше общий объём пополнений от ваших рефералов, тем выше
+            процент — до 30% с каждого платежа.
+          </div>
+          <div>
+            Реферальный баланс можно вывести на основной счёт для оплаты наших услуг
+            или на банковскую карту.
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 24, marginTop: 12, fontSize: '0.875rem', flexWrap: 'wrap' }}>
           <div>Рефералов: <strong>{data.referrals_count}</strong></div>
           <div>Заработано: <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>{data.total_earned.toLocaleString('ru-RU')} ₽</strong></div>
           <div>Доступно к выводу: <strong style={{ color: 'var(--primary)', whiteSpace: 'nowrap' }}>{data.referral_balance.toLocaleString('ru-RU')} ₽</strong></div>
         </div>
-        <div style={{ marginTop: 12 }}>
-          <button className="btn btn--primary btn--sm" onClick={withdraw}
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <button className="btn btn--primary btn--sm" onClick={withdrawToCard}
                   disabled={busy || data.referral_balance === 0}>
-            Вывести на баланс
+            Вывести на карту
+          </button>
+          <button className="btn btn--ghost btn--sm" onClick={withdraw}
+                  disabled={busy || data.referral_balance === 0}>
+            Перевести на баланс
           </button>
         </div>
       </div>

@@ -14,6 +14,7 @@ from keyboards.users_menu import (
     profile_kb,
     show_user_order_by_index,
 )
+from utils.order_status import order_status_label
 from utils.other import (
     format_decimal,
     str2bool,
@@ -231,7 +232,8 @@ async def check_order(message: Message, state: FSMContext, user_id: int):
         order = get_order(order_id)
         if order['user_id'] == user_id:
             STR = get_string('str_order_status_txt')
-            STR = STR.format(order['increment'], order['status'])
+            STR = STR.format(order['increment'],
+                             order_status_label(order['status']))
             msg = await message.answer(STR, reply_markup=menu_btn_kb())
         else:
             STR = get_string('str_not_your_order')

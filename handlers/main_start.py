@@ -2,12 +2,15 @@ import colorama
 from aiogram.dispatcher import FSMContext
 from aiogram.types import Message
 
-from data.loader import *
+from data import config
+from data.loader import bot, storage, dp
 from utils.sqlite3 import get_user, update_user, all_users
-from design import *
-from keyboards.inline_keyboards import *
-
-from handlers.admin_functions import *
+from design import (
+    yes_refer, refer_not_in_base, invite_yourself,
+    start_text, start_text_ref, welcome_bonus_line,
+)
+from keyboards.inline_keyboards import get_menu_kb
+from services import welcome_bonus
 
 async def get_user_name(user):
     if user.first_name:
@@ -30,24 +33,49 @@ async def get_refer_name(user_id):
         elif user['first_name']:
             name = user['first_name']
             return name
-        elif user['id']:
-            name = user['id']
-            return name
         else:
-            return None
+            # Referrer signed up via web (phone/email) and never opened the
+            # bot — no Telegram profile data to show, so avoid leaking the
+            # raw internal user_id to the referred user.
+            return "партнёр"
     else:
         return None
 
 @dp.message_handler(commands=['start'], state="*")
-async def main_start(message: Message, state: FSMContext):
+async def main_start(message: Message, state: FSMContext, user_id: int, is_new_user: bool = False):
     await state.finish()
-    user_id = message.from_user.id
     user = get_user(id=user_id)
     usr = message.from_user
     args = message.get_args()
     name = await get_user_name(usr)
+    bonus_line = ""
+    if is_new_user and config.WELCOME_BONUS_RUB > 0 and welcome_bonus.was_granted(user_id):
+        bonus_line = welcome_bonus_line.format(config.WELCOME_BONUS_RUB)
+    if args == 'connect':
+        # Deep-link from web SPA: /start connect → trigger phone-sharing flow
+        from handlers.connect import prompt_for_contact
+        await prompt_for_contact(message)
+        return
+    if args and args.startswith('ref_'):
+        from services.referral import attribute
+        code = args[4:]
+        status_, referrer_id = attribute(user_id, code)
+        if status_ == 'ok':
+            ref_name = await get_refer_name(referrer_id)
+            await message.answer(
+                start_text_ref(ref_first_name=ref_name) + bonus_line,
+                reply_markup=get_menu_kb(),
+            )
+        elif status_ == 'self':
+            await message.answer(invite_yourself)
+        elif status_ == 'already':
+            ref_name = await get_refer_name(referrer_id)
+            await message.answer(f"{yes_refer.format(name, ref_name)}")
+        else:  # unknown
+            await message.answer(f"{refer_not_in_base.format(name, code)}")
+        return
     if args:
-        if user['ref_user_name'] is not None:
+        if user['ref_id'] is not None:
             ref_name = await get_refer_name(user['ref_id'])
             await message.answer(f"{yes_refer.format(name, ref_name)}")
         else:
@@ -61,7 +89,20 @@ async def main_start(message: Message, state: FSMContext):
                     else:
                         update_user(id=user_id, ref_user_name=refer['user_name'])
                         update_user(id=user_id, ref_id=refer['id'])
-                        await message.answer(start_text_ref(ref_first_name=ref_name), reply_markup=get_menu_kb())
+                        if refer['referals']:
+                            referals_array = refer['referals'].split(',')
+                            if str(user_id) not in referals_array:
+                                referals_array.append(user_id)
+                            referals_str = ""
+                            for ref_id in referals_array:
+                                if referals_str == "":
+                                    referals_str = ref_id
+                                else:
+                                    referals_str += f",{ref_id}"
+                            update_user(id=refer['id'], referals=referals_str)
+                        else:
+                            update_user(id=refer['id'], referals=str(user_id))
+                        await message.answer(start_text_ref(ref_first_name=ref_name) + bonus_line, reply_markup=get_menu_kb())
                 else:
                     await message.answer(f"{refer_not_in_base.format(name, refer_id)}")
             else:
@@ -85,10 +126,10 @@ async def main_start(message: Message, state: FSMContext):
                                         referals_str += f",{ref_id}"
                                 update_user(id=usr['id'], referals=referals_str)
                             else:
-                                update_user(id=usr['id'], referals=user_id)
-                            await message.answer(start_text_ref(ref_first_name), reply_markup=get_menu_kb())
+                                update_user(id=usr['id'], referals=str(user_id))
+                            await message.answer(start_text_ref(ref_first_name) + bonus_line, reply_markup=get_menu_kb())
                 else:
                     await message.answer(invite_yourself)
                         #await message.reply(f"Привет {user['first_name']}! Ты пришел по реферальной ссылке {usr['first_name']} (@{usr['user_name']}).")
     else:
-        await message.answer(f"{start_text.format(name)}", reply_markup=get_menu_kb())
+        await message.answer(f"{start_text.format(name)}{bonus_line}", reply_markup=get_menu_kb())

@@ -1,0 +1,181 @@
+"""Тестовые фикстуры. Каждый тест получает изолированную SQLite-БД во временной папке.
+
+Мы не используем in-memory БД, потому что код продакшена открывает соединение через
+sqlite3.connect(path_db) на каждый запрос (см. utils/sqlite3.py), и in-memory БД у разных
+соединений — разные. Файловая БД во временной папке — самый прямой путь.
+"""
+from __future__ import annotations
+
+import sqlite3
+import sys
+import types
+from pathlib import Path
+from typing import Iterator
+
+import pytest
+
+
+def _make_config_stub() -> types.ModuleType:
+    """Минимальный data.config для тестов — без реальных секретов."""
+    stub = types.ModuleType("data.config")
+    stub.path_database = "data/database.db"  # overridden by tmp_db monkeypatch
+    stub.TOKEN = "test:token"
+    stub.bot_version = "0.0.0"
+    stub.YOOKASSA_TEST = ""
+    stub.SHOP_ID = 0
+    stub.SECRET_KEY = "test_secret"
+    stub.support_tag = "test"
+    stub.ADMINS = []
+    stub.SUPPORT_CHAT_ID = 0
+    stub.SUPPORT_THREAD_QUESTIONS = 0
+    stub.SUPPORT_THREAD_ORDERS = 0
+    stub.SUPPORT_THREAD_ORDERS_WEB = 0
+    stub.SUPPORT_THREAD_ERRORS = 0
+    stub.SUPPORT_THREAD_NEW_USERS = 0
+    stub.CODER = 0
+    stub.botlink = "https://t.me/test"
+    stub.SITE_URL = ""
+    stub.LANDING_URL = "https://pf-bot.com"
+    stub.channel_link = "https://t.me/test"
+    stub.host = ""
+    stub.user = ""
+    stub.bd_name = ""
+    stub.password = ""
+    stub.fix_price = 6
+    stub.prices = {}
+    stub.services = {}
+    stub.price_google = {}
+    stub.price_yandex = {}
+    stub.price_vk = {}
+    stub.price_flamp = {}
+    stub.price_2gis = {}
+    stub.price_avito = {}
+    stub.JWT_SECRET = "test_jwt_secret_placeholder_at_least_32_chars"
+    stub.WEB_HOST = "127.0.0.1"
+    stub.WEB_PORT = 8000
+    # Added later in production data/config.py — keep stub in sync so module
+    # imports (utils.googlesheets, services.email_otp, etc.) don't ImportError.
+    stub.GSHEETS_TARGET_SHEET_ID = ""
+    stub.OTP_TTL_SECONDS = 300
+    stub.OTP_MAX_ATTEMPTS = 5
+    stub.OTP_RESEND_COOLDOWN = 60
+    stub.BOT_HTTP_API_BASE = "https://api.telegram.org"
+    stub.AVITO_PROXY_URL = "https://lk.pf-bot.com"
+    stub.AVITO_PROXY_SECRET = ""
+    # Biznesklondaik PF executor (auto-mode) — keep stub in sync with
+    # data/config.py so services.biznesklondaik_client and friends don't
+    # AttributeError when imported in unit tests.
+    stub.BIZA_API_KEY = ""
+    stub.BIZA_LOGIN = ""
+    stub.BIZA_PASSWORD = ""
+    stub.BIZA_API_BASE_URL = "https://biznesklondaik.test/api"
+    stub.BIZA_DASHBOARD_BASE_URL = "https://biznesklondaik.test/pf-avito"
+    stub.PF_PHRASE_CACHE_REFRESH_ENABLED = False
+    stub.PF_AUTO_DISPATCH_ENABLED = False
+    stub.PF_PHRASE_CACHE_CHUNK_DAYS = 4
+    stub.PF_PHRASE_CACHE_REFRESH_INTERVAL_H = 24
+    stub.PF_AUTO_RATE_METRIC_INTERVAL_H = 1
+    stub.PF_DASHBOARD_REQUEST_DELAY_SEC = 3
+    stub.PF_DEFAULT_START_HOUR = 0
+    stub.PF_AUTO_EXPORT_ENABLED = False
+    stub.PF_AUTO_EXPORT_HOUR_MSK = 6
+    stub.BIZA_MAX_PER_MIN = 60
+    stub.BIZA_BREAKER_ERRORS = 3
+    stub.BIZA_COOLDOWN_MIN = 30
+    stub.BIZA_MAX_ATTEMPTS = 2
+    stub.WELCOME_BONUS_RUB = 0
+    stub.SMS_BALANCE_ALERT_THRESHOLD_RUB = 200
+    stub.SMS_BALANCE_ALERT_COOLDOWN_MIN = 60
+    return stub
+
+
+# Inject before any module-level import of data.config (utils/sqlite3.py imports it at load time)
+if "data.config" not in sys.modules:
+    _stub = _make_config_stub()
+    sys.modules["data.config"] = _stub
+    # Also set as attribute on the data package so `from data import config` works
+    import data as _data_pkg
+    _data_pkg.config = _stub  # type: ignore[attr-defined]
+
+
+def _make_loader_stub() -> types.ModuleType:
+    """Stub for data.loader — prevents Bot(token=...) validation at import time."""
+    from unittest.mock import MagicMock, AsyncMock
+    stub = types.ModuleType("data.loader")
+    stub.bot = MagicMock()
+    stub.bot.send_message = AsyncMock()
+    stub.storage = MagicMock()
+
+    # `dp` is used as a decorator factory (`@dp.callback_query_handler(...)`,
+    # `@dp.message_handler(...)`). A bare MagicMock would replace decorated
+    # handlers with MagicMocks, breaking unit tests that import and await
+    # them directly. Make every decorator factory a passthrough that returns
+    # the original function unchanged.
+    def _passthrough_decorator(*_args, **_kwargs):
+        def _wrap(func):
+            return func
+        return _wrap
+
+    dp = MagicMock()
+    dp.callback_query_handler = _passthrough_decorator
+    dp.message_handler = _passthrough_decorator
+    dp.errors_handler = _passthrough_decorator
+    dp.edited_message_handler = _passthrough_decorator
+    dp.channel_post_handler = _passthrough_decorator
+    dp.inline_handler = _passthrough_decorator
+    stub.dp = dp
+    return stub
+
+
+if "data.loader" not in sys.modules:
+    _loader_stub = _make_loader_stub()
+    sys.modules["data.loader"] = _loader_stub
+    import data as _data_pkg2
+    _data_pkg2.loader = _loader_stub  # type: ignore[attr-defined]
+
+from utils.sqlite3 import get_schema_statements, get_index_statements  # noqa: E402
+
+
+@pytest.fixture
+def tmp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
+    """Создаёт пустую БД с продакшен-схемой и подменяет path_database во всех модулях."""
+    db_path = tmp_path / "test.db"
+
+    with sqlite3.connect(db_path) as con:
+        for _table, ddl, _cols in get_schema_statements():
+            con.execute(ddl)
+        for idx_ddl in get_index_statements():
+            con.execute(idx_ddl)
+        con.commit()
+
+    monkeypatch.setattr("data.config.path_database", str(db_path), raising=False)
+    monkeypatch.setattr("utils.sqlite3.path_db", str(db_path), raising=False)
+
+    # Phase-2 migrations create indexes that reference columns added by ALTER
+    # (e.g. refills.status). On a fresh schema from get_schema_statements those
+    # columns already exist, so apply_phase2_migrations becomes a no-op for the
+    # ALTERs but still creates the indexes. Required so unit tests see the same
+    # uq_refills_payment_id partial index that production has.
+    from utils.sqlite3 import apply_phase2_migrations
+    apply_phase2_migrations()
+
+    yield db_path
+
+
+@pytest.fixture(autouse=True)
+def _reset_biza_singletons():
+    """Сбрасывает rate limiter и circuit breaker до и после каждого теста."""
+    def _do():
+        try:
+            from services.order_links_dispatcher import _breaker
+            _breaker.reset()
+        except Exception:
+            pass
+        try:
+            from services import rate_limiter
+            rate_limiter.reset()
+        except Exception:
+            pass
+    _do()
+    yield
+    _do()

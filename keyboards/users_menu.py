@@ -1,6 +1,10 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
 from utils.sqlite3 import get_user, get_string, get_setting, get_all_qna_avito, get_admins, get_price
-from design import *
+from data import config
+from design import (
+    profile, main_menu,
+    refill_balance, list_orders,
+)
 from utils.other_functions import str2bool
 
 months_names = {'1': 'Январь', '2': 'Февраль', '3': 'Март', '4': 'Апрель',
@@ -31,40 +35,28 @@ def get_menu_kb():
             callback_data='tarifs:pf'
         )
     )
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_reviews'),
-    #         callback_data="reviews"
-    #     )
-    # ),
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_seo_boost'),
-    #         callback_data="seo_boost"
-    #     )
-    # )
     keyboard.add(
         InlineKeyboardButton(
             text=get_string('btn_profile'),
             callback_data='user:profile'
         )
     ),
-    keyboard.add(
+    keyboard.row(
         InlineKeyboardButton(
             text=get_string('btn_channel'),
             url=get_setting('channel_link')
+        ),
+        InlineKeyboardButton(
+            text=get_string('btn_site'),
+            url=config.LANDING_URL
         )
     )
-    keyboard.row(
-        InlineKeyboardButton(
-            text=get_string('btn_rules'),
-            callback_data='info:rules'
-        ),
+    keyboard.add(
         InlineKeyboardButton(
             text=get_string('btn_support'),
             callback_data='info:support'
         )
-    ),
+    )
     keyboard.add(
 
         InlineKeyboardButton(
@@ -274,6 +266,42 @@ def yes_no_kb():
     )
     return keyboard
 
+def payment_methods_kb(methods: list) -> InlineKeyboardMarkup:
+    from services.payment_methods import METHODS as METHOD_LABELS
+    keyboard = InlineKeyboardMarkup()
+    for method in methods:
+        label = METHOD_LABELS.get(method, method)
+        keyboard.add(
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"pay_method:{method}"
+            )
+        )
+    keyboard.add(
+        InlineKeyboardButton(
+            text=get_string('btn_main_menu'),
+            callback_data='menu'
+        )
+    )
+    return keyboard
+
+
+def manual_payment_kb(manager_nick: str) -> InlineKeyboardMarkup:
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(
+        InlineKeyboardButton(
+            text="✉️ Написать менеджеру",
+            url=f"https://t.me/{manager_nick}"
+        )
+    )
+    keyboard.add(
+        InlineKeyboardButton(
+            text=get_string('btn_main_menu'),
+            callback_data='menu'
+        )
+    )
+    return keyboard
+
 def yes_no_contact_kb():
     keyboard = InlineKeyboardMarkup()
     STR_YES = get_string('btn_yes')
@@ -321,12 +349,12 @@ def pay_kb(price):
     )
     return keyboard
 
-def yookassa_kb(price, pay_url):
+def yookassa_kb(pay_url):
     keyboard = InlineKeyboardMarkup()
 
     keyboard.row(
         InlineKeyboardButton(
-            text=f"Оплатить {price} ₽",
+            text="Оплатить",
             url=pay_url
         ),
         InlineKeyboardButton(
@@ -365,95 +393,6 @@ def qna_avito_kb():
     return keyboard
 
 ###############################################################################################
-#############################           SEO BOOST              ################################
-###############################################################################################
-def seo_boost_kb():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_howto'),
-            callback_data='seo_howto'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_why'),
-            callback_data='seo_why'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_result'),
-            callback_data='seo_result'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_order'),
-            callback_data='seo_order'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_main_menu'),
-            callback_data='menu'
-        )
-    )
-    return keyboard
-
-#Клавиатура с месяцами для SEO
-def seo_months(buttons_per_row=6):
-    keyboard = InlineKeyboardMarkup()
-    buttons = []
-    for i in range(1,13):
-        button = InlineKeyboardButton(
-            text=str(i),
-            callback_data=f"seo:{str(i)}"
-        )
-        buttons.append(button)
-
-        # Если количество кнопок достигло buttons_per_row, добавляем ряд в клавиатуру
-        if len(buttons) == buttons_per_row:
-            keyboard.row(*buttons)
-            buttons = []
-
-    # Добавляем оставшиеся кнопки, если их число не делится на buttons_per_row
-    if buttons:
-        keyboard.row(*buttons)
-
-    keyboard.row(
-        InlineKeyboardButton(
-            text="⬅️ Назад",
-            callback_data='seo_boost'
-        ),
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='menu'
-        )
-    )
-
-    return keyboard
-
-#Подтверждение заказа SEO
-def seo_order_confirm(param):
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text=get_string('btn_yes'),
-            callback_data=f'seo_yes:{param}'
-        ),
-        InlineKeyboardButton(
-            text=get_string('btn_no'),
-            callback_data='seo_boost'
-        ),
-        InlineKeyboardButton(
-            text=get_string('btn_main_menu'),
-            callback_data='menu'
-        )
-    )
-    return keyboard
-
-###############################################################################################
 #############################        Заказы по индексу         ################################
 ###############################################################################################
 
@@ -466,54 +405,29 @@ def show_user_order_by_index(index, orders_cnt):
                 callback_data=f"repeat:{index}"
             )
         )
+        if orders_cnt > 1:
+            nav_buttons = []
+            if index > 0:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="◀️ Пред.",
+                    callback_data=f"ordr:{index-1}"
+                ))
+            nav_buttons.append(InlineKeyboardButton(
+                text=f"{index+1} / {orders_cnt}",
+                callback_data="user_show_all:orders"
+            ))
+            if index < orders_cnt - 1:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="След. ▶️",
+                    callback_data=f"ordr:{index+1}"
+                ))
+            keyboard.row(*nav_buttons)
         keyboard.add(
             InlineKeyboardButton(
-                text="📖Все заказы",
+                text="📖 Все заказы",
                 callback_data="user_show_all:orders"
             )
         )
-        if orders_cnt !=1:
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #1",
-                    callback_data=f"ordr:0"
-                )
-            )
-            if index == 0:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    )
-                )
-            elif index != 0 and index < orders_cnt - 1:
-                keyboard.row(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    ),
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    ),
-                )
-            else:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    )
-                )
-
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #{orders_cnt}",
-                    callback_data=f"ordr:{orders_cnt-1}"
-                )
-            )
-    else:
-        pass
-
     keyboard.row(
         InlineKeyboardButton(
             text=profile,
@@ -525,119 +439,6 @@ def show_user_order_by_index(index, orders_cnt):
         )
     )
     return keyboard
-
-###############################################################################################
-#############################           ОТЗЫВЫ              ################################
-###############################################################################################
-
-def reviews_kb():
-    """
-    ВКонтакте, Яндекс , Авито , 2гис, фламп, Гугл
-    """
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🚀 ВКонтакте",
-            callback_data="reviews:vk"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Яндекс",
-            callback_data="reviews:yandex"
-        ),
-        #InlineKeyboardButton(
-        #    text="🚀 Авито",
-        #    callback_data="reviews:avito"
-        #),
-    ),
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🚀 2ГИС",
-            callback_data="reviews:2gis"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Фламп",
-            callback_data="reviews:flamp"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Google",
-            callback_data="reviews:google"
-        )
-    ),
-    keyboard.add(
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data="menu"
-        )
-    )
-
-    return keyboard
-
-def reviews_count(service, buttons_per_row=5):
-    if service == "vk":
-        price = price_vk
-    elif service == "yandex":
-        price = price_yandex
-    elif service == "avito":
-        price = price_avito
-    elif service == "2gis":
-        price = price_2gis
-    elif service == "flamp":
-        price = price_flamp
-    elif service == "google":
-        price = price_google
-
-    keyboard = InlineKeyboardMarkup()
-    buttons = []
-
-    # Преобразование ключей к int и сортировка
-    sorted_keys = sorted(price.keys(), key=int)
-
-    for key in sorted_keys:
-        button = InlineKeyboardButton(
-            text=str(key),
-            callback_data=f"rev_price:{str(key)}"
-        )
-        buttons.append(button)
-
-        if len(buttons) == buttons_per_row:
-            keyboard.row(*buttons)
-            buttons = []
-
-    # Добавляем оставшиеся кнопки, если их число не делится на buttons_per_row
-    if buttons:
-        keyboard.row(*buttons)
-
-    if service == "avito":
-        keyboard.add(
-            InlineKeyboardButton(
-                text="Удаление негативного отзыва",
-                callback_data="avito_del_review"
-            )
-        )
-
-    keyboard.add(
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='menu'
-        )
-    )
-
-    return keyboard
-
-def yes_no_reviews():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="✅ Да",
-            callback_data="rev_confirm"
-        ),
-        InlineKeyboardButton(
-            text="❎ Нет",
-            callback_data="menu"
-        ),
-    )
-    return keyboard
-
 
 def payment_error_kb():
     keyboard = InlineKeyboardMarkup()

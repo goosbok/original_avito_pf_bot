@@ -3,17 +3,16 @@ from data.config import *
 from utils.sqlite3 import get_user
 from utils.other_functions import get_user_string_without_first_name, get_days_suffix, format_decimal
 start_text = "👋 Приветствую, <b>{}</b> ! Выберите что хотите сделать."
+welcome_bonus_line = "\n\n🎁 Вам начислен приветственный бонус {} ₽"
 
-what_tasks = "⚙️ Что умеет бот?"
 profile = "🪪 Личный кабинет"
 tarifs = "💰 Тарифы"
 promocodes = "🔮 Промокоды"
-rules = "🔰 Правила пользования ботом"
 qna = "📲 FAQ / Кейсы"
 btn_how_to_start = "🕐 Как начать работу"
 support = "🧑‍💻 Тех поддержка"
 in_devel = "⚠️ Данная функция в разработке!"
-btn_channel = "🔗 Наш телеграм канал"
+btn_channel = "TG канал⛓️‍💥"
 
 manager_nick = "avito_pf_otzivi"
 
@@ -26,18 +25,12 @@ magic_gen_str = "⚙️Для пользователя <b>{}</b> сгенери�
 sheet_complete = "⚙️ Cформирована электронная таблица в GoogleSheets:"
 invite_yourself = "<b>❗ Вы не можете пригласить себя</b>"
 new_refferal = "<b>💎 У вас новый реферал! @{user_name} </b>"
-delete_review = "⚙️ Данная услуга стоит <b>7000 руб.</b>!\nУкажите ссылку на профиль, из которого надо удалить негативный отзыв\n<b>‼️После оплаты - с вами свяжется менеджер в ближайшее время‼️</b>"
 
 
 def start_text_ref(ref_first_name):
     msg = (f" 🎉Добро пожаловать!\n"
            f"🙋‍♂️Вас пригласил: {ref_first_name}")
     return msg
-
-
-reviews_menu = '''
-Накрутка Отзывов находится в разработке, в ближайшее время будет доступно.
-'''
 
 
 tasks_text = """Прайс сделан для примера с расчетом на одно объявление, ниже вы выбираете количество пф.
@@ -50,19 +43,6 @@ tasks_text = """Прайс сделан для примера с расчето�
 """
 
 qna_text = "📲 Вопросы и ответы."
-rules_text = '''1. Вы берете на себя ответственность за то, сколько вы запускаете пф на одно объявление, накрутить можно любое количество, пф выполняют наши сотрудники а не боты.
-2. Деньги с баланса нельзя перевести обратно на карту.
-3. Минимальное количество ПФ на одно объявление составляет = 5 ПФ
-'''
-
-suppport_text = f'''<b>🧑‍💻 Возникла проблема или вопрос?
-Обратитесь в техническую поддержку!
-
--> @{support_tag}</b>
-<code>[Сверяйте контакты!]</code>
-'''
-
-
 
 how_to_start_text = '''1. Перейти в личный кабинет и нажать кнопку Пополнить баланс
 2. Ввести сумму и выберете способ оплаты
@@ -73,70 +53,23 @@ how_to_start_text = '''1. Перейти в личный кабинет и на�
 7. Подтвердить списание с баланса бота.
 '''
 
-q1 = "Как работает услуга ПФ?"
-q2 = "Как работает услуга Просмотр номера?"
-q3 = "ПФ на все объявления в аккаунте одним днём?"
-q4 = "Одновременное использование отзывов и ПФ?"
 main_menu = "🧊 Главное меню"
 
-q1_text = '''1 ПФ «ПОВЕДЕНЧЕСКИЙ ФАКТОР» - имитация активности пользователя «исполнители живые люди , не робот, не бот», выполняющие целевые действия на вашем объявлении, которые учитывает авито , а точнее считывают его алгоритмы , для определения заинтересованности в вас , как в исполнители или продавце для дальнейшего участия в ранжировании «думает на какую страницу и строчку тебя поставить»
-
-Важно понимать , что любой площадке необходимо задержать посетителя , как можно дольше , и желательно , чтобы он вернулся - а для этого нужно учитывать не только , кто тебе больше заплатил за рекламу , но и тот кто больше помог конечному клиенту на твоей площадке !
-
-Целевые действия это :
-
- 1. Ваше объявление будет найдено при введении в поисковую строку минимум 5 целевых запросов , пример ниже на услугу аренды эвакуатор :
-
-Эвакуатор
-Услуги эвакуатора
-Услуги эвакуатора круглосуточно
-Эвакуатор недорого
-Эвакуатор дёшево
-Вызвать эвакуатор
-Эвакуатор цена
-Эвакуатор 24 часа
-Эвакуатор круглосуточно
-Эвакуатор срочно
-Эвакуатор 24/7
-Заказать эвакуатор
-Легковой эвакуатор
-Эвакуатор со сдвижной платформой
-Эвакуация авто
-
- 2. Время нахождения 1 пользователя на вашем объявлении 2-10 минут
-
- 1. Добавление в избранное (лайк)
- 2. Запрос контакта (номера телефона)
- 3. Просмотр фотографий
- 4. Пролистывания отзывов на аккаунте
- 5. Просмотр гео - нахождения оказания услуги
-
-Пункты 2,3,4,5 целевых действий - происходят в хаотичном количестве , в отличии от просмотров, ради сохранении безопасности и органического вида прироста активности .'''
-
-q2_text = '''Вопрос:
-Как работает услуга просмотр номера:
-
-Ответ:
-1. Переходим по ключевому слову из поиска
-2. Находим ваше объявление и находимся на странице объявления более 2 минут
-3. Просматриваем все фото
-4. Просматриваем карту
-5. Просматриваем весь текст
-6. Просматриваем телефон (учитывается Авито как звонок'''
-
-q3_text = '''Вопрос:
-Можно ли делать ПФ на все объявления в аккаунте одним днём?
-
-Ответ:
-Да - можно, но рекомендуем делать на категорию услуг 50-100пф,  на товарку 100-500, а на продажу авто  до 2000пф можно.'''
-
-q4_text = '''Вопрос:
-Можно ли одновременно использовать отзывы и ПФ?
-
-Ответ:
- На объявление , которое постоянно имеет вовлеченность со стороны клиентов (накрутка) - авито хочет видеть обратную связь в ввиде отзыва (ему не важно - будет он положительный или негативный).
-
-Таким образом, накрутка будет более органической для поисковой системы.'''
+# Button label fallbacks for get_string().
+# get_string() in keyboards/inline_keyboards.py falls back to globals() of that
+# module (which has `from design import *`). Any btn_* key used in a keyboard
+# MUST have a constant here so keyboards never produce text=None.
+btn_avito = "🚀 Накрутка ПФ Авито"
+btn_profile = "🪪 Личный кабинет"
+btn_main_menu = "🧊 Главное меню"
+btn_yes = "✅ Да"
+btn_no = "❎ Нет"
+btn_all_completed = "✅ Выполненные"
+btn_all_posted = "✍️ Размещённые"
+btn_avito_cases = "🔗 Кейсы Авито"
+btn_support = "🧑‍💻 Поддержка"
+btn_qna = "📲 FAQ / Кейсы"
+btn_promocodes = "🔮 Промокоды"
 
 show_balance = "💳 Показать баланс"
 refill_balance = "💰 Пополнить баланс"
@@ -163,15 +96,23 @@ refill_balance_text = '''💳 Даём + 50% к балансу при попол
 🧊 Пожалуйста, введите сумму пополнения баланса (минимум - 100)'''
 
 
-def listord_text(orders: list[dict]):
-    msg = "Список заказов:\n"
-    for order in orders:
-        if order['contacts']:
-            contacts_str = 'Да'
-        else:
-            contacts_str = 'Нет'
-        msg += f"\nЗаказ номер {order['increment']}\nУслуга: {order['position_name']}\nЦена:{order['price']}\nДата размещения: {order['date']}\n{order['links']}"
-    return msg
+def _render_order_links_block(order: dict) -> str:
+    """Возвращает HTML-блок ссылок для TG-сообщения о заказе.
+
+    Читает order_links таблицу — orders.links колонка deprecated."""
+    from services.order_links import list_links
+    try:
+        rows = list_links(int(order['increment']))
+    except Exception:
+        rows = []
+    urls = [r['url'] for r in rows if r.get('url')]
+    if not urls:
+        return "🔗 Ссылок нет"
+    out = f"🔗 Ссылки на объявления({len(urls)}):"
+    for url in urls:
+        out += f"\n<code>{url}</code>"
+    return out
+
 
 def listord_array(orders: list[dict]):
     orders_array = []
@@ -180,7 +121,6 @@ def listord_array(orders: list[dict]):
             contacts_str = '✅ Да'
         else:
             contacts_str = '❎ Нет'
-        #orders_array.append(f"\nЗаказ номер {order['increment']}\nУслуга: {order['position_name']}\nЦена:{order['price']}\nДата размещения: {order['date']}\n{order['links']}")
         info = get_user(id=order['user_id'])
         if info:
             if info['user_name'] is not None:
@@ -204,10 +144,7 @@ def listord_array(orders: list[dict]):
                f"🔰 Статус: {status}\n"
                f"👥 Контакты: {contacts_str}\n"
                f"🗓 Дата: {order['date']}\n"
-               f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-        for link in order['links'].split(','):
-            link = link.replace("'", "")
-            msg += f"\n<code>{link}</code>"
+               + _render_order_links_block(order))
         orders_array.append(msg)
     return orders_array
 
@@ -216,14 +153,9 @@ tarifs_text = '''При пополнении баланса более чем н
 
 Для заказа услуги выберите раздел:'''
 
-nosuchorder = "Такого заказа не существует"
-
-
 def order_status_txt(id, status):
     return f"Заказ номер {id}\nСтатус заказа: {status}"
 
-
-moremoney = "Минимальная сумма пополнения - 1000 рублей"
 
 pf_text = """Вы выбрали {} {}.
 
@@ -245,27 +177,6 @@ pf_links = """Больше 1 ссылки запустить сразу - мож
 - КАЖДАЯ ССЫЛКА С НОВОЙ СТРОКИ 'CTRL+ENTER'."""
 
 
-def new_order_text(order: dict):
-    info = get_user(id=order['user_id'])
-    if order['contacts']:
-        contacts_str = 'Да'
-    else:
-        contacts_str = 'Нет'
-
-    msg = (f"<b>💰 Поступил новый заказ!</b>\n"
-           f"🐼 ID заказа: {order['increment']}\n"
-           f"💳 Цена: {order['price']}\n"
-           f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-           f"⚙️ Имя позиции: {order['position_name']}\n"
-           f"🔰 Статус: {order['status']}\n"
-           f"👥 Контакты: {contacts_str}\n"
-           f"🗓 Дата: {order['date']}\n"
-           f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-    for link in order['links'].split(','):
-        link = link.replace("'", "")
-        msg += f"\n<code>{link}</code>"
-    return msg
-
 def order_text(order: dict):
     info = get_user(id=order['user_id'])
     if order['contacts']:
@@ -281,136 +192,17 @@ def order_text(order: dict):
                f"🔰 Статус: {order['status']}\n"
                f"👥 Контакты: {contacts_str}\n"
                f"🗓 Дата: {order['date']}\n"
-               f"🔗 Ссылки на объявления({len(order['links'].split(','))}):")
-        for link in order['links'].split(','):
-            link = link.replace("'", "")
-            msg += f"\n<code>{link}</code>"
+               + _render_order_links_block(order))
         return msg
     except Exception as e:
         print(e)
         return "заказ не найден"
 
-str_reviews_google="""Отзывы на Google Картах.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 120 руб/шт
-🔥 50 отзывов - 150 руб/шт
-🔥 20 отзывов - 180 руб/шт
-🔥 10 отзывов - 200 руб/шт
-🔥 5 отзывов - 300 руб/шт
-Выбери кол-во отзывов!"""
+str_select_payment_method = "💳 Пополнение на <b>{}</b>₽\n\nВыберите способ оплаты:"
 
-str_reviews_yandex="""Отзывы на Яндекс Картах.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 300 руб/шт
-🔥 50 отзывов - 350 руб/шт
-🔥 20 отзывов - 400 руб/шт
-🔥 10 отзывов - 450 руб/шт
-🔥 5 отзывов - 500 руб/шт
-Выбери кол-во отзывов!"""
-
-str_reviews_vk="""Отзывы в ВКонтакте.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 400 руб/шт
-🔥 50 отзывов - 450 руб/шт
-🔥 20 отзывов - 500 руб/шт
-🔥 10 отзывов - 550 руб/шт
-🔥 5 отзывов - 600 руб/шт
-Выбери кол-во отзывов!"""
-
-str_reviews_flamp="""Отзывы на FLAMP.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 120 руб/шт
-🔥 50 отзывов - 150 руб/шт
-🔥 20 отзывов - 180 руб/шт
-🔥 10 отзывов - 200 руб/шт
-🔥 5 отзывов - 300 руб/шт
-Выбери кол-во отзывов!"""
-
-str_reviews_2gis="""Отзывы на 2GIS.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 120 руб/шт
-🔥 50 отзывов - 150 руб/шт
-🔥 20 отзывов - 180 руб/шт
-🔥 10 отзывов - 200 руб/шт
-🔥 5 отзывов - 300 руб/шт
-Выбери кол-во отзывов!"""
-
-str_reviews_avito="""Отзывы на Авито.
-Гарантия 14 дней.
-Предоставляем отчет о проделанной работе.
-<b>Прайс:</b>
-🔥 100 отзывов - 650 руб/шт
-🔥 50 отзывов - 650 руб/шт
-🔥 20 отзывов - 650 руб/шт
-🔥 10 отзывов - 650 руб/шт
-🔥 5 отзывов - 650 руб/шт
-Выбери кол-во отзывов!"""
-
-def rviews_text(reviews_count, service, price, amount):
-    STR = f"""Вы выбрали <b>{reviews_count}</b> отзывов
-Cервис <b>{service}</b>, стоимость <b>{price} руб.</b> за отзыв.
-Оплата составит <b>{amount} руб.</b>.
-<b>‼️После оплаты - с вами свяжется менеджер для согласования текста‼️</b>
-А теперь введите ссылку на страницу, на которой надо разместить отзыв:"""
-    return STR
-
-def new_order_review_text(order: dict):
-    info = get_user(id=order['user_id'])
-    msg = (f"<b>💰 Поступил новый заказ на отзывы!</b>\n"
-           f"🐼 ID заказа: {order['id']}\n"
-           f"💳 Цена: {order['price']}\n"
-           f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-           f"⚙️ Сервис: {order['service']}\n"
-           f"🔰 Статус: {order['status']}\n"
-           f"🗓 Дата: {order['date']}\n"
-           f"🔗 Ссылка на страницу: {order['link']}")
-    return msg
-
-def reviews_array(orders: list[dict]):
-    orders_array = []
-    for order in orders:
-        info = get_user(id=order['user_id'])
-        msg = (f"🐼 ID заказа: {order['id']}\n"
-               f"💳 Цена: {order['price']}\n"
-               f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-               f"⚙️ Сервис: {order['service']}\n"
-               f"🔰 Статус: {order['status']}\n"
-               f"🗓 Дата: {order['date']}")
-        orders_array.append(msg)
-    return orders_array
-
-def new_order_delreview_text(order: dict):
-    info = get_user(id=order['user_id'])
-    msg = (f"<b>💰 Поступил новый заказ на удаление отзыва!</b>\n"
-           f"🐼 ID заказа: {order['increment']}\n"
-           f"💳 Цена: {order['price']}\n"
-           f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-           f"⚙️ Сервис: {order['service']}\n"
-           f"🔗 Ссылка на профиль: {order['link']}\n"
-           f"🔰 Статус: {order['status']}\n"
-           f"🗓 Дата: {order['date']}")
-    return msg
-
-def del_reviews_array(orders: list[dict]):
-    orders_array = []
-    for order in orders:
-        info = get_user(id=order['user_id'])
-        msg = (f"🐼 ID заказа: {order['increment']}\n"
-               f"💳 Цена: {order['price']}\n"
-               f"👤 Пользователь: @{info['user_name']} | <a href='tg://user?id={info['id']}'>{info['id']}</a>\n"
-               f"⚙️ Сервис: {order['service']}\n"
-               f"🔗 Ссылка на профиль: {order['link']}\n"
-               f"🔰 Статус: {order['status']}\n"
-               f"🗓 Дата: {order['date']}")
-        orders_array.append(msg)
-    return orders_array
+str_manual_payment = (
+    "💳 Ручная оплата на <b>{}</b>₽\n\n"
+    "Напишите менеджеру следующее сообщение\n"
+    "(нажмите, чтобы скопировать):\n\n"
+    "<code>{}</code>"
+)

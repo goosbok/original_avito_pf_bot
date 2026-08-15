@@ -1,3 +1,9 @@
-from .main_start import dp
-from .user_functions import dp
-# from .admin_functions import dp
+from . import (
+    main_start,
+    profile, promocodes, pf_order, refill,
+    admin_base, admin_promos, admin_users, admin_broadcast,
+    admin_orders, admin_settings, admin_funnel,
+    support_web,
+    connect,
+    commands,  # commands.py has unhandled_callback LAST
+)

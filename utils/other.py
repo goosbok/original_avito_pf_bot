@@ -4,14 +4,34 @@ import re
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-# Получение текущей даты
-def get_date():
-    this_date = datetime.today().replace(microsecond=0)
-    this_date = this_date.strftime("%d.%m.%Y %H:%M:%S")
+from utils.dates import now_iso
 
-    return this_date
+# Получение текущей даты в ISO+UTC.
+# Старый формат "dd.mm.yyyy HH:MM:SS" больше не пишется — для отображения
+# используйте utils.dates.format_display().
+def get_date():
+    return now_iso()
+
+
+def parse_refill_date(value):
+    """Tolerate both legacy '%d.%m.%Y %H:%M:%S' (Telegram path) and ISO-8601
+    with optional 'Z'/timezone offset (web/payments path). Returns None if
+    neither format matches."""
+    if value is None:
+        return None
+    s = str(value).strip()
+    try:
+        return datetime.strptime(s, "%d.%m.%Y %H:%M:%S")
+    except (ValueError, TypeError):
+        pass
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
 
 def format_decimal(value):
+    if value is None or value == "":
+        value = 0
     decimal_value = Decimal(value)
     formatted_value = f"{decimal_value:,.2f}".replace(',', ' ')
     return formatted_value
@@ -36,7 +56,9 @@ def link_cleaner(link):
     return cleaned_link
 
 def str2bool(value):
-  return value.lower() in ("yes", "true", "1")
+    if value is None:
+        return False
+    return str(value).lower() in ("yes", "true", "1")
 
 def str2dict(str_value):
     result_dict = ast.literal_eval(str_value)

@@ -1,0 +1,348 @@
+// Cabinet — dashboard: balance, catalog, recent orders, refill.
+// SupportChat is mounted at the app root (web/static/components/SupportChat.jsx).
+const { useState: useCabinetState, useEffect: useCabinetEffect } = React;
+
+const SERVICES = [
+  { id: 'pf', abbr: 'ПФ', name: 'Авито ПФ', desc: 'Просмотры, лайки, контакты для объявлений', price: 'от 6 ₽/ПФ', available: true, route: 'order-new' },
+];
+
+const PRESETS = [500, 1000, 2000];
+
+function StatusBadge({ status }) {
+  const map = {
+    unpaid: 'pending',
+    paid: 'posted',
+    done: 'completed',
+    failed: 'cancelled',
+    payment_failed: 'muted',
+    cancelled: 'muted',
+  };
+  const labels = {
+    unpaid: 'Ожидает оплаты',
+    paid: 'В работе',
+    done: 'Выполнен',
+    failed: 'Ошибка накрутки',
+    payment_failed: 'Не оплачен',
+    cancelled: 'Отменён',
+  };
+  return <span className={`badge badge--${map[status] || 'muted'}`}>{labels[status] || status}</span>;
+}
+
+// Backend stores Авито PF orders with position_name like "7/30" (days/views).
+// Display nicer service name in tables.
+function displayServiceName(o) {
+  if (/^\d+\/\d+$/.test(String(o.position_name || ''))) return 'Авито ПФ';
+  return o.position_name || '—';
+}
+
+function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) {
+  const [recentOrders, setRecentOrders] = useCabinetState([]);
+  const [refillAmount, setRefillAmount] = useCabinetState(1000);
+  const [customMode, setCustomMode] = useCabinetState(false);
+  const [refillStatus, setRefillStatus] = useCabinetState(null);
+  const [refillPaymentId, setRefillPaymentId] = useCabinetState(null);
+  const [refillErrorMessage, setRefillErrorMessage] = useCabinetState(null);
+  const refillBusy = refillStatus === 'pending' || refillStatus === 'polling';
+  const refillAmountValid = Number(refillAmount) >= 100;
+
+  // Клик по балансу в шапке → переход в кабинет с автоскроллом к пополнению.
+  useCabinetEffect(() => {
+    if (sessionStorage.getItem('scroll_to_refill') !== '1') return;
+    sessionStorage.removeItem('scroll_to_refill');
+    const t = setTimeout(() => {
+      document.getElementById('cabinet-refill')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    return () => clearTimeout(t);
+  }, []);
+
+  const openSupportForRefill = () => {
+    const text = `Хочу пополнить баланс на ${Number(refillAmount).toLocaleString('ru-RU')} ₽, но через сайт не получается. Помогите, пожалуйста.`;
+    window.dispatchEvent(new CustomEvent('support-chat-send', { detail: { text } }));
+  };
+
+  useCabinetEffect(() => {
+    api.get('/api/orders?page=1&page_size=5').then(data => {
+      if (!data.__unauthorized) setRecentOrders(data.items || []);
+    }).catch(() => {});
+  }, []);
+
+  const handleRefill = async () => {
+    if (!refillAmountValid) return;
+    setRefillErrorMessage(null);
+    setRefillStatus('pending');
+    try {
+      const data = await api.post('/api/refill', {
+        amount: Number(refillAmount),
+        agreed_privacy: true,
+        agreed_offer: true,
+      });
+      setRefillPaymentId(data.payment_id);
+      window.open(data.payment_url, '_blank');
+      setRefillStatus('polling');
+    } catch (e) {
+      if (e.status >= 400 && e.status < 500 && e.message) {
+        setRefillErrorMessage(e.message);
+      }
+      setRefillStatus('error');
+    }
+  };
+
+  const selectPreset = (p) => {
+    setRefillAmount(p);
+    setCustomMode(false);
+  };
+
+  const enterCustomMode = () => {
+    setCustomMode(true);
+  };
+
+  const exitCustomMode = () => {
+    setCustomMode(false);
+    setRefillAmount(1000);
+  };
+
+  const checkRefillStatus = async () => {
+    if (!refillPaymentId) return;
+    try {
+      const data = await api.get(`/api/refill/${refillPaymentId}/status`);
+      if (data.status === 'succeeded') {
+        setRefillStatus('success');
+        refreshBalance();
+        setTimeout(() => { setRefillStatus(null); setRefillPaymentId(null); }, 4000);
+      } else if (data.status === 'failed') {
+        setRefillStatus('error');
+      }
+    } catch (_) {}
+  };
+
+  const handleServiceClick = (service) => {
+    if (!service.available) return;
+    if (service.route) onNavigate(service.route);
+    else alert(`Услуга "${service.name}" — оформление через менеджера в Telegram`);
+  };
+
+  return (
+    <div className="page-wrap">
+      <div className="cabinet">
+        <div className="container">
+
+          <InstallBanner />
+
+          <div className="cabinet-top-row" style={{
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            gap: 16, flexWrap: 'wrap', marginBottom: 28
+          }}>
+            <div>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: 4 }}>
+                Привет, {user.first_name}
+              </h2>
+              <p style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>
+                Личный кабинет · Управляйте заказами и балансом
+              </p>
+            </div>
+
+            <div id="cabinet-refill" className="card cabinet-balance-card" style={{ padding: '16px 20px', width: '100%', maxWidth: 340, flex: '0 0 auto' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Баланс</span>
+                <span style={{ fontSize: '1.375rem', fontWeight: 800, color: 'var(--primary)' }}>{balance.toLocaleString('ru-RU')} ₽</span>
+              </div>
+
+              {!customMode ? (
+                <div className="balance-presets">
+                  {PRESETS.map(p => (
+                    <button
+                      key={p}
+                      className={`balance-preset${refillAmount === p && !customMode ? ' active' : ''}`}
+                      style={{ flex: 1 }}
+                      onClick={() => selectPreset(p)}
+                      disabled={refillBusy}
+                    >
+                      {p.toLocaleString('ru-RU')}
+                    </button>
+                  ))}
+                  <button
+                    className="balance-preset"
+                    style={{ flex: 1 }}
+                    onClick={enterCustomMode}
+                    disabled={refillBusy}
+                  >
+                    Другая
+                  </button>
+                </div>
+              ) : (
+                <div className="balance-custom-row">
+                  <button
+                    className="balance-back-btn"
+                    onClick={exitCustomMode}
+                    disabled={refillBusy}
+                    aria-label="К пресетам"
+                    title="К пресетам"
+                  >
+                    ←
+                  </button>
+                  <input
+                    className="input"
+                    type="number"
+                    min={100}
+                    autoFocus
+                    value={refillAmount === 0 ? '' : refillAmount}
+                    onChange={e => setRefillAmount(e.target.value === '' ? 0 : Number(e.target.value))}
+                    placeholder="Сумма от 100 ₽"
+                    disabled={refillBusy}
+                    style={{ flex: 1, padding: '8px 10px', fontSize: '0.875rem' }}
+                  />
+                </div>
+              )}
+
+              <button
+                className="btn btn--primary balance-cta"
+                onClick={handleRefill}
+                disabled={refillBusy || !refillAmountValid}
+              >
+                {refillStatus === 'pending'
+                  ? '...'
+                  : refillAmountValid
+                    ? `Пополнить ${Number(refillAmount).toLocaleString('ru-RU')} ₽`
+                    : 'Введите сумму от 100 ₽'}
+              </button>
+
+              {!refillStatus && (
+                <div className="balance-fineprint">
+                  Нажимая «Пополнить», вы соглашаетесь с{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer">Политикой конфиденциальности</a>
+                  {' '}и{' '}
+                  <a href="/offer" target="_blank" rel="noopener noreferrer">Публичной офертой</a>
+                </div>
+              )}
+
+              {refillStatus === 'polling' && (
+                <div className="balance-status balance-status--pending" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>⏳ Ожидаем оплаты</span>
+                  <button
+                    className="btn btn--ghost btn--sm"
+                    onClick={checkRefillStatus}
+                    style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                  >Проверить</button>
+                </div>
+              )}
+              {refillStatus === 'success' && (
+                <div className="balance-status balance-status--success" style={{ marginTop: 8, padding: '8px 12px', fontSize: '0.8rem' }}>
+                  ✅ {refillAmount.toLocaleString('ru-RU')} ₽ зачислено!
+                </div>
+              )}
+              {refillStatus === 'error' && (
+                <div
+                  className="balance-status"
+                  style={{
+                    marginTop: 8, padding: '8px 12px', fontSize: '0.8rem',
+                    background: 'var(--status-cancel-bg)', color: 'var(--status-cancel-text)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                  }}
+                >
+                  <span>❌ {refillErrorMessage || 'Произошла ошибка'}</span>
+                  {!refillErrorMessage && (
+                    <button
+                      className="btn btn--sm"
+                      onClick={openSupportForRefill}
+                      style={{
+                        fontSize: '0.7rem', padding: '3px 10px', whiteSpace: 'nowrap',
+                        background: 'var(--status-cancel-text)', color: '#fff', borderColor: 'transparent',
+                      }}
+                    >Пополнить через поддержку</button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Catalog */}
+          <div className="cabinet__section">
+            <div className="section-header">
+              <span className="section-title">Услуги</span>
+            </div>
+            <div className="catalog-grid">
+              {SERVICES.map(s => (
+                <div
+                  key={s.id}
+                  className={`card service-card card--hover${!s.available ? ' service-card--disabled' : ''}`}
+                  onClick={() => handleServiceClick(s)}
+                  style={{ cursor: s.available ? 'pointer' : 'default' }}
+                >
+                  <div style={{ width: 38, height: 38, borderRadius: 8, background: s.available ? 'var(--primary-dim)' : 'var(--surface-3)', color: s.available ? 'var(--primary)' : 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '-0.01em' }}>{s.abbr}</div>
+                  <div className="service-card__name">{s.name}</div>
+                  <div className="service-card__desc">{s.desc}</div>
+                  <div className="service-card__footer">
+                    {s.available
+                      ? <span className="service-card__price">{s.price}</span>
+                      : <span className="badge badge--muted" style={{ fontSize: '0.7rem' }}>{s.badge}</span>
+                    }
+                    {s.available && <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>Заказать</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Recent orders */}
+          <div className="cabinet__section">
+            <div className="section-header">
+              <span className="section-title">Последние заказы</span>
+              <button className="btn btn--ghost btn--sm" onClick={() => onNavigate('orders')}>
+                Все заказы
+              </button>
+            </div>
+            <div className="card" style={{ overflow: 'hidden' }}>
+              {recentOrders.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state__icon">📭</div>
+                  <div className="empty-state__title">Заказов ещё нет</div>
+                  <div className="empty-state__desc">Выберите услугу из каталога выше</div>
+                </div>
+              ) : (
+                <>
+                  <div className="desktop-only">
+                    <table className="orders-table">
+                      <thead>
+                        <tr>
+                          <th>#</th><th>Услуга</th><th>Сумма</th><th>Статус</th><th>Дата</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recentOrders.map(o => (
+                          <tr key={o.order_id} style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
+                            <td style={{ color: 'var(--text-3)', fontWeight: 600 }}>#{o.order_id}</td>
+                            <td style={{ fontWeight: 600 }}>{displayServiceName(o)}</td>
+                            <td style={{ fontWeight: 700 }}>{o.price.toLocaleString('ru-RU')} ₽</td>
+                            <td><StatusBadge status={o.status} /></td>
+                            <td style={{ color: 'var(--text-3)' }}>{formatDisplay(o.date) || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mobile-only">
+                    {recentOrders.map(o => (
+                      <div key={o.order_id} className="order-card-mobile" style={{ cursor: 'pointer' }} onClick={() => onNavigate('order-detail', o)}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{displayServiceName(o)}</div>
+                            <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: 2 }}>#{o.order_id} · {formatDisplay(o.date) || '—'}</div>
+                          </div>
+                          <StatusBadge status={o.status} />
+                        </div>
+                        <div style={{ fontWeight: 700, color: 'var(--primary)' }}>{o.price.toLocaleString('ru-RU')} ₽</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { CabinetPage, StatusBadge, displayServiceName });

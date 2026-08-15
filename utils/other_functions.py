@@ -7,13 +7,6 @@ from data.loader import bot
 from aiogram.utils.exceptions import ChatNotFound
 #from utils.sqlite3 import get_admins, get_spam_exclude
 
-# Получение текущей даты
-def get_date():
-    this_date = datetime.today().replace(microsecond=0)
-    this_date = this_date.strftime("%d.%m.%Y %H:%M:%S")
-
-    return this_date
-
 def format_decimal(value):
     decimal_value = Decimal(value)
     formatted_value = f"{decimal_value:,.2f}".replace(',', ' ')
@@ -35,33 +28,10 @@ def link_cleaner(link):
     cleaned_link = cleaned_link.replace(";", "")
     return cleaned_link
 
-#Отправка отчета админам
-async def send_admins(msg: str):
-    for admin in get_admins():
-        if admin not in get_spam_exclude():
-            await bot.send_message(chat_id=admin, text=msg, disable_web_page_preview=True)
-        else:
-            pass
-
-#Отправка отчета админам
-async def send_admin(msg: str):
-    await bot.send_message(chat_id=257838190, text=msg, disable_web_page_preview=True)
-
-#Отправка отчета манагерам
-async def send_managers(msg: str):
-    for admin in get_admins():
-        if admin != 6988175544 and admin != 257838190:
-            await bot.send_message(chat_id=admin, text=msg, disable_web_page_preview=True)
-        else:
-            pass
-
 def str2bool(value):
-  return value.lower() in ("yes", "true", "1")
-
-def str2dict(str_value):
-    result_dict = ast.literal_eval(str_value)
-
-    return result_dict
+    if value is None:
+        return False
+    return str(value).lower() in ("yes", "true", "1")
 
 #Падежи для слова день
 def get_days_suffix(count):

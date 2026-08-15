@@ -1,19 +1,19 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup
-from utils.sqlite3 import get_user, get_string_from_base, get_setting, get_all_qna_avito, get_admins
-from design import *
+# NOTE: import get_string from utils.sqlite3 — DO NOT redefine it here.
+# A previous local get_string() shadowed the canonical one via star-imports
+# and silently dropped _STRING_DEFAULTS fallbacks, breaking every handler.
+from utils.sqlite3 import get_user, get_string, get_string_from_base, get_setting, get_all_qna_avito, get_admins
+from design import (
+    support, qna, promocodes, profile, main_menu,
+    refill_balance, list_orders,
+)
+from data import config
 from data.config import price_google, price_yandex, price_vk, price_flamp, price_2gis, price_avito
 from utils.other_functions import str2bool
 
 months_names = {'1': 'Январь', '2': 'Февраль', '3': 'Март', '4': 'Апрель',
                 '5': 'Май', '6': 'Июнь', '7': 'Июль', '8': 'Август',
                 '9': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь'}
-
-def get_string(param):
-    str_value = get_string_from_base(param)
-    if str_value:
-        return str_value['value']
-    else:
-        return globals().get(param)
 
 def get_username(user_id):
     user = get_user(id=user_id)
@@ -39,52 +39,28 @@ def get_menu_kb():
             callback_data='tarifs:pf'
         )
     ),
-    """keyboard.add(
-        InlineKeyboardButton(
-            text=f"🚀 Заказать ПФ Яндекс",
-            callback_data='yandex_pf'
-        )
-    ),"""
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_reviews'),
-    #         callback_data="reviews"
-    #     )
-    # ),
-    # keyboard.add(
-    #     InlineKeyboardButton(
-    #         text=get_string('btn_seo_boost'),
-    #         callback_data="seo_boost"
-    #     )
-    # )
     keyboard.add(
         InlineKeyboardButton(
             text=get_string('btn_profile'),
             callback_data='user:profile'
         )
     ),
-    """keyboard.add(
-        InlineKeyboardButton(
-            text=f"❗️Получи 1.000₽ баланса за отзыв❗️",
-            callback_data='review_bonus'
-        )
-    ),"""
-    keyboard.add(
+    keyboard.row(
         InlineKeyboardButton(
             text=get_string('btn_channel'),
             url=get_setting('channel_link')
+        ),
+        InlineKeyboardButton(
+            text=get_string('btn_site'),
+            url=config.LANDING_URL
         )
     )
-    keyboard.row(
-        InlineKeyboardButton(
-            text=rules,
-            callback_data='info:rules'
-        ),
+    keyboard.add(
         InlineKeyboardButton(
             text=support,
             callback_data='info:support'
         )
-    ),
+    )
     keyboard.add(
 
         InlineKeyboardButton(
@@ -97,95 +73,6 @@ def get_menu_kb():
         )
     )
 
-    return keyboard
-
-###############################################################################################
-#############################           SEO BOOST              ################################
-###############################################################################################
-def seo_boost_kb():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_howto'),
-            callback_data='seo_howto'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_why'),
-            callback_data='seo_why'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_result'),
-            callback_data='seo_result'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_seo_order'),
-            callback_data='seo_order'
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=get_string('btn_main_menu'),
-            callback_data='menu'
-        )
-    )
-    return keyboard
-
-#Клавиатура с месяцами для SEO
-def seo_months(buttons_per_row=6):
-    keyboard = InlineKeyboardMarkup()
-    buttons = []
-    for i in range(1,13):
-        button = InlineKeyboardButton(
-            text=str(i),
-            callback_data=f"seo:{str(i)}"
-        )
-        buttons.append(button)
-
-        # Если количество кнопок достигло buttons_per_row, добавляем ряд в клавиатуру
-        if len(buttons) == buttons_per_row:
-            keyboard.row(*buttons)
-            buttons = []
-
-    # Добавляем оставшиеся кнопки, если их число не делится на buttons_per_row
-    if buttons:
-        keyboard.row(*buttons)
-
-    keyboard.row(
-        InlineKeyboardButton(
-            text="⬅️ Назад",
-            callback_data='seo_boost'
-        ),
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='menu'
-        )
-    )
-
-    return keyboard
-
-#Подтверждение заказа SEO
-def seo_order_confirm(param):
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text=get_string('btn_yes'),
-            callback_data=f'seo_yes:{param}'
-        ),
-        InlineKeyboardButton(
-            text=get_string('btn_no'),
-            callback_data='seo_boost'
-        ),
-        InlineKeyboardButton(
-            text=get_string('btn_main_menu'),
-            callback_data='menu'
-        )
-    )
     return keyboard
 
 ###############################################################################################
@@ -455,11 +342,7 @@ def admin():
                 callback_data="user_balance"
             )
         )
-        keyboard.row(
-            InlineKeyboardButton(
-                text="⭐️ Отзывы",
-                callback_data='reviews_man'
-            ),
+        keyboard.add(
             InlineKeyboardButton(
                 text="📖 Заказы",
                 callback_data='orders_man'
@@ -502,6 +385,12 @@ def admin():
             InlineKeyboardButton(
                 text="💰 Финансовый отчет",
                 callback_data='money_by_year'
+            )
+        )
+        keyboard.add(
+            InlineKeyboardButton(
+                text="📊 Воронка",
+                callback_data='funnel_menu'
             )
         )
         return keyboard
@@ -738,6 +627,13 @@ def payment_setup_kb(param):
 
     keyboard.add(
         InlineKeyboardButton(
+            text="💳 Способы оплаты",
+            callback_data='payment_methods_setup'
+        )
+    )
+
+    keyboard.add(
+        InlineKeyboardButton(
             text="💰 Прайс \"ПФ Авито\"",
             callback_data='price_edit:avito_pf'
         )
@@ -799,6 +695,29 @@ def payment_setup_kb(param):
            text=main_menu,
            callback_data='to_admin_menu'
        )
+    )
+    return keyboard
+
+def payment_methods_admin_kb() -> InlineKeyboardMarkup:
+    from services.payment_methods import METHODS, is_enabled, can_disable
+    keyboard = InlineKeyboardMarkup()
+    for method, label in METHODS.items():
+        enabled = is_enabled(method)
+        if enabled:
+            icon = "✅"
+            suffix = " (единственный)" if not can_disable(method) else ""
+        else:
+            icon = "❎"
+            suffix = ""
+        keyboard.add(
+            InlineKeyboardButton(
+                text=f"{icon} {label}{suffix}",
+                callback_data=f"payment_method_toggle:{method}"
+            )
+        )
+    keyboard.row(
+        InlineKeyboardButton(text="⬅️ Назад", callback_data="price_setup"),
+        InlineKeyboardButton(text=main_menu, callback_data='to_admin_menu')
     )
     return keyboard
 
@@ -880,10 +799,10 @@ def del_admin_kb(buttons_per_row=2, show_nick=True, show_id=False):
     buttons = []
     for admin in admins:
         user = get_user(id=admin)
-        if user['user_name']:
+        if user and user['user_name']:
             user_name = user['user_name']
         else:
-            user_name = 'Нет имени'
+            user_name = str(admin)
         button = InlineKeyboardButton(
             text=f"❎{user_name}",
             callback_data=f"del_admin:{admin}"
@@ -1110,12 +1029,36 @@ def orders_kb():
         )
         keyboard.row(
             InlineKeyboardButton(
-                text="✅ Выполнить",
-                callback_data="gotovoebat"
+                text="❌ Заказ failed",
+                callback_data="fail_order"
             ),
             InlineKeyboardButton(
                 text="❎ Удалить",
                 callback_data="del_order"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📤 Отправил все manual",
+                callback_data="mark_all_manual"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="📋 Manual задачи в шит",
+                callback_data="gsheets_manual"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="🤖 Авто запуски в шит",
+                callback_data="gsheets_auto"
+            )
+        )
+        keyboard.row(
+            InlineKeyboardButton(
+                text="🧪 Test auto",
+                callback_data="test_auto_dispatch",
             )
         )
         keyboard.add(
@@ -1224,54 +1167,29 @@ def show_user_order_by_index(index, orders_cnt):
                 callback_data=f"repeat:{index}"
             )
         )
+        if orders_cnt > 1:
+            nav_buttons = []
+            if index > 0:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="◀️ Пред.",
+                    callback_data=f"ordr:{index-1}"
+                ))
+            nav_buttons.append(InlineKeyboardButton(
+                text=f"{index+1} / {orders_cnt}",
+                callback_data="user_show_all:orders"
+            ))
+            if index < orders_cnt - 1:
+                nav_buttons.append(InlineKeyboardButton(
+                    text="След. ▶️",
+                    callback_data=f"ordr:{index+1}"
+                ))
+            keyboard.row(*nav_buttons)
         keyboard.add(
             InlineKeyboardButton(
-                text="📖Все заказы",
+                text="📖 Все заказы",
                 callback_data="user_show_all:orders"
             )
         )
-        if orders_cnt !=1:
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #1",
-                    callback_data=f"ordr:0"
-                )
-            )
-            if index == 0:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    )
-                )
-            elif index != 0 and index < orders_cnt - 1:
-                keyboard.row(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    ),
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"ordr:{index+1}"
-                    ),
-                )
-            else:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"ordr:{index-1}"
-                    )
-                )
-
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #{orders_cnt}",
-                    callback_data=f"ordr:{orders_cnt-1}"
-                )
-            )
-    else:
-        pass
-
     keyboard.row(
         InlineKeyboardButton(
             text=profile,
@@ -1404,7 +1322,7 @@ def refill_ref_kb(user_id, kb_page_dict={}, page=0, buttons_per_row=2, back='use
     keyboard = InlineKeyboardMarkup()
     buttons = []
     if int(page) > len(kb_page_dict):
-        page = len(page_dict)
+        page = len(kb_page_dict)
     if kb_page_dict:
         for usr_id in kb_page_dict[str(page)]:
             user_str = get_username(usr_id)
@@ -1533,211 +1451,44 @@ def money_by_month(months_array, buttons_per_row=3):
 
     return keyboard
 
-def reviews_kb():
-    """
-    ВКонтакте, Яндекс , Авито , 2гис, фламп, Гугл
-    """
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🚀 ВКонтакте",
-            callback_data="reviews:vk"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Яндекс",
-            callback_data="reviews:yandex"
-        ),
-        #InlineKeyboardButton(
-        #    text="🚀 Авито",
-        #    callback_data="reviews:avito"
-        #),
-    ),
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🚀 2ГИС",
-            callback_data="reviews:2gis"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Фламп",
-            callback_data="reviews:flamp"
-        ),
-        InlineKeyboardButton(
-            text="🚀 Google",
-            callback_data="reviews:google"
-        )
-    ),
-    keyboard.add(
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data="menu"
-        )
+
+def funnel_service_kb() -> InlineKeyboardMarkup:
+    """Service picker for the funnel admin menu."""
+    # Lazy import — services.funnel pulls matplotlib at module load.
+    from services.funnel import FUNNEL_STEPS, SERVICE_LABELS
+
+    kb = InlineKeyboardMarkup()
+    for service in FUNNEL_STEPS.keys():
+        label = SERVICE_LABELS.get(service, service)
+        kb.add(InlineKeyboardButton(text=label, callback_data=f"funnel:{service}"))
+    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="to_admin_menu"))
+    return kb
+
+
+def funnel_period_kb(service: str) -> InlineKeyboardMarkup:
+    """Period picker for a specific service."""
+    kb = InlineKeyboardMarkup()
+    kb.row(
+        InlineKeyboardButton(text="Сегодня", callback_data=f"funnel:{service}:today"),
+        InlineKeyboardButton(text="7 дней", callback_data=f"funnel:{service}:7d"),
     )
-
-    return keyboard
-
-def reviews_count(service, buttons_per_row=5):
-    if service == "vk":
-        price = price_vk
-    elif service == "yandex":
-        price = price_yandex
-    elif service == "avito":
-        price = price_avito
-    elif service == "2gis":
-        price = price_2gis
-    elif service == "flamp":
-        price = price_flamp
-    elif service == "google":
-        price = price_google
-
-    keyboard = InlineKeyboardMarkup()
-    buttons = []
-
-    # Преобразование ключей к int и сортировка
-    sorted_keys = sorted(price.keys(), key=int)
-
-    for key in sorted_keys:
-        button = InlineKeyboardButton(
-            text=str(key),
-            callback_data=f"rev_price:{str(key)}"
-        )
-        buttons.append(button)
-
-        if len(buttons) == buttons_per_row:
-            keyboard.row(*buttons)
-            buttons = []
-
-    # Добавляем оставшиеся кнопки, если их число не делится на buttons_per_row
-    if buttons:
-        keyboard.row(*buttons)
-
-    if service == "avito":
-        keyboard.add(
-            InlineKeyboardButton(
-                text="Удаление негативного отзыва",
-                callback_data="avito_del_review"
-            )
-        )
-
-    keyboard.add(
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='menu'
-        )
+    kb.row(
+        InlineKeyboardButton(text="30 дней", callback_data=f"funnel:{service}:30d"),
+        InlineKeyboardButton(text="Всё время", callback_data=f"funnel:{service}:all"),
     )
+    kb.add(InlineKeyboardButton(text="⬅️ Назад", callback_data="funnel_menu"))
+    return kb
 
-    return keyboard
 
-def yes_no_reviews():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="✅ Да",
-            callback_data="rev_confirm"
-        ),
-        InlineKeyboardButton(
-            text="❎ Нет",
-            callback_data="menu"
-        ),
-    )
-    return keyboard
-
-def reviews_man_kb():
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(
-            text="🔎 по юзеру",
-            callback_data="rev_user_search"
-        ),
-        InlineKeyboardButton(
-            text="✅ Выполнить",
-            callback_data="reviw_close"
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text="📖 Таблица по отзывам",
-            callback_data="reviews_sheet"
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text="🐹 Заказы на удаление отзыва",
-            callback_data="del_rev_user_search"
-        )
-    )
-
-    keyboard.add(
-        InlineKeyboardButton(
-            text="✅ Выполнить заказ",
-            callback_data="del_review_close"
-        )
-    )
-    keyboard.add(
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='to_admin_menu'
-        )
-    )
-    return keyboard
-
-def show_admin_review_by_index(index, orders_cnt, page='reviews_man'):
-    keyboard = InlineKeyboardMarkup()
-    if orders_cnt:
-        keyboard.add(
-            InlineKeyboardButton(
-                text="📖Все заказы",
-                callback_data="admin_show_all_reviews"
-            )
-        )
-        if orders_cnt != 1:
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #1",
-                    callback_data=f"review:0"
-                )
-            )
-            if index == 0:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"review:{index+1}"
-                    )
-                )
-            elif index != 0 and index < orders_cnt - 1:
-                keyboard.row(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"review:{index-1}"
-                    ),
-                    InlineKeyboardButton(
-                        text=f"Следующий ({index+2}/{orders_cnt}) ▶️",
-                        callback_data=f"review:{index+1}"
-                    ),
-                )
-            else:
-                keyboard.add(
-                    InlineKeyboardButton(
-                        text=f"◀️ Предыдущий ({index}/{orders_cnt})",
-                        callback_data=f"review:{index-1}"
-                    )
-                )
-            keyboard.add(
-                InlineKeyboardButton(
-                    text=f"Заказ #{orders_cnt}",
-                    callback_data=f"review:{orders_cnt-1}"
-                )
-            )
-    else:
-        pass
-
-    keyboard.add(
-        InlineKeyboardButton(
-            text="⬅️ Назад",
-            callback_data=page
-        ),
-        InlineKeyboardButton(
-            text=main_menu,
-            callback_data='to_admin_menu'
-        )
-    )
-    return keyboard
+def user_select_kb(page: int, total: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardMarkup(row_width=3)
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("←", callback_data="usel:prev"))
+    nav.append(InlineKeyboardButton(f"{page + 1}/{total}", callback_data="usel:noop"))
+    if page < total - 1:
+        nav.append(InlineKeyboardButton("→", callback_data="usel:next"))
+    kb.row(*nav)
+    kb.add(InlineKeyboardButton("✅ Выбрать этого", callback_data="usel:pick"))
+    kb.add(InlineKeyboardButton("🔙 Отмена", callback_data="usel:cancel"))
+    return kb

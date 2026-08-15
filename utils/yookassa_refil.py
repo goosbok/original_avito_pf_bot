@@ -6,11 +6,6 @@ import uuid
 from data.config import SHOP_ID, SECRET_KEY, botlink
 from yookassa import Configuration, Payment
 
-_PROXY = os.getenv("YOOKASSA_PROXY")
-if _PROXY:
-    os.environ["HTTPS_PROXY"] = _PROXY
-    os.environ["HTTP_PROXY"] = _PROXY
-
 """
 SHOP_ID = os.getenv("SHOP_ID")
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -75,7 +70,9 @@ async def check_payment_status(payment_id):
     attempts = 0
 
     while attempts < max_attempts:
-        payment_response = Payment.find_one(payment_id)
+        # YK SDK синхронный — в отдельный поток, чтобы не блокировать event loop
+        # (зависший к YooKassa запрос иначе замораживает весь polling бота).
+        payment_response = await asyncio.to_thread(Payment.find_one, payment_id)
         print(payment_response.status)
 
         if payment_response.status == "succeeded":
@@ -84,7 +81,7 @@ async def check_payment_status(payment_id):
             return False
         elif payment_response.status == "waiting_for_capture":
             # Вызов метода "Capture" для завершения платежа
-            captured_payment = Payment.capture(payment_id)
+            captured_payment = await asyncio.to_thread(Payment.capture, payment_id)
             print(captured_payment.status)
 
             if captured_payment.status == "succeeded":

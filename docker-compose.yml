@@ -1,0 +1,53 @@
+# Запуск:  docker compose up -d
+# Тесты:   docker compose --profile test run --rm test
+# Сборка:  docker compose build
+#
+# Перед первым запуском:
+#   cp .env.example .env  и заполнить BOT_TOKEN, JWT_SECRET и остальное
+
+services:
+  bot:
+    build: .
+    command: python __main__.py
+    env_file:
+      - path: .env
+        required: false   # тесты не требуют .env; для бота/апи он обязателен
+    environment:
+      - START_WEB=0
+    volumes:
+      - ./storage:/app/storage
+      # images/ монтируем с хоста: IMG_2661.MP4 (46MB) исключён из образа
+      # через .dockerignore, чтобы не раздувать build. Файл приезжает через
+      # `git pull` в deploy.sh и подхватывается отсюда.
+      - ./images:/app/images:ro
+    # На хосте нет глобального IPv6. Docker DNS иногда отдаёт для googleapis.com
+    # только AAAA — httplib2 (oauth2client/googleapiclient) перебирает все
+    # адреса, упирается в "Errno 101 Network is unreachable" и падает.
+    # Отключаем IPv6 в netns контейнера, чтобы резолвер ставил IPv4 первым.
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+      net.ipv6.conf.lo.disable_ipv6: "1"
+    restart: unless-stopped
+
+  api:
+    build: .
+    command: uvicorn web.main:app --host 0.0.0.0 --port 8000
+    env_file:
+      - path: .env
+        required: false   # тесты не требуют .env; для бота/апи он обязателен
+    volumes:
+      - ./storage:/app/storage   # shared SQLite with bot
+    ports:
+      - "8000:8000"
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+      net.ipv6.conf.lo.disable_ipv6: "1"
+    restart: unless-stopped
+
+  test:
+    build: .
+    command: pytest -v
+    profiles:
+      - test

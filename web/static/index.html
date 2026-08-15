@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light" data-variant="classic">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>авито.пф — Платформа цифрового продвижения</title>
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <!-- Иконка для «Добавить на экран Домой» (iOS) и установки PWA (Android) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="авито.пф" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/platform.css" />
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- API helper (must be before Babel scripts) -->
+  <script src="/api.js"></script>
+
+  <!-- Add-to-Home-Screen state (must load before React to catch beforeinstallprompt) -->
+  <script src="/a2hs.js"></script>
+
+  <!-- Date formatters (Moscow time, ISO→dd.mm.yyyy HH:MM) -->
+  <script src="/dates.js"></script>
+
+  <!-- React + Babel -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- Shared helpers (loads first — defines TweaksPanel, etc.) -->
+  <script type="text/babel" src="/tweaks-panel.jsx"></script>
+
+  <!-- Components (dependency order — imported by app.jsx) -->
+  <script type="text/babel" src="/components/NotificationsBell.jsx"></script>
+  <script type="text/babel" src="/components/Notifications.jsx"></script>
+  <script type="text/babel" src="/components/InstallPrompt.jsx"></script>
+  <script type="text/babel" src="/components/AppHeader.jsx"></script>
+  <script type="text/babel" src="/components/PhoneLogin.jsx"></script>
+  <script type="text/babel" src="/components/Auth.jsx"></script>
+  <script type="text/babel" src="/components/Cabinet.jsx"></script>
+  <script type="text/babel" src="/components/LinkCard.jsx"></script>
+  <script type="text/babel" src="/components/OrderForm.jsx"></script>
+  <script type="text/babel" src="/components/Orders.jsx"></script>
+  <script type="text/babel" src="/components/OrderDetail.jsx"></script>
+  <script type="text/babel" src="/components/Profile.jsx"></script>
+  <script type="text/babel" src="/components/Referral.jsx"></script>
+  <script type="text/babel" src="/components/SupportChat.jsx"></script>
+  <script type="text/babel" src="/components/AdminHeader.jsx"></script>
+  <script type="text/babel" src="/components/AdminPanel.jsx"></script>
+  <script type="text/babel" src="/components/AdminDashboard.jsx"></script>
+  <script type="text/babel" src="/components/AdminUsers.jsx"></script>
+  <script type="text/babel" src="/components/AdminOrders.jsx"></script>
+  <script type="text/babel" src="/components/AdminSupport.jsx"></script>
+
+  <!-- Root app (last — uses all components) -->
+  <script type="text/babel" src="/app.jsx"></script>
+</body>
+</html>

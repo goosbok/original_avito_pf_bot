@@ -1,0 +1,318 @@
+"""Email registration / login flow."""
+from __future__ import annotations
+
+import secrets
+from datetime import datetime, timedelta, timezone
+
+from email_validator import EmailNotValidError, validate_email
+
+from services import identity
+from services.auth_password import hash_password, verify_password
+from services.exceptions import (
+    EmailAlreadyRegistered,
+    InvalidCredentials,
+    OTPCooldown,
+    OTPExpired,
+    OTPInvalid,
+    ProviderAlreadyLinked,
+)
+
+CODE_TTL_MINUTES = 10
+CODE_RESEND_COOLDOWN_SECONDS = 60
+
+
+def normalize_email(email: str) -> str:
+    """Валидирует и нормализует email. Бросает InvalidCredentials при неверном формате."""
+    try:
+        v = validate_email(email, check_deliverability=False)
+    except EmailNotValidError as exc:
+        raise InvalidCredentials(f"invalid email: {exc}") from exc
+    return v.normalized.lower()
+
+
+def _generate_code() -> str:
+    """6-digit numeric code."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def register(email: str, password: str, first_name: str | None = None) -> int:
+    """Зарегистрировать нового юзера. Возвращает user_id.
+
+    Legacy: immediate registration without email verification.
+    Сохраняется ради обратной совместимости (старые тесты + старый /register endpoint).
+    """
+    email_norm = normalize_email(email)
+    cred = hash_password(password)
+    return identity.get_or_create_user_by_email(
+        email_norm, credential_hash=cred, first_name=first_name
+    )
+
+
+def register_request(email: str, password: str, first_name: str | None = None) -> None:
+    """Step 1 of email registration. Validates, stores pending row, sends code via email.
+
+    Raises:
+      - InvalidCredentials: invalid email
+      - EmailAlreadyRegistered: email уже принадлежит реальному юзеру
+      - OTPCooldown: предыдущий код запрошен < CODE_RESEND_COOLDOWN_SECONDS назад
+      - EmailSendError: SMTP send failed
+      - ValueError: пароль слишком короткий (поднимается hash_password / выше по стеку)
+    """
+    email_norm = normalize_email(email)
+
+    # Already a real user?
+    if identity.find_user_id_by_provider("email", email_norm) is not None:
+        raise EmailAlreadyRegistered(f"email already registered: {email_norm}")
+
+    cred = hash_password(password)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        # Cooldown check
+        row = con.execute(
+            "SELECT created_at FROM pending_email_registrations WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is not None:
+            try:
+                created = datetime.fromisoformat(row["created_at"])
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                elapsed = (now - created).total_seconds()
+                if elapsed < CODE_RESEND_COOLDOWN_SECONDS:
+                    raise OTPCooldown(int(CODE_RESEND_COOLDOWN_SECONDS - elapsed))
+            except (ValueError, KeyError):
+                # malformed timestamp — overwrite below
+                pass
+
+        code = _generate_code()
+        expires_at = now + timedelta(minutes=CODE_TTL_MINUTES)
+
+        con.execute(
+            "INSERT INTO pending_email_registrations"
+            "(email, password_hash, first_name, code, expires_at, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET "
+            "password_hash = excluded.password_hash, "
+            "first_name = excluded.first_name, "
+            "code = excluded.code, "
+            "expires_at = excluded.expires_at, "
+            "created_at = excluded.created_at",
+            (email_norm, cred, first_name, code, expires_at.isoformat(), now.isoformat()),
+        )
+        con.commit()
+
+    # Send email outside the DB transaction.
+    from services.email_sender import send_email
+
+    subject = "код подтверждения"
+    body = (
+        f"Ваш код подтверждения регистрации: {code}\n\n"
+        f"Код действителен {CODE_TTL_MINUTES} минут.\n\n"
+        f"Если вы не запрашивали регистрацию, просто проигнорируйте это письмо."
+    )
+    send_email(email_norm, subject, body)
+
+
+def register_verify(email: str, code: str) -> int:
+    """Step 2: verify code, create user, return user_id. Удаляет pending-строку.
+
+    Raises:
+      - OTPExpired: код истёк
+      - OTPInvalid: неверный код или нет pending-строки
+    """
+    email_norm = normalize_email(email)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        row = con.execute(
+            "SELECT password_hash, first_name, code, expires_at "
+            "FROM pending_email_registrations WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is None:
+            raise OTPInvalid("Запросите код заново")
+        expires = datetime.fromisoformat(row["expires_at"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now > expires:
+            raise OTPExpired("Код истёк, запросите новый")
+        if str(row["code"]) != str(code).strip():
+            raise OTPInvalid("Неверный код")
+
+        password_hash = row["password_hash"]
+        first_name = row["first_name"]
+
+        # Cleanup
+        con.execute(
+            "DELETE FROM pending_email_registrations WHERE email = ?",
+            (email_norm,),
+        )
+        con.commit()
+
+    # Create the user outside the connection (identity opens its own).
+    user_id = identity.get_or_create_user_by_email(
+        email_norm,
+        credential_hash=password_hash,
+        first_name=first_name,
+    )
+    return user_id
+
+
+def login(email: str, password: str) -> int:
+    """Проверить email/пароль. Возвращает user_id или бросает InvalidCredentials."""
+    email_norm = normalize_email(email)
+    user_id = identity.find_user_id_by_provider("email", email_norm)
+    if user_id is None:
+        raise InvalidCredentials("email not registered")
+
+    from services.db import connect
+    with connect() as con:
+        row = con.execute(
+            "SELECT credential_hash FROM auth_providers "
+            "WHERE provider = 'email' AND identifier = ?",
+            (email_norm,),
+        ).fetchone()
+    if row is None or not verify_password(password, row["credential_hash"] or ""):
+        raise InvalidCredentials("wrong password")
+
+    identity.touch_provider("email", email_norm)
+    return user_id
+
+
+def link_email_request(user_id: int, email: str, password: str) -> None:
+    """Step 1 of email-link flow: validate, store pending row, send OTP.
+
+    Raises:
+      - InvalidCredentials: invalid email format
+      - ProviderAlreadyLinked: email already linked to any account
+      - OTPCooldown: last request < CODE_RESEND_COOLDOWN_SECONDS ago
+      - EmailSendError: SMTP failure
+      - ValueError: password too short
+    """
+    email_norm = normalize_email(email)
+
+    existing = identity.find_user_id_by_provider("email", email_norm)
+    if existing is not None:
+        raise ProviderAlreadyLinked("email", email_norm, existing)
+
+    cred = hash_password(password)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        row = con.execute(
+            "SELECT created_at FROM pending_email_links WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is not None:
+            try:
+                created = datetime.fromisoformat(row["created_at"])
+                if created.tzinfo is None:
+                    created = created.replace(tzinfo=timezone.utc)
+                elapsed = (now - created).total_seconds()
+                if elapsed < CODE_RESEND_COOLDOWN_SECONDS:
+                    raise OTPCooldown(int(CODE_RESEND_COOLDOWN_SECONDS - elapsed))
+            except (ValueError, KeyError):
+                pass
+
+        code = _generate_code()
+        expires_at = now + timedelta(minutes=CODE_TTL_MINUTES)
+
+        con.execute(
+            "INSERT INTO pending_email_links"
+            "(email, user_id, password_hash, code, expires_at, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(email) DO UPDATE SET "
+            "user_id = excluded.user_id, "
+            "password_hash = excluded.password_hash, "
+            "code = excluded.code, "
+            "expires_at = excluded.expires_at, "
+            "created_at = excluded.created_at",
+            (email_norm, user_id, cred, code, expires_at.isoformat(), now.isoformat()),
+        )
+        con.commit()
+
+    from services.email_sender import send_email
+
+    subject = "код подтверждения привязки почты"
+    body = (
+        f"Ваш код подтверждения: {code}\n\n"
+        f"Код действителен {CODE_TTL_MINUTES} минут.\n\n"
+        f"Если вы не запрашивали это, просто проигнорируйте письмо."
+    )
+    send_email(email_norm, subject, body)
+
+
+def link_email_verify(user_id: int, email: str, code: str) -> None:
+    """Step 2: verify OTP, link email to user account.
+
+    Raises:
+      - OTPInvalid: wrong code, no pending row, or wrong user_id
+      - OTPExpired: code TTL passed
+      - ProviderAlreadyLinked: race condition (email linked between request and verify)
+    """
+    email_norm = normalize_email(email)
+
+    from services.db import connect
+
+    now = datetime.now(timezone.utc)
+    with connect() as con:
+        row = con.execute(
+            "SELECT user_id, password_hash, code, expires_at "
+            "FROM pending_email_links WHERE email = ?",
+            (email_norm,),
+        ).fetchone()
+        if row is None:
+            raise OTPInvalid("Запросите код заново")
+        if int(row["user_id"]) != user_id:
+            raise OTPInvalid("Запросите код заново")
+
+        expires = datetime.fromisoformat(row["expires_at"])
+        if expires.tzinfo is None:
+            expires = expires.replace(tzinfo=timezone.utc)
+        if now > expires:
+            raise OTPExpired("Код истёк, запросите новый")
+        if str(row["code"]) != str(code).strip():
+            raise OTPInvalid("Неверный код")
+
+        password_hash = row["password_hash"]
+        con.execute("DELETE FROM pending_email_links WHERE email = ?", (email_norm,))
+        con.commit()
+
+    identity.link_provider(user_id, "email", email_norm, credential_hash=password_hash)
+
+
+def change_password(user_id: int, current_password: str, new_password: str) -> None:
+    """Change password for an authenticated user who already has email linked.
+
+    Raises:
+      - InvalidCredentials: no email provider or current_password is wrong
+      - ValueError: new password is the same as current
+    """
+    from services.db import connect
+    with connect() as con:
+        row = con.execute(
+            "SELECT identifier, credential_hash FROM auth_providers "
+            "WHERE user_id = ? AND provider = 'email'",
+            (user_id,),
+        ).fetchone()
+
+        if row is None or not verify_password(current_password, row["credential_hash"] or ""):
+            raise InvalidCredentials("wrong current password or no email provider")
+
+        if verify_password(new_password, row["credential_hash"] or ""):
+            raise ValueError("new password must differ from current")
+
+        new_hash = hash_password(new_password)
+        con.execute(
+            "UPDATE auth_providers SET credential_hash = ? "
+            "WHERE user_id = ? AND provider = 'email'",
+            (new_hash, user_id),
+        )
+        con.commit()

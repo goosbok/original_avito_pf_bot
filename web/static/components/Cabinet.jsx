@@ -268,7 +268,12 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                   onClick={() => handleServiceClick(s)}
                   style={{ cursor: s.available ? 'pointer' : 'default' }}
                 >
-                  <div style={{ width: 38, height: 38, borderRadius: 8, background: s.available ? 'var(--primary-dim)' : 'var(--surface-3)', color: s.available ? 'var(--primary)' : 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '-0.01em' }}>{s.abbr}</div>
+                  {/* Кнопка заказа — в шапке карточки: выше по странице и
+                      дальше от кнопки техподдержки в правом нижнем углу. */}
+                  <div className="service-card__top">
+                    <div style={{ width: 38, height: 38, borderRadius: 8, background: s.available ? 'var(--primary-dim)' : 'var(--surface-3)', color: s.available ? 'var(--primary)' : 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 800, letterSpacing: '-0.01em' }}>{s.abbr}</div>
+                    {s.available && <span className="service-card__cta">Заказать</span>}
+                  </div>
                   <div className="service-card__name">{s.name}</div>
                   <div className="service-card__desc">{s.desc}</div>
                   <div className="service-card__footer">
@@ -276,7 +281,6 @@ function CabinetPage({ user, balance, setBalance, refreshBalance, onNavigate }) 
                       ? <span className="service-card__price">{s.price}</span>
                       : <span className="badge badge--muted" style={{ fontSize: '0.7rem' }}>{s.badge}</span>
                     }
-                    {s.available && <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 700 }}>Заказать</span>}
                   </div>
                 </div>
               ))}

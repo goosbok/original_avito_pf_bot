@@ -311,6 +311,7 @@ p  { line-height: 1.65; }
 .header__spacer { flex: 1; }
 .header__actions { display: flex; align-items: center; gap: 8px; }
 .header__user { font-size: 0.8125rem; color: var(--text-2); font-weight: 500; }
+.nav-link__icon { font-size: 0.85em; }
 .theme-btn {
   background: none; border: 1.5px solid var(--border); border-radius: 50%; width: 34px; height: 34px;
   display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1rem;
@@ -721,6 +722,18 @@ p  { line-height: 1.65; }
 }
 @media (min-width: 769px) and (max-width: 1024px) {
   .catalog-grid { grid-template-columns: repeat(2, 1fr) !important; }
+}
+/* Узкий десктоп: .header__inner — flex без сжатия, при трёх пунктах навигации
+   (+ тумблер «Админ») правый блок уезжает за край. Сворачиваем подписи в иконки
+   по мере сужения: сперва у привычных «Кабинет»/«Заказы», следом — у «Пригласи
+   друга». Название остаётся в title и в меню профиля. */
+@media (min-width: 769px) and (max-width: 1099px) {
+  .nav-link:not([data-route="referral"]) .nav-link__label { display: none; }
+  .nav-link:not([data-route="referral"]) .nav-link__icon { font-size: 1.05rem; }
+}
+@media (min-width: 769px) and (max-width: 999px) {
+  .nav-link .nav-link__label { display: none; }
+  .nav-link .nav-link__icon { font-size: 1.05rem; }
 }
 
 /* ===== MISC ===== */

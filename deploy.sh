@@ -27,6 +27,18 @@ LANDING_ASSETS=(
 SERVER="root@167.233.52.85"
 PROD_HOSTNAME="ubuntu-4gb-fsn1-1-igor"
 PROJECT_DIR="/root/projects/original_avito_pf_bot"
+# Ветка, с которой раскатывается прод.
+DEPLOY_BRANCH="main"
+
+# Подтягивает $DEPLOY_BRANCH. Явный checkout нужен потому, что сервер
+# исторически стоял на dev: без него `git pull origin main` влил бы main
+# в dev и оставил рабочую копию на ветке с чужим именем. --ff-only —
+# чтобы деплой падал громко, если на сервере кто-то накоммитил руками.
+pull_code() {
+  git fetch origin "$DEPLOY_BRANCH"
+  git checkout "$DEPLOY_BRANCH"
+  git merge --ff-only "origin/$DEPLOY_BRANCH"
+}
 
 # Копирует лендинг (index.html + PWA-ассеты) в каталог, который раздаёт nginx
 # и пред-сжимает текстовые ассеты в .gz/.br (gzip_static + brotli_static в nginx).
@@ -72,7 +84,7 @@ step() { echo ""; echo "▶ $*"; }
 # --- Только лендинг ---
 if [[ "$MODE" == "--landing" ]]; then
   step "Pulling latest code..."
-  git pull origin dev --ff-only
+  pull_code
   step "Copying landing HTML..."
   copy_landing
   echo "✅ Landing updated."
@@ -82,7 +94,7 @@ fi
 # --- Только api ---
 if [[ "$MODE" == "--api" ]]; then
   step "Pulling latest code..."
-  git pull origin dev --ff-only
+  pull_code
   step "Building api..."
   docker compose build api
   step "Restarting api..."
@@ -97,7 +109,7 @@ fi
 
 # --- Full deploy (default) ---
 step "Pulling latest code..."
-git pull origin dev --ff-only
+pull_code
 
 step "Building images (api + bot)..."
 docker compose build api bot

@@ -20,6 +20,7 @@ from utils.sqlite3 import (
     get_report_exclude,
 )
 from utils.dates import format_display
+from utils.order_status import order_status_label
 from utils.other import (
     get_user_string_without_first_name, get_user_string_with_first_name,
     get_days_suffix, format_decimal, split_messages, decline_order,
@@ -257,20 +258,7 @@ async def order_work_start(message: types.Message, state: FSMContext):
     pos = order['position_name'].split('/')
     days_suff = get_days_suffix(pos[0])
     pos_name = f"{pos[0]} {days_suff} / {pos[1]} ПФ"
-    if order['status'] == 'paid':
-        status = 'В работе'
-    elif order['status'] == 'done':
-        status = 'Выполнен'
-    elif order['status'] == 'failed':
-        status = 'Ошибка накрутки'
-    elif order['status'] == 'payment_failed':
-        status = 'Не оплачен'
-    elif order['status'] == 'cancelled':
-        status = 'Отменён'
-    elif order['status'] == 'unpaid':
-        status = 'Ожидает оплаты'
-    else:
-        status = order['status']
+    status = order_status_label(order['status'])
     if order['contacts']:
         cont = '✅Да'
     else:

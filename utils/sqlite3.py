@@ -64,7 +64,7 @@ _STRING_DEFAULTS: dict[str, str] = {
     "btn_yes": "✅ Да",
     "btn_no": "❎ Нет",
     "btn_all_completed": "✅ Выполненные",
-    "btn_all_posted": "✍️ Размещённые",
+    "btn_all_posted": "🚀 В работе",
     "btn_avito_cases": "🔗 Кейсы Авито",
     "btn_support": "🧑‍💻 Тех поддержка",
     "btn_qna": "📲 FAQ / Кейсы",

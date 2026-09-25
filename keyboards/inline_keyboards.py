@@ -888,6 +888,12 @@ def messages_kb():
     )
     keyboard.add(
         InlineKeyboardButton(
+            text="📋 Рассылка по списку",
+            callback_data='send_list_spam'
+        )
+    )
+    keyboard.add(
+        InlineKeyboardButton(
                 text="🤖 Написать адину",
                 callback_data='admin_send'
             )
@@ -1390,6 +1396,21 @@ def spam_send_kb():
         InlineKeyboardButton(
             text='❎Нет',
             callback_data='send:no'
+        )
+    )
+
+    return keyboard
+
+def list_spam_send_kb():
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row(
+        InlineKeyboardButton(
+            text='✅Да',
+            callback_data='list_send:yes'
+        ),
+        InlineKeyboardButton(
+            text='❎Нет',
+            callback_data='list_send:no'
         )
     )
 

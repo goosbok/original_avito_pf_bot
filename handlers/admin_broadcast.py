@@ -1,3 +1,4 @@
+import io
 import logging
 import asyncio
 import random
@@ -12,7 +13,10 @@ from data import config
 from data.loader import dp, bot
 from utils.sqlite3 import get_admins, all_users, get_tg_id_for_user
 from utils.other import conv_delta
-from keyboards.inline_keyboards import spam_send_kb, messages_kb, admin_back_kb
+from keyboards.inline_keyboards import spam_send_kb, list_spam_send_kb, messages_kb, admin_back_kb
+from services.list_broadcast import (
+    RecipientsFileError, parse_recipients_csv, resolve_recipients, send_to_list, undelivered_csv,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +144,9 @@ async def call_send_button(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("⚠️ Рассылка сообщений отменена.", reply_markup=admin_back_kb('messages_menu'))
 
 
-@dp.callback_query_handler(text="messages_menu")
-async def messages_menu(call: types.CallbackQuery):
+@dp.callback_query_handler(text="messages_menu", state="*")
+async def messages_menu(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
     user_id = call.from_user.id
     await bot.send_message(chat_id=user_id, text="🤖 Кому отправим сообщение:", reply_markup=messages_kb())
     try:
@@ -189,3 +194,120 @@ async def send_coder_message(message: types.Message, state: FSMContext):
     CODER = config.CODER
     await bot.send_message(chat_id=CODER, text=message.text, disable_web_page_preview=True)
     await state.finish()
+
+
+# --- Рассылка по списку Telegram ID из CSV-файла ---
+
+class ListSpam(StatesGroup):
+    WaitFile = State()
+    WaitMessage = State()
+
+
+@dp.callback_query_handler(text="send_list_spam", state="*")
+async def list_spam_start(call: types.CallbackQuery, state: FSMContext):
+    await state.finish()
+    if str(call.from_user.id) not in get_admins():
+        return
+    await call.message.answer(
+        "📋 Пришлите CSV-файл со списком получателей.\n\n"
+        "Нужна колонка <b>telegram_id</b> (или ID в первой колонке). "
+        "Написать бот может только тем, кто хоть раз запускал бота.",
+        reply_markup=admin_back_kb('messages_menu'),
+    )
+    try:
+        await call.message.delete()
+    except Exception:
+        logger.debug("could not delete message")
+    await ListSpam.WaitFile.set()
+
+
+@dp.message_handler(content_types=['document'], state=ListSpam.WaitFile)
+async def list_spam_file(message: types.Message, state: FSMContext):
+    buf = io.BytesIO()
+    await message.document.download(destination_file=buf)
+    try:
+        parsed = parse_recipients_csv(buf.getvalue())
+    except RecipientsFileError as e:
+        await message.answer(f"⚠️ Не получилось прочитать файл: {e}. Пришлите другой файл.",
+                             reply_markup=admin_back_kb('messages_menu'))
+        return
+
+    resolved = resolve_recipients(parsed.tg_ids)
+    lines = [f"📋 В файле {len(parsed.tg_ids)} получателей."]
+    if resolved.unknown:
+        lines.append(f"• {len(resolved.unknown)} нет в базе бота — им не отправим")
+    if resolved.excluded:
+        lines.append(f"• {len(resolved.excluded)} исключены из рассылки — им не отправим")
+    if parsed.invalid:
+        lines.append(f"• {parsed.invalid} строк без ID пропущено")
+    if not resolved.send:
+        lines.append("\nНекому отправлять. Пришлите другой файл.")
+        await message.answer("\n".join(lines), reply_markup=admin_back_kb('messages_menu'))
+        return
+
+    lines.append(f"\n✅ Получат сообщение: <b>{len(resolved.send)}</b>")
+    lines.append("\n🔔 Введите сообщение для рассылки (текст или фото с подписью):")
+    await state.update_data(list_tg_ids=resolved.send)
+    await message.answer("\n".join(lines), reply_markup=admin_back_kb('messages_menu'))
+    await ListSpam.WaitMessage.set()
+
+
+@dp.message_handler(content_types=['text', 'photo'], state=ListSpam.WaitFile)
+async def list_spam_not_file(message: types.Message):
+    await message.answer("📎 Нужен именно CSV-файл — прикрепите его как документ.",
+                         reply_markup=admin_back_kb('messages_menu'))
+
+
+@dp.message_handler(content_types=list_content_types, state=ListSpam.WaitMessage)
+async def list_spam_message(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+    count = len(data.get("list_tg_ids", []))
+    await message.answer("Вы ввели сообщение:")
+    if message.content_type == "photo":
+        photo_id = message.photo[-1].file_id
+        await message.answer_photo(photo=photo_id, caption=message.caption)
+        payload = {"content_type": "photo", "photo_id": photo_id, "caption": message.caption}
+    else:
+        await message.answer(message.text)
+        payload = {"content_type": "text", "text": message.text}
+    await state.update_data(list_payload=payload)
+    await message.answer(f"Отправить {count} получателям?", reply_markup=list_spam_send_kb())
+
+
+async def _run_list_spam(admin_chat_id: int, tg_ids: list, payload: dict):
+    start_time = time.monotonic()
+    report = await send_to_list(bot, tg_ids, payload)
+    sec = await conv_delta(timedelta(seconds=time.monotonic() - start_time))
+    text = (
+        f"⚠️ Рассылка по списку завершена!\n"
+        f"Получателей <b>{len(tg_ids)}</b>: доставлено <b>{report.delivered}</b>, "
+        f"заблокировали бота <b>{len(report.blocked)}</b>, ошибок <b>{len(report.failed)}</b>. "
+        f"Время рассылки <b>{sec}</b>"
+    )
+    try:
+        await bot.send_message(admin_chat_id, text, reply_markup=admin_back_kb('messages_menu'))
+        if report.blocked or report.failed:
+            await bot.send_document(
+                admin_chat_id,
+                types.InputFile(io.BytesIO(undelivered_csv(report)), filename="undelivered.csv"),
+                caption="Кому не доставлено",
+            )
+    except Exception:
+        logger.exception("list broadcast: failed to send report to admin chat_id=%s", admin_chat_id)
+
+
+@dp.callback_query_handler(text_startswith="list_send:", state=ListSpam.WaitMessage)
+async def list_spam_confirm(call: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    await state.finish()
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    tg_ids, payload = data.get("list_tg_ids"), data.get("list_payload")
+    if call.data != "list_send:yes" or not tg_ids or not payload:
+        await call.message.answer("⚠️ Рассылка по списку отменена.", reply_markup=admin_back_kb('messages_menu'))
+        return
+    asyncio.create_task(_run_list_spam(call.from_user.id, tg_ids, payload))
+    await call.message.answer(f"⚠️ Рассылка по списку началась ({len(tg_ids)} получателей). "
+                              f"Пришлю отчёт, когда закончу.", reply_markup=admin_back_kb('messages_menu'))

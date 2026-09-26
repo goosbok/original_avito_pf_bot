@@ -73,23 +73,27 @@ def test_resolve_splits_unknown_and_excluded(tmp_db: Path):
     assert r.excluded == [333]
 
 
+PAYLOAD = {"from_chat_id": 500, "message_id": 42}
+
+
 @pytest.mark.asyncio
 async def test_send_counts_delivered_blocked_failed_and_retries():
     bot = AsyncMock()
     calls = {"n": 0}
 
-    async def send_message(tg_id, text):
-        if tg_id == 2:
+    async def copy_message(chat_id, from_chat_id, message_id):
+        assert (from_chat_id, message_id) == (500, 42)
+        if chat_id == 2:
             raise BotBlocked("Forbidden: bot was blocked by the user")
-        if tg_id == 3:
+        if chat_id == 3:
             raise TelegramAPIError("boom")
-        if tg_id == 4:
+        if chat_id == 4:
             calls["n"] += 1
             if calls["n"] == 1:
                 raise RetryAfter(0)
 
-    bot.send_message.side_effect = send_message
-    report = await send_to_list(bot, [1, 2, 3, 4], {"content_type": "text", "text": "hi"}, delay=0)
+    bot.copy_message.side_effect = copy_message
+    report = await send_to_list(bot, [1, 2, 3, 4], PAYLOAD, delay=0)
     assert report.delivered == 2
     assert report.blocked == [2]
     assert report.failed == [3]
@@ -100,12 +104,28 @@ async def test_send_counts_delivered_blocked_failed_and_retries():
 
 
 @pytest.mark.asyncio
-async def test_send_photo_payload():
+async def test_send_copies_message_without_rebuilding_it():
     bot = AsyncMock()
-    payload = {"content_type": "photo", "photo_id": "PH", "caption": "cap"}
-    report = await send_to_list(bot, [7], payload, delay=0)
-    bot.send_photo.assert_awaited_once_with(chat_id=7, photo="PH", caption="cap")
+    report = await send_to_list(bot, [7], PAYLOAD, delay=0)
+    bot.copy_message.assert_awaited_once_with(chat_id=7, from_chat_id=500, message_id=42)
+    bot.send_message.assert_not_called()
     assert report.delivered == 1
+
+
+@pytest.mark.asyncio
+async def test_all_users_broadcast_skips_admins_vip_and_no_tg(tmp_db: Path):
+    with sqlite3.connect(tmp_db) as con:
+        rows = [(1, "111", None), (2, "222", 1), (3, "333", None), (4, None, None)]
+        for uid, tg, vip in rows:
+            con.execute("INSERT INTO users(id, user_name, first_name, balance, reg_date, is_vip) "
+                        "VALUES (?, NULL, 'U', 0, '2026-01-01', ?)", (uid, vip))
+            if tg:
+                con.execute("INSERT INTO auth_providers(user_id, provider, identifier, created_at) "
+                            "VALUES (?, 'telegram', ?, '2026-01-01')", (uid, tg))
+        con.execute("INSERT INTO settings(parametr, description, value) VALUES ('admins', 'a', '333')")
+        con.commit()
+    import handlers.admin_broadcast as ab
+    assert ab._all_users_recipients() == [111]
 
 
 def test_handlers_import_and_menu_button(tmp_db: Path):

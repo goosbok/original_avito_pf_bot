@@ -8,6 +8,7 @@ from datetime import timedelta
 from aiogram import types
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.utils.exceptions import TelegramAPIError
 
 from data import config
 from data.loader import dp, bot
@@ -21,11 +22,36 @@ from services.list_broadcast import (
 logger = logging.getLogger(__name__)
 
 
-list_content_types = ['text', 'photo']
 
-spam_send_stickers = ['CAACAgIAAxkBAAKkwmZiBWDI9edrau5mxOWyZVdKku86AAK6PAACn8eQS1pXdxbNkN0GNQQ', 'CAACAgIAAxkBAAKkyWZiBjXiq-xMlCblUMTRPEE8l9gMAAKEOwACqg-ASB2g--fr7MgZNQQ']
 spam_ok_stickers = ['CAACAgIAAxkBAAKkxGZiBbbOh3b7DO0AAQko2z_Ea--_fgACrz0AAus-MUmBZQXoeh94iTUE', 'CAACAgIAAxkBAAKky2ZiBqaVIwreVHo-mMSW1aMa_yefAAI4QwAC-GaQS2IRSUEqOCBxNQQ']
-spam_no_stickers = ['CAACAgIAAxkBAAKkzWZiB2S2CnhpW7OwVogkxgXiaDvNAAIDPQACen2QSwnVTmP8lTDXNQQ', 'CAACAgIAAxkBAAKkz2ZiB3WcO3970Sz0PvC-QmSa5oBlAAIwOQACTbCJS_QvdBkhGwOcNQQ']
+
+
+async def accept_broadcast_message(message: types.Message, state: FSMContext, confirm_text: str, confirm_kb) -> None:
+    """Запоминает присланное/пересланное сообщение и показывает, как его увидят получатели.
+
+    Рассылается копия именно этого сообщения (copy_message), поэтому сохраняются
+    форматирование, ссылки и любые вложения.
+    """
+    if message.media_group_id:
+        data = await state.get_data()
+        if data.get("album_warned") == message.media_group_id:
+            return
+        await state.update_data(album_warned=message.media_group_id)
+        await message.answer("⚠️ Альбом из нескольких фото/видео разослать целиком нельзя. "
+                             "Пришлите одно фото или видео с подписью.")
+        return
+    payload = {"from_chat_id": message.chat.id, "message_id": message.message_id}
+    await state.update_data(broadcast_payload=payload)
+    await message.answer("Получатели увидят сообщение так:")
+    try:
+        await bot.copy_message(chat_id=message.chat.id, from_chat_id=message.chat.id,
+                               message_id=message.message_id)
+    except TelegramAPIError:
+        logger.warning("broadcast: cannot copy message type=%s", message.content_type, exc_info=True)
+        await state.update_data(broadcast_payload=None)
+        await message.answer("⚠️ Такое сообщение разослать нельзя. Пришлите другое.")
+        return
+    await message.answer(confirm_text, reply_markup=confirm_kb)
 
 
 class Spam(StatesGroup):
@@ -45,7 +71,7 @@ class coder_message(StatesGroup):
 async def send_spam(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
     user_id = call.from_user.id
-    await bot.send_message(chat_id=user_id, text=f"🔔 Ввыедите сообщение для рассылки:")
+    await bot.send_message(chat_id=user_id, text="🔔 Пришлите или перешлите сюда сообщение для рассылки — текст, фото, видео, голосовое. Оформление и ссылки сохранятся.")
     try:
         await call.message.delete()
     except:
@@ -53,70 +79,29 @@ async def send_spam(call: types.CallbackQuery, state: FSMContext):
     await Spam.SpamShow.set()
 
 
-@dp.message_handler(content_types=list_content_types, state=Spam.SpamShow)
+@dp.message_handler(content_types=types.ContentTypes.ANY, state=Spam.SpamShow)
 async def spam_message(message: types.Message, state: FSMContext):
-    content_type = message.content_type
-
-    if content_type == "text":
-        await message.answer("Вы ввели сообщение:")
-        await message.answer(message.text)
-        msg = await message.answer("Отправить?", reply_markup=spam_send_kb())
-        await state.update_data(content_type="text", text=message.text, msg_id=msg.message_id)
-    elif content_type == "photo":
-        photo_id = message.photo[-1].file_id
-        await message.answer("Вы ввели сообщение:")
-        await message.answer_photo(photo=photo_id, caption=message.caption)
-        msg = await message.answer("Отправить?", reply_markup=spam_send_kb())
-        await state.update_data(content_type="photo", photo_id=photo_id, caption=message.caption, msg_id=msg.message_id)
+    await accept_broadcast_message(message, state, "Отправить?", spam_send_kb())
 
 
-async def send_spam(state: FSMContext):
-    state_data = await state.get_data()
-    content_type = state_data['content_type']
-    msg_id = state_data['msg_id']
-    users = all_users()
-    total_users = len(users)
-    sended = 0
-    not_sended = 0
+def _all_users_recipients() -> list:
     admins = get_admins()
-    if content_type == "text":
-        text = state_data['text']
-        start_time = time.monotonic()
-        for user in users:
-            tg_id = get_tg_id_for_user(user['id'])
-            if tg_id is None:
-                not_sended += 1
-                continue
-            if str(tg_id) not in admins and user['is_vip'] != 1:
-                try:
-                    await bot.send_message(tg_id, text=text)
-                    sended += 1
-                except:
-                    logger.warning("spam: failed to send to tg_id=%s", tg_id)
-                    not_sended += 1
-            else:
-                not_sended += 1
-    elif content_type == "photo":
-        photo_id = state_data['photo_id']
-        caption = state_data['caption']
-        start_time = time.monotonic()
-        for user in users:
-            tg_id = get_tg_id_for_user(user['id'])
-            if tg_id is None:
-                not_sended += 1
-                continue
-            if str(tg_id) not in admins and user['is_vip'] != 1:
-                try:
-                    await bot.send_photo(chat_id=tg_id, photo=photo_id, caption=caption)
-                    sended += 1
-                except:
-                    logger.warning("spam: failed to send to tg_id=%s", tg_id)
-                    not_sended += 1
-            else:
-                not_sended += 1
-    end_time = time.monotonic()
-    sec = await conv_delta(timedelta(seconds=end_time - start_time))
-    for admin in admins:
+    tg_ids = []
+    for user in all_users():
+        tg_id = get_tg_id_for_user(user['id'])
+        if tg_id is not None and str(tg_id) not in admins and user['is_vip'] != 1:
+            tg_ids.append(tg_id)
+    return tg_ids
+
+
+async def _run_spam(payload: dict):
+    total_users = len(all_users())
+    start_time = time.monotonic()
+    report = await send_to_list(bot, _all_users_recipients(), payload)
+    sended = report.delivered
+    not_sended = total_users - sended
+    sec = await conv_delta(timedelta(seconds=time.monotonic() - start_time))
+    for admin in get_admins():
         admin_tg_id = get_tg_id_for_user(int(admin)) or int(admin)
         try:
             random_sticker = random.choice(spam_ok_stickers)
@@ -124,23 +109,21 @@ async def send_spam(state: FSMContext):
             await bot.send_message(chat_id=admin_tg_id, text=f"⚠️Рассылка сообщений завершена!\nПользователей в базе <b>{total_users}</b> из них <b>{sended}</b> доставлено, <b>{not_sended}</b> не доставлено, время рассылки <b>{sec}</b>", reply_markup=admin_back_kb('messages_menu'))
         except Exception as e:
             logger.exception("sender: failed to send to admin_id=%s", admin)
-    await state.finish()
 
 
 @dp.callback_query_handler(text_startswith="send:", state="*")
 async def call_send_button(call: types.CallbackQuery, state: FSMContext):
     answer = call.data.split(':')[1]
+    payload = (await state.get_data()).get("broadcast_payload")
+    await state.finish()
     try:
         await call.message.delete()
     except:
         pass
-    if answer == "yes":
-        asyncio.create_task(send_spam(state))
-        random_sticker = random.choice(spam_send_stickers)
+    if answer == "yes" and payload:
+        asyncio.create_task(_run_spam(payload))
         await call.message.answer("⚠️ Рассылка сообщений началась.", reply_markup=admin_back_kb('messages_menu'))
     else:
-        random_sticker = random.choice(spam_no_stickers)
-        await state.finish()
         await call.message.answer("⚠️ Рассылка сообщений отменена.", reply_markup=admin_back_kb('messages_menu'))
 
 
@@ -246,7 +229,7 @@ async def list_spam_file(message: types.Message, state: FSMContext):
         return
 
     lines.append(f"\n✅ Получат сообщение: <b>{len(resolved.send)}</b>")
-    lines.append("\n🔔 Введите сообщение для рассылки (текст или фото с подписью):")
+    lines.append("\n🔔 Пришлите или перешлите сюда сообщение для рассылки — текст, фото, видео, голосовое. Оформление и ссылки сохранятся.")
     await state.update_data(list_tg_ids=resolved.send)
     await message.answer("\n".join(lines), reply_markup=admin_back_kb('messages_menu'))
     await ListSpam.WaitMessage.set()
@@ -258,20 +241,10 @@ async def list_spam_not_file(message: types.Message):
                          reply_markup=admin_back_kb('messages_menu'))
 
 
-@dp.message_handler(content_types=list_content_types, state=ListSpam.WaitMessage)
+@dp.message_handler(content_types=types.ContentTypes.ANY, state=ListSpam.WaitMessage)
 async def list_spam_message(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    count = len(data.get("list_tg_ids", []))
-    await message.answer("Вы ввели сообщение:")
-    if message.content_type == "photo":
-        photo_id = message.photo[-1].file_id
-        await message.answer_photo(photo=photo_id, caption=message.caption)
-        payload = {"content_type": "photo", "photo_id": photo_id, "caption": message.caption}
-    else:
-        await message.answer(message.text)
-        payload = {"content_type": "text", "text": message.text}
-    await state.update_data(list_payload=payload)
-    await message.answer(f"Отправить {count} получателям?", reply_markup=list_spam_send_kb())
+    count = len((await state.get_data()).get("list_tg_ids", []))
+    await accept_broadcast_message(message, state, f"Отправить {count} получателям?", list_spam_send_kb())
 
 
 async def _run_list_spam(admin_chat_id: int, tg_ids: list, payload: dict):
@@ -304,7 +277,7 @@ async def list_spam_confirm(call: types.CallbackQuery, state: FSMContext):
         await call.message.delete()
     except Exception:
         pass
-    tg_ids, payload = data.get("list_tg_ids"), data.get("list_payload")
+    tg_ids, payload = data.get("list_tg_ids"), data.get("broadcast_payload")
     if call.data != "list_send:yes" or not tg_ids or not payload:
         await call.message.answer("⚠️ Рассылка по списку отменена.", reply_markup=admin_back_kb('messages_menu'))
         return

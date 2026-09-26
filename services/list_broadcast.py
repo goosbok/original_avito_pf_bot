@@ -1,4 +1,4 @@
-"""Рассылка по списку Telegram ID из CSV-файла (админка бота).
+"""Рассылки из админки бота: по списку Telegram ID из CSV и по всем пользователям.
 
 Разбор файла и сама отправка вынесены сюда из handlers/admin_broadcast.py,
 чтобы их можно было тестировать без aiogram-диспетчера.
@@ -123,20 +123,17 @@ class SendReport:
 
 async def send_to_list(bot, tg_ids: list[int], payload: dict,
                        delay: float = SEND_DELAY_SEC) -> SendReport:
-    """Отправляет payload (text или photo+caption) каждому tg_id по очереди."""
+    """Копирует сообщение админа (payload: from_chat_id + message_id) каждому tg_id.
+
+    copy_message сохраняет форматирование, ссылки и любые вложения (видео,
+    голосовые, файлы) и не добавляет плашку «Переслано из…».
+    """
     report = SendReport()
-
-    async def _send(tg_id: int) -> None:
-        if payload["content_type"] == "photo":
-            await bot.send_photo(chat_id=tg_id, photo=payload["photo_id"],
-                                 caption=payload.get("caption"))
-        else:
-            await bot.send_message(tg_id, text=payload["text"])
-
     for tg_id in tg_ids:
         for attempt in range(2):
             try:
-                await _send(tg_id)
+                await bot.copy_message(chat_id=tg_id, from_chat_id=payload["from_chat_id"],
+                                       message_id=payload["message_id"])
                 report.delivered += 1
             except RetryAfter as e:
                 if attempt == 0:
@@ -146,7 +143,7 @@ async def send_to_list(bot, tg_ids: list[int], payload: dict,
             except (BotBlocked, UserDeactivated, ChatNotFound):
                 report.blocked.append(tg_id)
             except TelegramAPIError:
-                logger.warning("list broadcast: failed to send to tg_id=%s", tg_id, exc_info=True)
+                logger.warning("broadcast: failed to send to tg_id=%s", tg_id, exc_info=True)
                 report.failed.append(tg_id)
             break
         await asyncio.sleep(delay)

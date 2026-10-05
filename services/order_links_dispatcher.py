@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass
 
 from data import config
-from services.avito_phrase_cache import lookup as cache_lookup
 from services.avito_url import extract_ad_id
 from services.circuit_breaker import CircuitBreaker
 from services.db import connect
@@ -25,7 +24,7 @@ from services.exceptions import (
     OrderNotFound,
 )
 from services.order_links import compute_deadline
-from services.order_links_classifier import classify
+from services.order_links_classifier import classify, resolve_phrase
 from services.pf_executor_api import find_existing_task, submit_link
 
 logger = logging.getLogger(__name__)
@@ -281,7 +280,7 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
             )
             continue
 
-        phrase = cache_lookup(ad_id)
+        phrase, source = resolve_phrase(ad_id)
         if not phrase:
             previews.append(LinkPreview(
                 link_id=link_id, url=url, ad_id=ad_id,
@@ -299,12 +298,12 @@ def classify_for_preview(order_id: int) -> list[LinkPreview]:
         deadline = deadline_cached
         previews.append(LinkPreview(
             link_id=link_id, url=url, ad_id=ad_id,
-            decision="auto", reason="cache_hit",
+            decision="auto", reason=source,
             phrase=phrase, deadline_at=deadline,
         ))
         logger.info(
-            "classifier.preview link=%s ad=%s decision=auto reason=cache_hit",
-            link_id, ad_id,
+            "classifier.preview link=%s ad=%s decision=auto reason=%s",
+            link_id, ad_id, source,
         )
 
     return previews

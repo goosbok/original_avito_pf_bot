@@ -29,7 +29,7 @@ def test_e2e_auto_dispatch_when_phrase_cached(tmp_db):
     url = "https://avito.ru/moskva/kvartiry/x_1234567890"
     order_id = _seed(tmp_db, url)
     upsert_many([{"ad_id": "1234567890",
-                  "search_link": "купить квартиру",
+                  "search_link": "https://www.avito.ru/msk?q=квартира",
                   "created_at": "2026-06-01 12:00"}])
 
     with patch(
@@ -43,7 +43,7 @@ def test_e2e_auto_dispatch_when_phrase_cached(tmp_db):
 
     # submit_link был вызван с search_phrase из кэша
     args, kwargs = submit.call_args
-    assert kwargs["search_phrase"] == "купить квартиру"
+    assert kwargs["search_phrase"] == "https://www.avito.ru/msk?q=квартира"
     assert args[0] == url
 
     links = list_links(order_id)

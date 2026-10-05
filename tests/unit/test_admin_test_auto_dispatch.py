@@ -169,7 +169,7 @@ async def test_collect_id_empty_cache_shows_fallback(tmp_db):
 @pytest.mark.asyncio
 async def test_collect_id_happy_path_shows_preview_with_buttons(tmp_db):
     """Cache hit → preview + кнопки [Confirm] [Cancel], state → confirm."""
-    _seed_phrase("1234567890", "купить квартиру")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=квартира")
     order_id = _seed_paid_order(tmp_db, urls=[
         "https://avito.ru/x_1234567890",
     ])
@@ -239,7 +239,7 @@ def test_deserialize_previews_ignores_unknown_fields():
 @pytest.mark.asyncio
 async def test_confirm_runs_force_dispatch_and_edits_message(tmp_db):
     """Confirm → force_dispatch вызван, message edited с результатом."""
-    _seed_phrase("1234567890", "купить")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=купить")
     order_id = _seed_paid_order(tmp_db, urls=[
         "https://avito.ru/x_1234567890",
     ])
@@ -287,7 +287,7 @@ async def test_confirm_runs_force_dispatch_and_edits_message(tmp_db):
 @pytest.mark.asyncio
 async def test_confirm_shows_failure_message(tmp_db):
     """Confirm + force_dispatch вернул failure → result message с ❌."""
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=[
         "https://avito.ru/x_1234567890",
     ])

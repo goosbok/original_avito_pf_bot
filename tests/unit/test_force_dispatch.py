@@ -43,7 +43,7 @@ def test_force_dispatch_empty_link_ids(tmp_db):
 def test_force_dispatch_success_path(tmp_db):
     """Cache hit + submit OK → in_work, delivery_mode=auto, external_id."""
     from services.order_links_dispatcher import force_dispatch
-    _seed_phrase("1234567890", "купить квартиру")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=квартира")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 
@@ -65,13 +65,13 @@ def test_force_dispatch_success_path(tmp_db):
 
     # submit_link был вызван с правильной phrase
     args, kwargs = submit.call_args
-    assert kwargs["search_phrase"] == "купить квартиру"
+    assert kwargs["search_phrase"] == "https://www.avito.ru/msk?q=квартира"
 
 
 def test_force_dispatch_executor_rejected_keeps_pending(tmp_db):
     """API Rejected → success=False, link остаётся pending (не flip в manual)."""
     from services.order_links_dispatcher import force_dispatch
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 
@@ -92,7 +92,7 @@ def test_force_dispatch_executor_rejected_keeps_pending(tmp_db):
 def test_force_dispatch_executor_error_keeps_pending(tmp_db):
     """API временная ошибка → success=False, link не трогаем."""
     from services.order_links_dispatcher import force_dispatch
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 
@@ -109,7 +109,7 @@ def test_force_dispatch_skips_non_pending(tmp_db):
     """Если ссылка уже in_work — success=False, error 'уже не pending'."""
     from services.order_links_dispatcher import force_dispatch
     from services.order_links import mark_in_work
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 
@@ -128,7 +128,7 @@ def test_force_dispatch_skips_non_pending(tmp_db):
 def test_force_dispatch_ignores_feature_flag(tmp_db):
     """PF_AUTO_DISPATCH_ENABLED=False — всё равно отправляет."""
     from services.order_links_dispatcher import force_dispatch
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 
@@ -151,7 +151,7 @@ def test_force_dispatch_race_invalidlinktransition(tmp_db):
     from services.order_links_dispatcher import force_dispatch
     from services.exceptions import InvalidLinkTransition
 
-    _seed_phrase("1234567890", "x")
+    _seed_phrase("1234567890", "https://www.avito.ru/msk?q=x")
     order_id = _seed_paid_order(tmp_db, urls=["https://avito.ru/x_1234567890"])
     link_id = list_links(order_id)[0]["id"]
 

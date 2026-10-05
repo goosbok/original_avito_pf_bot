@@ -39,7 +39,7 @@ def test_classify_for_preview_mixed_cache(tmp_db):
 
     upsert_many([{
         "ad_id": "1234567890",
-        "search_link": "купить квартиру",
+        "search_link": "https://www.avito.ru/msk?q=квартира",
         "created_at": "2026-06-01 12:00",
     }])
     order_id = _seed_paid_order(tmp_db, urls=[
@@ -52,7 +52,7 @@ def test_classify_for_preview_mixed_cache(tmp_db):
 
     auto = next(p for p in previews if p.decision == "auto")
     assert auto.ad_id == "1234567890"
-    assert auto.phrase == "купить квартиру"
+    assert auto.phrase == "https://www.avito.ru/msk?q=квартира"
     assert auto.reason == "cache_hit"
     assert auto.deadline_at is not None
 
@@ -84,7 +84,7 @@ def test_classify_for_preview_ignores_feature_flag(tmp_db):
 
     upsert_many([{
         "ad_id": "1234567890",
-        "search_link": "купить",
+        "search_link": "https://www.avito.ru/msk?q=купить",
         "created_at": "2026-06-01 12:00",
     }])
     order_id = _seed_paid_order(tmp_db, urls=[
@@ -98,7 +98,7 @@ def test_classify_for_preview_ignores_feature_flag(tmp_db):
         previews = classify_for_preview(order_id)
 
     assert previews[0].decision == "auto"
-    assert previews[0].phrase == "купить"
+    assert previews[0].phrase == "https://www.avito.ru/msk?q=купить"
 
 
 def test_classify_for_preview_does_not_submit(tmp_db):
@@ -109,7 +109,7 @@ def test_classify_for_preview_does_not_submit(tmp_db):
 
     upsert_many([{
         "ad_id": "1234567890",
-        "search_link": "x",
+        "search_link": "https://www.avito.ru/msk?q=x",
         "created_at": "2026-06-01 12:00",
     }])
     order_id = _seed_paid_order(tmp_db, urls=[

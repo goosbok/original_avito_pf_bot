@@ -46,12 +46,13 @@ def test_cache_hit_returns_auto(tmp_db, caplog):
     import logging
     caplog.set_level(logging.INFO)
     from services.avito_phrase_cache import upsert_many
-    upsert_many([{"ad_id": "1234567890", "search_link": "купить квартиру",
+    upsert_many([{"ad_id": "1234567890",
+                  "search_link": "https://www.avito.ru/msk?q=квартира",
                   "created_at": "2026-06-01 12:00"}])
     with patch("services.order_links_classifier.config.PF_AUTO_DISPATCH_ENABLED",
                True):
         mode, phrase = classify("https://avito.ru/x_1234567890",
                                 _order(), link_id=99)
     assert mode == "auto"
-    assert phrase == "купить квартиру"
+    assert phrase == "https://www.avito.ru/msk?q=квартира"
     assert any("cache_hit" in r.message for r in caplog.records)

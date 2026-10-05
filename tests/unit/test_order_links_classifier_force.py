@@ -12,7 +12,7 @@ def test_force_true_bypasses_feature_off_when_cache_hit(tmp_db):
     from services.avito_phrase_cache import upsert_many
     upsert_many([{
         "ad_id": "1234567890",
-        "search_link": "купить квартиру",
+        "search_link": "https://www.avito.ru/msk?q=квартира",
         "created_at": "2026-06-01 12:00",
     }])
 
@@ -24,7 +24,7 @@ def test_force_true_bypasses_feature_off_when_cache_hit(tmp_db):
         )
 
     assert mode == "auto"
-    assert phrase == "купить квартиру"
+    assert phrase == "https://www.avito.ru/msk?q=квартира"
 
 
 def test_force_true_returns_manual_when_no_ad_id(tmp_db):

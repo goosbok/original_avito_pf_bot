@@ -414,6 +414,12 @@ def setup_kb():
     )
     keyboard.add(
         InlineKeyboardButton(
+            text="🤖 Автоотправка в бизу",
+            callback_data='auto_dispatch_setup'
+        )
+    )
+    keyboard.add(
+        InlineKeyboardButton(
             text="👑 Админы",
             callback_data='admins_setup'
         )
@@ -594,6 +600,30 @@ def btn_visual_edit_kb(index, str_cnt, page='interface_setup'):
         InlineKeyboardButton(
             text="⬅️ Назад",
             callback_data=page
+        ),
+        InlineKeyboardButton(
+            text=main_menu,
+            callback_data='to_admin_menu'
+        )
+    )
+    return keyboard
+
+def auto_dispatch_setup_kb(enabled):
+    keyboard = InlineKeyboardMarkup()
+    if enabled:
+        keyboard.add(InlineKeyboardButton(
+            text="❎ Отключить",
+            callback_data="auto_dispatch_toggle:0"
+        ))
+    else:
+        keyboard.add(InlineKeyboardButton(
+            text="✅ Включить",
+            callback_data="auto_dispatch_toggle:1"
+        ))
+    keyboard.row(
+        InlineKeyboardButton(
+            text="⬅️ Назад",
+            callback_data="settings"
         ),
         InlineKeyboardButton(
             text=main_menu,

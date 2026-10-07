@@ -368,6 +368,15 @@ class AdminStatsResponse(BaseModel):
     open_support_threads: int
 
 
+class AdminAutoDispatchState(BaseModel):
+    enabled: bool
+    source: str  # "db" — переключено из админки; "env" — дефолт из конфига
+
+
+class AdminAutoDispatchUpdate(BaseModel):
+    enabled: bool
+
+
 class NotificationItem(BaseModel):
     id: int
     kind: str

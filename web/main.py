@@ -137,6 +137,10 @@ from web.routers.admin_stats import router as admin_stats_router  # noqa: E402
 
 app.include_router(admin_stats_router)
 
+from web.routers.admin_settings import router as admin_settings_router  # noqa: E402
+
+app.include_router(admin_settings_router)
+
 from web.routers.legal import router as legal_router  # noqa: E402
 
 app.include_router(legal_router)

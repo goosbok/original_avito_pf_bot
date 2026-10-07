@@ -4,12 +4,28 @@ const { useState: useAdmDState, useEffect: useAdmDEffect } = React;
 function AdminDashboard({ onNavigate }) {
   const [stats, setStats] = useAdmDState(null);
   const [error, setError] = useAdmDState('');
+  const [autoDispatch, setAutoDispatch] = useAdmDState(null);
+  const [toggleBusy, setToggleBusy] = useAdmDState(false);
+  const [toggleError, setToggleError] = useAdmDState('');
 
   useAdmDEffect(() => {
     api.get('/api/admin/stats')
       .then(data => { if (!data.__unauthorized) setStats(data); })
       .catch(e => setError(e.message || 'Ошибка загрузки статистики'));
+    api.get('/api/admin/settings/auto-dispatch')
+      .then(data => { if (!data.__unauthorized) setAutoDispatch(data); })
+      .catch(e => setToggleError(e.message || 'Ошибка загрузки настройки'));
   }, []);
+
+  const toggleAutoDispatch = () => {
+    if (!autoDispatch || toggleBusy) return;
+    setToggleBusy(true);
+    setToggleError('');
+    api.post('/api/admin/settings/auto-dispatch', { enabled: !autoDispatch.enabled })
+      .then(data => setAutoDispatch(data))
+      .catch(e => setToggleError(e.message || 'Не удалось переключить'))
+      .finally(() => setToggleBusy(false));
+  };
 
   const cards = stats ? [
     { label: 'Всего пользователей', value: stats.users_total,           cta: 'admin-users',   ctaLabel: 'Открыть' },
@@ -49,6 +65,32 @@ function AdminDashboard({ onNavigate }) {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="card" style={{ marginTop: 22, padding: '20px 22px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Автоотправка заданий в бизу
+              </div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: autoDispatch && autoDispatch.enabled ? 'var(--primary)' : 'var(--text-2)' }}>
+                {!autoDispatch ? 'Загрузка...' : autoDispatch.enabled ? 'Включена' : 'Выключена'}
+                {autoDispatch && autoDispatch.source === 'env' &&
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-3)', fontWeight: 400 }}> (по умолчанию из конфига)</span>}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginTop: 4 }}>
+                Когда выключена — все заказы уходят на ручной запуск, внешнему исполнителю ничего не отправляется.
+              </div>
+            </div>
+            <button
+              className={autoDispatch && autoDispatch.enabled ? 'btn btn--ghost' : 'btn btn--primary'}
+              disabled={!autoDispatch || toggleBusy}
+              onClick={toggleAutoDispatch}
+            >
+              {toggleBusy ? '...' : (autoDispatch && autoDispatch.enabled ? 'Отключить' : 'Включить')}
+            </button>
+          </div>
+          {toggleError && <div className="alert alert--error" style={{ marginTop: 12 }}>{toggleError}</div>}
         </div>
       </div>
     </div>

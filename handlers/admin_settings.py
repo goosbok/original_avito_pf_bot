@@ -38,6 +38,7 @@ from keyboards.inline_keyboards import (
     setup_kb, setup_variables_kb, setup_strings_kb,
     str_visual_edit_kb, btn_visual_edit_kb,
     payment_setup_kb, payment_methods_admin_kb,
+    auto_dispatch_setup_kb,
     setup_admins, del_admin_kb,
     admin_back_kb,
     edit_price_kb,
@@ -140,6 +141,44 @@ async def admin_call_payment_method_toggle(call: types.CallbackQuery, state: FSM
     await call.message.answer(
         "💳 Способы оплаты:",
         reply_markup=payment_methods_admin_kb()
+    )
+
+
+#Автоотправка заданий исполнителю (биза)
+def _auto_dispatch_text(enabled: bool) -> str:
+    if enabled:
+        return ("🤖 Автоотправка в бизу сейчас <b>включена</b>.\n"
+                "Оплаченные заказы с валидным поисковым ключом автоматически "
+                "уходят исполнителю через API. Отключаем?")
+    return ("🤖 Автоотправка в бизу сейчас <b>выключена</b>.\n"
+            "Все заказы уходят на ручной запуск админом. Включить?")
+
+@dp.callback_query_handler(text="auto_dispatch_setup", state="*")
+async def admin_call_auto_dispatch_setup(call: types.CallbackQuery, state: FSMContext):
+    from services import feature_flags
+    try:
+        await call.message.delete()
+    except:
+        logger.debug("could not delete message")
+    enabled = feature_flags.auto_dispatch_enabled()
+    await call.message.answer(
+        text=_auto_dispatch_text(enabled),
+        reply_markup=auto_dispatch_setup_kb(enabled),
+    )
+
+@dp.callback_query_handler(text_startswith="auto_dispatch_toggle:", state="*")
+async def admin_call_auto_dispatch_toggle(call: types.CallbackQuery, state: FSMContext):
+    from services import feature_flags
+    value = call.data.split(":")[1]
+    feature_flags.set_auto_dispatch_enabled(value == "1")
+    try:
+        await call.message.delete()
+    except:
+        logger.debug("could not delete message")
+    enabled = feature_flags.auto_dispatch_enabled()
+    await call.message.answer(
+        text=_auto_dispatch_text(enabled),
+        reply_markup=auto_dispatch_setup_kb(enabled),
     )
 
 

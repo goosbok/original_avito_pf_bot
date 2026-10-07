@@ -37,7 +37,9 @@ async def run_metric_loop() -> None:
         await asyncio.sleep(interval_sec)
         # Skip when auto-dispatch is off — иначе rate=0.0 каждый час
         # выглядит как поломанный classifier, хотя это by design (всё → manual).
-        if not config.PF_AUTO_DISPATCH_ENABLED:
+        # Флаг runtime из settings (кнопка в админке), fallback — env.
+        from services import feature_flags
+        if not feature_flags.auto_dispatch_enabled():
             logger.info("metric.auto_rate.skip feature_off")
             continue
         try:

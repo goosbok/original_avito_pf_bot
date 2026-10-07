@@ -4,7 +4,7 @@ Hot-path: один SELECT в локальный кэш — никаких вне
 
 Decision-логи (structured) на каждое решение — для аудита почему ссылка
 пошла куда пошла. Reason codes:
-  feature_off  — PF_AUTO_DISPATCH_ENABLED=false
+  feature_off  — auto-dispatch выключен (settings-флаг или env)
   no_ad_id     — extract_ad_id не вернул id
   cache_miss   — ad_id есть, но валидного ключа нет ни в кэше, ни в истории
   cache_hit    — auto, phrase подтянулась из кэша
@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import logging
 
-from data import config
+from data import config  # noqa: F401 — точка патча в тестах (config.PF_AUTO_DISPATCH_ENABLED)
+from services import feature_flags
 from services.avito_phrase_cache import lookup as cache_lookup
 from services.avito_url import extract_ad_id
 from services.db import connect
@@ -85,11 +86,13 @@ def classify(url: str, order: dict, *,
     Phrase != None только когда mode='auto'.
 
     `link_id` — для логов; ничего не меняет в логике.
-    `force` — игнорировать PF_AUTO_DISPATCH_ENABLED. Используется только
+    `force` — игнорировать флаг auto-dispatch. Используется только
     админ-handler'ом «Test auto-dispatch». Штатный dispatcher всегда зовёт
     с force=False (дефолт).
     """
-    if not force and not config.PF_AUTO_DISPATCH_ENABLED:
+    # Флаг читается runtime из settings-таблицы (кнопка в админке бота/веба),
+    # fallback — env PF_AUTO_DISPATCH_ENABLED.
+    if not force and not feature_flags.auto_dispatch_enabled():
         _log(link_id, None, "manual", "feature_off")
         return "manual", None
 

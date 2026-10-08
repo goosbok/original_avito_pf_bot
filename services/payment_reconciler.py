@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 
 from yookassa import Configuration, Payment
 
-from data.config import SECRET_KEY, SHOP_ID
+from services import payment_credentials
 from services.db import connect
 from services.exceptions import UserNotFound
 from services.payment_notifications import (
@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 async def reconcile_pending() -> None:
     """Один тик крона: опросить все наши pending за 24h и финализировать succeeded."""
-    Configuration.account_id = SHOP_ID
-    Configuration.secret_key = SECRET_KEY
+    Configuration.account_id = payment_credentials.shop_id()
+    Configuration.secret_key = payment_credentials.secret_key()
 
     cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     with connect() as con:

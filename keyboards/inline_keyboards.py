@@ -664,6 +664,20 @@ def payment_setup_kb(param):
 
     keyboard.add(
         InlineKeyboardButton(
+            text="🔑 Shop ID Юкассы",
+            callback_data='yk_shop_id_setup'
+        )
+    )
+
+    keyboard.add(
+        InlineKeyboardButton(
+            text="🔐 Secret-ключ Юкассы",
+            callback_data='yk_secret_setup'
+        )
+    )
+
+    keyboard.add(
+        InlineKeyboardButton(
             text="💰 Прайс \"ПФ Авито\"",
             callback_data='price_edit:avito_pf'
         )

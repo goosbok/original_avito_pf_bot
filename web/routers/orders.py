@@ -275,12 +275,12 @@ async def payment_status(order_id: int) -> OrderPaymentStatusResponse:
     # Заказ в unpaid: если выбран yookassa и payment_id — спрашиваем у YooKassa.
     if order["payment_method"] == "yookassa" and order["payment_id"]:
         try:
-            from data.config import SECRET_KEY, SHOP_ID
+            from services import payment_credentials
             from yookassa import Configuration, Payment
 
             def _probe(payment_id):
-                Configuration.account_id = SHOP_ID
-                Configuration.secret_key = SECRET_KEY
+                Configuration.account_id = payment_credentials.shop_id()
+                Configuration.secret_key = payment_credentials.secret_key()
                 return Payment.find_one(payment_id)
 
             p = await asyncio.to_thread(_probe, order["payment_id"])
@@ -337,12 +337,12 @@ async def yookassa_return(order_id: int, request: Request):
 
     if status_val == "unpaid" and order["payment_method"] == "yookassa" and order["payment_id"]:
         try:
-            from data.config import SECRET_KEY, SHOP_ID
+            from services import payment_credentials
             from yookassa import Configuration, Payment
 
             def _probe(payment_id):
-                Configuration.account_id = SHOP_ID
-                Configuration.secret_key = SECRET_KEY
+                Configuration.account_id = payment_credentials.shop_id()
+                Configuration.secret_key = payment_credentials.secret_key()
                 return Payment.find_one(payment_id)
 
             p = await asyncio.to_thread(_probe, order["payment_id"])

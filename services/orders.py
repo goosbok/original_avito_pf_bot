@@ -225,11 +225,11 @@ def pay_with_yookassa(*, order_id: int, return_url: str) -> tuple[str, str]:
 
     price = int(order_d["price"] or 0)
     try:
-        from data.config import SECRET_KEY, SHOP_ID
+        from services import payment_credentials
         from yookassa import Configuration, Payment
 
-        Configuration.account_id = SHOP_ID
-        Configuration.secret_key = SECRET_KEY
+        Configuration.account_id = payment_credentials.shop_id()
+        Configuration.secret_key = payment_credentials.secret_key()
         payment = Payment.create({
             "amount": {"value": f"{price:.2f}", "currency": "RUB"},
             "confirmation": {"type": "redirect", "return_url": return_url},
@@ -273,11 +273,11 @@ def _yookassa_payment_status(payment_id: str) -> str | None:
     """Опросить YooKassa о статусе платежа. None — если API недоступна/ошибка
     (безопасный дефолт: вызывающий продолжит как обычно, т.е. пометит failed)."""
     try:
-        from data.config import SECRET_KEY, SHOP_ID
+        from services import payment_credentials
         from yookassa import Configuration, Payment
 
-        Configuration.account_id = SHOP_ID
-        Configuration.secret_key = SECRET_KEY
+        Configuration.account_id = payment_credentials.shop_id()
+        Configuration.secret_key = payment_credentials.secret_key()
         return getattr(Payment.find_one(payment_id), "status", None)
     except Exception:
         logger.warning("yookassa find_one failed for payment %s (treating as unknown)",
@@ -333,11 +333,11 @@ def mark_payment_failed(order_id: int) -> None:
 
     if changed and method == "yookassa" and payment_id:
         try:
-            from data.config import SECRET_KEY, SHOP_ID
+            from services import payment_credentials
             from yookassa import Configuration, Payment
 
-            Configuration.account_id = SHOP_ID
-            Configuration.secret_key = SECRET_KEY
+            Configuration.account_id = payment_credentials.shop_id()
+            Configuration.secret_key = payment_credentials.secret_key()
             Payment.cancel(payment_id)
         except Exception:
             logger.warning(

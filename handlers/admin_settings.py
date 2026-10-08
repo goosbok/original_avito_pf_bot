@@ -59,6 +59,8 @@ class setup_class(StatesGroup):
     btn_edit = State()
     price_edit = State()
     min_amount = State()
+    yk_shop_id = State()
+    yk_secret = State()
     set_admin = State()
     spam_exclude = State()
     report_exclude = State()
@@ -641,6 +643,85 @@ async def price_edit_function(message: types.Message, state: FSMContext):
         await state.finish()
     else:
         await message.answer('⚠️ Неверное значение! Цена должна быть числом!')
+
+
+#Креды Юкассы (Shop ID / secret key) — хранятся в settings, приоритет над env
+@dp.callback_query_handler(text="yk_shop_id_setup", state="*")
+async def admin_call_yk_shop_id(call: types.CallbackQuery, state: FSMContext):
+    from services import payment_credentials
+    try:
+        await call.message.delete()
+    except:
+        logger.debug("could not delete message")
+    current = payment_credentials.shop_id() or "не задан"
+    src = {"db": "настройки бота", "env": ".env на сервере", "none": "—"}.get(
+        payment_credentials.source(), "?")
+    await call.message.answer(
+        f"🔑 Текущий Shop ID: <code>{current}</code> (источник: {src})\n"
+        f"Введите новый Shop ID или <code>-</code>, чтобы вернуться к .env:",
+        reply_markup=admin_back_kb("price_setup"),
+    )
+    await setup_class.yk_shop_id.set()
+
+@dp.message_handler(state=setup_class.yk_shop_id)
+async def yk_shop_id_value(message: types.Message, state: FSMContext):
+    from services import payment_credentials
+    value = message.text.strip()
+    if value == "-":
+        payment_credentials.set_shop_id("")
+        await message.answer("👌🏻 Shop ID сброшен — используется значение из .env",
+                             reply_markup=admin_back_kb("price_setup"))
+        await state.finish()
+        return
+    if not value.isdigit():
+        await message.answer("⚠️ Shop ID должен быть числом!")
+        return
+    payment_credentials.set_shop_id(value)
+    await message.answer(f"👌🏻 Shop ID сохранён: <code>{value}</code>",
+                         reply_markup=admin_back_kb("price_setup"))
+    await state.finish()
+
+@dp.callback_query_handler(text="yk_secret_setup", state="*")
+async def admin_call_yk_secret(call: types.CallbackQuery, state: FSMContext):
+    from services import payment_credentials
+    try:
+        await call.message.delete()
+    except:
+        logger.debug("could not delete message")
+    src = {"db": "настройки бота", "env": ".env на сервере", "none": "—"}.get(
+        payment_credentials.source(), "?")
+    await call.message.answer(
+        f"🔐 Текущий secret-ключ: <code>{payment_credentials.masked_secret()}</code> "
+        f"(источник: {src})\n"
+        f"Введите новый ключ (live_... / test_...) или <code>-</code>, чтобы "
+        f"вернуться к .env. Сообщение с ключом будет удалено.",
+        reply_markup=admin_back_kb("price_setup"),
+    )
+    await setup_class.yk_secret.set()
+
+@dp.message_handler(state=setup_class.yk_secret)
+async def yk_secret_value(message: types.Message, state: FSMContext):
+    from services import payment_credentials
+    value = message.text.strip()
+    # Гигиена: секрет не должен висеть в истории чата (в ЛС бот может
+    # удалять сообщения собеседника; если не вышло — не страшно).
+    try:
+        await message.delete()
+    except:
+        logger.debug("could not delete secret message")
+    if value == "-":
+        payment_credentials.set_secret_key("")
+        await message.answer("👌🏻 Secret-ключ сброшен — используется значение из .env",
+                             reply_markup=admin_back_kb("price_setup"))
+        await state.finish()
+        return
+    if not (value.startswith("live_") or value.startswith("test_")):
+        await message.answer("⚠️ Ключ должен начинаться с live_ или test_!")
+        return
+    payment_credentials.set_secret_key(value)
+    await message.answer(f"👌🏻 Secret-ключ сохранён: <code>{payment_credentials.masked_secret()}</code>",
+                         reply_markup=admin_back_kb("price_setup"))
+    await state.finish()
 
 
 #Минимальный платеж

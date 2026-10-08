@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 
-from data.config import SHOP_ID, SECRET_KEY
+from services import payment_credentials
 from yookassa import Configuration, Payment
 
 _log = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class ProbeResult:
 def is_yookassa_enabled() -> bool:
     """Return True if yookassa is configured and enabled in payment methods."""
     from services.payment_methods import is_enabled
-    return bool(SHOP_ID and SECRET_KEY and is_enabled("yookassa"))
+    return payment_credentials.is_configured() and is_enabled("yookassa")
 
 
 def probe_yookassa() -> ProbeResult:
@@ -36,11 +36,11 @@ def probe_yookassa() -> ProbeResult:
     Returns ProbeResult.ok=True if both API calls succeed.
     Does not charge anyone — capture=False is a hold-only authorization.
     """
-    if not SHOP_ID or not SECRET_KEY:
+    if not payment_credentials.is_configured():
         return ProbeResult(ok=False, error_msg="SHOP_ID or SECRET_KEY not configured")
 
-    Configuration.account_id = SHOP_ID
-    Configuration.secret_key = SECRET_KEY
+    Configuration.account_id = payment_credentials.shop_id()
+    Configuration.secret_key = payment_credentials.secret_key()
 
     t0 = time.monotonic()
     payment_id: str | None = None

@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from yookassa import Configuration, Payment
 
-from data.config import SECRET_KEY, SHOP_ID
+from services import payment_credentials
 from services.exceptions import PaymentError, UserNotFound
 from services.refill import create_invoice, finalize_with_referral_bonus
 from web.deps import CurrentCaller, current_caller
@@ -68,8 +68,8 @@ async def _notify_refill_error(user_id: int, amount: int, error: str) -> None:
 
 
 async def _yookassa_status(payment_id: str, *, user_id: int) -> str:
-    Configuration.account_id = SHOP_ID
-    Configuration.secret_key = SECRET_KEY
+    Configuration.account_id = payment_credentials.shop_id()
+    Configuration.secret_key = payment_credentials.secret_key()
     try:
         # YK SDK синхронный — в отдельный поток, чтобы не блокировать event loop
         # (зависший к YooKassa запрос иначе замораживает весь API-процесс).
@@ -124,8 +124,8 @@ async def refill_status(
     yookassa_status = await _yookassa_status(payment_id, user_id=caller.user_id)
 
     if yookassa_status == "succeeded":
-        Configuration.account_id = SHOP_ID
-        Configuration.secret_key = SECRET_KEY
+        Configuration.account_id = payment_credentials.shop_id()
+        Configuration.secret_key = payment_credentials.secret_key()
         payment = await asyncio.to_thread(Payment.find_one, payment_id)
         amount = int(float(payment.amount.value))
         try:

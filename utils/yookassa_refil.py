@@ -3,23 +3,17 @@ import json
 import os
 import uuid
 
-from data.config import SHOP_ID, SECRET_KEY, botlink
+from data.config import botlink
+from services import payment_credentials
 from yookassa import Configuration, Payment
-
-"""
-SHOP_ID = os.getenv("SHOP_ID")
-SECRET_KEY = os.getenv("SECRET_KEY")
-SUB_AMOUNT = os.getenv("SUB_AMOUNT")
-URL_BOT = os.getenv("URL_BOT")
-"""
 URL_BOT = botlink
 
 
 
 def create_invoice(user_id, AMOUNT):
 
-    Configuration.account_id = SHOP_ID
-    Configuration.secret_key = SECRET_KEY
+    Configuration.account_id = payment_credentials.shop_id()
+    Configuration.secret_key = payment_credentials.secret_key()
     print(user_id)
     
     # Add receipt information
@@ -63,8 +57,8 @@ def create_invoice(user_id, AMOUNT):
 
 
 async def check_payment_status(payment_id):
-    Configuration.account_id = SHOP_ID
-    Configuration.secret_key = SECRET_KEY
+    Configuration.account_id = payment_credentials.shop_id()
+    Configuration.secret_key = payment_credentials.secret_key()
 
     max_attempts = 12  # 12 попыток с задержкой в 30 секунд
     attempts = 0
